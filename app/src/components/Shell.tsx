@@ -17,6 +17,8 @@ export function Wordmark({ className }: { className?: string }) {
 const NAV = [
   { to: '/', label: 'Profile' },
   { to: '/usage', label: 'Usage' },
+  { to: '/words', label: 'Words' },
+  { to: '/backups', label: 'Backups' },
   { to: '/devices', label: 'Devices' },
 ]
 
@@ -28,9 +30,10 @@ export function Shell({ email }: { email: string }) {
   return (
     <div className="min-h-svh">
       <header className="border-b border-line bg-paper/80 backdrop-blur sticky top-0 z-10">
-        <div className="mx-auto max-w-2xl px-5 h-14 flex items-center gap-6">
-          <Wordmark />
-          <nav className="flex items-center gap-1">
+        {/* Phones: brand and sign-out on the first row, the tabs on their own scrollable row. */}
+        <div className="mx-auto max-w-2xl px-5 flex flex-wrap sm:flex-nowrap items-center gap-x-6">
+          <Wordmark className="h-14 shrink-0 whitespace-nowrap" />
+          <nav className="order-last sm:order-none w-full sm:w-auto min-w-0 -mx-2.5 sm:mx-0 pb-2 sm:pb-0 flex items-center gap-1 overflow-x-auto">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
@@ -38,7 +41,7 @@ export function Shell({ email }: { email: string }) {
                 end
                 className={({ isActive }) =>
                   cn(
-                    'px-2.5 h-8 inline-flex items-center rounded-[8px] text-[13.5px] font-medium',
+                    'px-2.5 h-8 shrink-0 inline-flex items-center rounded-[8px] text-[13.5px] font-medium',
                     isActive ? 'bg-cream-deep text-ink' : 'text-ink-soft hover:text-ink',
                   )
                 }
@@ -47,9 +50,8 @@ export function Shell({ email }: { email: string }) {
               </NavLink>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="hidden sm:block text-[12.5px] text-muted truncate max-w-[180px]">{email}</span>
-            <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out" title="Sign out">
+          <div className="ml-auto flex items-center">
+            <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label={`Sign out ${email}`} title={`Sign out ${email}`}>
               <LogOut />
             </Button>
           </div>

@@ -56,6 +56,8 @@ import com.kudcrafts.kudkeys.voice.Profile
 import com.kudcrafts.kudkeys.voice.Usage
 import com.kudcrafts.kudkeys.voice.VoiceSettings
 import helium314.keyboard.kudkeys.KudKeywords
+import helium314.keyboard.kudkeys.sync.KudSync
+import helium314.keyboard.kudkeys.sync.KudSyncWork
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.utils.NextScreenIcon
 import helium314.keyboard.settings.SearchSettingsScreen
@@ -129,12 +131,13 @@ private fun Avatar(name: String, sizeDp: Int) {
 
 /** Settings → Account: the sign-in screen while signed out, the profile once signed in. */
 @Composable
-fun KudAccountScreen(onClickBack: () -> Unit, account: Account? = null) {
+fun KudAccountScreen(onClickBack: () -> Unit, account: Account? = null, onClickBackups: () -> Unit = {}) {
     val ctx = LocalContext.current
     val acc = account ?: remember { Account(ctx) }
     var signedIn by remember { mutableStateOf(acc.settings.isSignedIn) }
-    if (signedIn) KudProfileScreen(acc, onClickBack, onSignedOut = { signedIn = false }, onLeft = onClickBack)
-    else KudSignInScreen(acc, onClickBack, onSignedIn = { signedIn = true })
+    if (signedIn) KudProfileScreen(acc, onClickBack, onSignedOut = { signedIn = false }, onLeft = onClickBack, onClickBackups = onClickBackups)
+    // v0.4: a sign-in starts sync (pull first, then push) and the periodic sync and backup
+    else KudSignInScreen(acc, onClickBack, onSignedIn = { KudSyncWork.onSignedIn(ctx); signedIn = true })
 }
 
 @Composable
@@ -208,8 +211,16 @@ private sealed interface Loaded {
 }
 
 @Composable
-fun KudProfileScreen(account: Account, onClickBack: () -> Unit, onSignedOut: () -> Unit, onLeft: () -> Unit) {
+fun KudProfileScreen(
+    account: Account,
+    onClickBack: () -> Unit,
+    onSignedOut: () -> Unit,
+    onLeft: () -> Unit,
+    onClickBackups: () -> Unit = {},
+    sync: KudSync? = null,
+) {
     val ctx = LocalContext.current
+    val kudSync = sync ?: remember { KudSync(ctx, account.settings) }
     var loaded by remember { mutableStateOf<Loaded>(Loaded.Loading) }
     var attempt by remember { mutableStateOf(0) }
 
@@ -245,6 +256,8 @@ fun KudProfileScreen(account: Account, onClickBack: () -> Unit, onSignedOut: () 
                 }
             }
             HorizontalDivider()
+            KudSyncSection(kudSync, onClickBackups, onSignedOut)
+            HorizontalDivider()
             Preference(
                 name = stringResource(R.string.kud_account_web),
                 description = stringResource(R.string.kud_account_web_summary),
@@ -257,7 +270,7 @@ fun KudProfileScreen(account: Account, onClickBack: () -> Unit, onSignedOut: () 
                     if (account.settings.token.isNotEmpty()) R.string.kud_account_sign_out_summary_legacy
                     else R.string.kud_account_sign_out_summary
                 ),
-                onClick = { account.signOut(); onLeft() },
+                onClick = { account.signOut(); KudSyncWork.onSignedOut(ctx); onLeft() },
             )
         }
     }

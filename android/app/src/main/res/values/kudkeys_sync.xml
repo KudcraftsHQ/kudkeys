@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kud Keys v0.4: Account → Sync and Backups. -->
+<resources>
+    <string name="kud_sync_title">Sync</string>
+    <string name="kud_sync_last_synced">Last synced</string>
+    <string name="kud_sync_last_backup">Last backup</string>
+    <string name="kud_sync_never">Never</string>
+    <string name="kud_sync_just_now">Just now</string>
+    <string name="kud_sync_now">Sync now</string>
+    <string name="kud_sync_now_summary">Settings and learned words, with your account</string>
+    <string name="kud_sync_syncing">Syncing…</string>
+    <string name="kud_sync_done">Synced</string>
+    <string name="kud_sync_backup_now">Back up now</string>
+    <string name="kud_sync_backup_now_summary">Settings, learned words and added dictionaries</string>
+    <string name="kud_sync_backing_up">Backing up…</string>
+    <string name="kud_sync_backed_up">Backed up</string>
+    <string name="kud_sync_backups">Backups</string>
+    <string name="kud_sync_backups_summary">Restore or delete a backup</string>
+    <string name="kud_sync_auto_backup">Automatic backup</string>
+    <string name="kud_sync_auto_backup_summary">Once a day, when the battery isn\'t low</string>
+    <string name="kud_sync_signed_out">Signed out — sign in again to sync</string>
+
+    <string name="kud_backups_empty">No backups yet. Back up now from Account, or wait for the daily one.</string>
+    <string name="kud_backups_kind_auto">automatic</string>
+    <string name="kud_backups_kind_manual">manual</string>
+    <string name="kud_backups_restore_title">Restore this backup?</string>
+    <string name="kud_backups_restore_message">Settings, learned words and added dictionaries on this phone are replaced by the ones from %1$s. Your account and voice draft stay.</string>
+    <string name="kud_backups_restore">Restore</string>
+    <string name="kud_backups_restoring">Restoring…</string>
+    <string name="kud_backups_restored">Backup restored</string>
+    <string name="kud_backups_delete_title">Delete this backup?</string>
+    <string name="kud_backups_delete_message">The backup from %1$s is deleted from your account.</string>
+    <string name="kud_backups_delete">Delete</string>
+    <string name="kud_backups_delete_cd">Delete backup from %1$s</string>
+</resources>

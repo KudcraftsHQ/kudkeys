@@ -257,3 +257,65 @@ cd android
   selection, 4,000-char window, undo, text changed, errors, field change), `voice/.../TextClientTest` (MockWebServer with
   the contract's JSON), `KudV03ScreenshotTest` → `$TMPDIR/kudkeys-v03-shots/*.png` (editor states, bar after Fix,
   Instruct listening/waiting, draft dot, incognito).
+
+## Sync and automatic backup (v0.4, `docs/v0.4-spec.md` "Phone")
+
+- **Code:** `J/kudkeys/sync/` — `KudSync` (sync, backup, restore, list/delete, tombstones), `KudSettingsSync` (which
+  prefs sync and their JSON), `KudSyncedDictionary` (the add-on dictionary file), `KudSyncStore` (bookkeeping),
+  `KudSyncWork` (WorkManager). HTTP: `SyncClient` in `:voice` (`SyncResult`, never carries words or values).
+  Screens: `J/settings/screens/KudSyncScreens.kt` (`KudSyncSection` in the profile, `KudBackupsScreen` at
+  `KudDestination.Backups`).
+- **Settings JSON** (`prefs` in `/api/sync/settings`) is HeliBoard's backup prefs file as one object, grouped by type:
+  `{"boolean":{…},"int":{…},"long":{…},"float":{…},"string":{…},"stringSet":{"k":["a"]}}`. A flat `{key: value}`
+  answer is read too (typed like the local pref; a key in two type groups takes the local pref's type). Only the
+  **difference** from what the server held after the last sync (`settings.json`) goes up, stamped with the sync's
+  time: changed keys, and `null` for keys that are gone (reset to default, a deleted layout or colour, an old-type
+  copy). Empty groups are never sent. A synced key missing from the merged answer is removed here (reset on another
+  phone). Never synced (`KudSettingsSync.isSynced`): keys matching
+  token/secret/password/session/account/draft/server_url/api_key, height/padding/split/one-handed/floating scales and
+  positions, per-app subtypes, `version_code`, emoji recents and last category, `emoji_max_sdk`. Voice/account prefs
+  (`kudkeys_voice`) and the draft are separate files and never read. Pulled prefs are written with HeliBoard's
+  restore code (`applySettingsLikeRestore`) and then `reloadAfterPrefsChanged`.
+- **Words** travel with `locale` = the language only (`en`, `id`; `KudSyncLocales.lang`), the server's canonical
+  form (it normalises `en_US` → `en` too). Push: every enabled locale's
+  user-history dictionary (`ExpandableBinaryDictionary.readAllWordProperties`, 10 s timeout) → rows whose count
+  differs from what was last pushed (`no_backup/kudkeys_sync/pushed.json`), source `typed`, ≤5000 per POST, each with
+  **its own last-use time** (the historical timestamp), never the sync's. A word with spaces is never sent.
+  **Removals stick:** every tombstone pulled or sent is kept in `removed.json` (lang → word → time); a typed word last
+  used before its removal is never sent (so it can't revive the tombstone), and a pulled tombstone also takes the word
+  out of this phone's user history (`removeUnigramEntryDynamically`) unless it was typed again since. Typing it again
+  later is a new use: it goes up and revives the word.
+  Pull: `GET /api/sync/words` (all on the first sync after sign-in, then `?since=` the last `now`) into a mirror
+  (`mirror.json`), then `synced_user.dict` (type `synced`, written with `DictIO`, probability 130–210 from the count)
+  in `dicts/<locale>/` for each enabled locale of that language, and the new-dictionary broadcast reloads the keyboard.
+  `DictionaryFactory` loads it as an add-on next to the main dictionary. Never touches `UserDictionary`.
+- **Removing a suggestion** (`LatinIME.removeSuggestion`) also calls `KudSync.suggestionRemoved`: a tombstone per
+  enabled language (sent on the next sync), the word leaves the mirror and the synced dictionary at once, and the user
+  history of every enabled locale of those languages (not only the active subtype's). Recorded while signed out too,
+  once the phone has an account; they survive sign-out and go first when the **same** account signs back in.
+- **Order of a sync:** (first after sign-in, or after a restore: GET settings) → PUT settings, apply the merged answer
+  → POST pending tombstones → GET words → POST typed words. The first sync of a phone on an account applies the
+  server's settings first; the same account signing back in keeps what was changed here meanwhile. Everything runs on
+  `Dispatchers.IO` (the bookkeeping files are big). 401 → `markSignedOut` + work cancelled; 5xx/429/network → "Couldn't sync, will retry".
+- **Backups:** `writeBackupZip` / `restoreBackupZip` / `reloadAfterRestore` were pulled out of
+  `BackupRestorePreference.kt`, so Advanced → Backup and Account → Backups make and apply the same zip. Sync drops
+  secret-looking pref keys from it. Restore now keeps files a backup never holds (voice draft, extracted main
+  dictionaries) and really moves the device-protected files aside (upstream renamed the wrong dir). After a restore
+  the sync is **exact**: the server ends up holding the restored settings (keys added after that backup go as `null`);
+  words already sent aren't sent again; the synced dictionaries are rebuilt. A restore runs under `NonCancellable` in
+  `KudSync.appScope`, so leaving the Backups screen neither stops it nor loses its outcome (a toast). Uploads carry
+  `X-Backup-Sha256`, which the server checks. Max 20 MB.
+- **When:** `KudSyncWork` — periodic sync 6 h and backup 24 h (network connected, battery not low; backup only with
+  Automatic backup on), one sync right after sign-in (network only) and when `SettingsActivity` stops with changed
+  synced prefs. `App.onCreate` re-schedules (KEEP) while signed in; nothing before the first unlock. Sign-out (and a
+  worker that finds no session) cancels everything. `KudSyncStore` keeps the bookkeeping per account (`state.account`):
+  sign-out only forces a full pull next time; signing in as another account starts clean.
+- **Tests:** `voice/.../SyncClientTest` (every endpoint), `KudSyncTest` (first sync pull-then-push, incremental, 5000
+  batches, tombstones, exclusions — no token/draft/URL in any body or the zip, merged settings, 401/5xx, backup zip,
+  restore incl. a bad zip), `KudSyncWorkTest` (WorkManager test helpers), `KudSyncedDictionaryTest` (a real
+  `synced_user.dict` loaded by the native code; suggestions typed on the real keyboard), `KudV04ScreenshotTest` →
+  `$TMPDIR/kudkeys-v04-shots/`. Made-up words only.
+- **Native code in JVM tests:** the `hostJni` Gradle task compiles `src/main/jni` with g++ for the host
+  (~35 s, cached) and passes its path as `kudkeys.hostJni`; only `KudSyncedDictionaryTest` loads it, in its own
+  Robolectric sandbox (`ShadowOwnSandboxForNativeCode`), so the other tests still run without native code. No g++
+  (macOS) → that test is skipped.

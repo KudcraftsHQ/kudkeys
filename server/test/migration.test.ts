@@ -18,12 +18,15 @@ test('migrations apply; profile defaults and usage columns are as the API expect
     `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1`,
   )
   expect(tables.rows.map((r) => r.table_name)).toEqual([
+    'backup',
+    'keyboard_settings',
     'kudkeys_account',
     'kudkeys_session',
     'kudkeys_user',
     'kudkeys_verification',
     'text_usage',
     'voice_session',
+    'word',
   ])
 
   await pg.exec(`INSERT INTO kudkeys_user (id, email, name, "updatedAt") VALUES ('u1', 'a@b.c', 'A', now())`)
@@ -56,7 +59,11 @@ test('migrations apply; profile defaults and usage columns are as the API expect
   await pg.exec(
     `INSERT INTO voice_session (id, "userId", session, "startedAt", "endedAt", "audioSeconds", finals, outcome) VALUES ('v1', 'u1', 'ab12', now(), now(), 1.5, 1, 'stopped')`,
   )
+  await pg.exec(`INSERT INTO word ("userId", word, locale, count, source, "updatedAt", "changedAt") VALUES ('u1', 'zibber', 'en', 1, 'typed', now(), now())`)
+  await pg.exec(`INSERT INTO keyboard_settings ("userId", prefs, "updatedAt", "deviceId", "syncedAt") VALUES ('u1', '{}', now(), 'd', now())`)
+  await pg.exec(`INSERT INTO backup (id, "userId", "createdAt", "deviceId", "deviceName", kind, "sizeBytes", sha256, data) VALUES ('b1', 'u1', now(), 'd', 'P', 'auto', 1, 'x', '\\x00')`)
   await pg.exec(`DELETE FROM kudkeys_user WHERE id = 'u1'`)
+  for (const t of ['word', 'keyboard_settings', 'backup']) expect((await pg.query(`SELECT * FROM ${t}`)).rows.length).toBe(0)
   expect((await pg.query(`SELECT * FROM voice_session`)).rows.length).toBe(0)
   expect((await pg.query(`SELECT * FROM text_usage`)).rows.length).toBe(0)
 })

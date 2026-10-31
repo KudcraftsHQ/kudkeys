@@ -5,9 +5,11 @@ The keyboard's backend, at `https://keys.kudcrafts.com`. One container serves:
 - **`/v1/stream`** — the voice WebSocket. It holds the provider keys, so the APK (public on
   GitHub) never contains one. The keyboard streams microphone audio and gets text back
   phrase by phrase.
-- **`/api/*`** — accounts (Better Auth), the voice profile and usage. The contract the Android
+- **`/api/*`** — accounts (Better Auth), the voice profile and usage, AI text actions, and
+  settings/words sync and backups (v0.4). The contract the Android
   app builds against is [below](#api-for-the-app).
-- **`/`** — the web app (`app/`, Vite + React): sign in, profile, usage, signed-in devices.
+- **`/`** — the web app (`app/`, Vite + React): sign in, profile, usage, words, backups,
+  signed-in devices.
 
 Layout follows `~/Projects/board`: root `package.json` with workspaces (`app`, `server`),
 `prisma/` at the root, Hono on Bun, one Dockerfile at the root.
@@ -19,6 +21,7 @@ Layout follows `~/Projects/board`: root `package.json` with workspaces (`app`, `
 | `server/app.ts`, `server/routes/` | Hono: `/api/health`, `/api/auth/*`, `/api/me*`, the SPA |
 | `server/auth.ts` | Better Auth (email + password, allowlist, bearer plugin) |
 | `server/lib/store.ts` | Profile + usage rows (Prisma; memory for tests) |
+| `server/routes/sync.ts`, `server/sync/` | Settings and words sync, backups (raw SQL via `server/lib/sql.ts`: Prisma in production, PGlite in tests) |
 | `server/voice/` | The voice pipeline: protocol, session, segmenter, providers |
 | `app/` | The web app, built into `server/public` |
 | `prisma/` | Schema and migrations |
@@ -65,7 +68,8 @@ curl localhost:8080/api/health   # {"ok":true,"transcription":"groq:whisper-larg
 
 `bun run typecheck`, `bun run test`, `bun run build` (SPA into `server/public`).
 `bun server/scripts/smoke.ts <base> <allowed email>` exercises a running server end to end
-(sign-up, `/api/me`, a stream, its usage row); CI runs it against the built image.
+(sign-up, `/api/me`, text fix, settings and words sync, a backup round trip, a stream, its
+usage row); CI runs it against the built image.
 
 Try a real voice note, sent the way the keyboard will send it (100 ms frames, real time):
 
@@ -208,6 +212,137 @@ The retry on invalid JSON only happens when the budget has room. In practice a t
 model writes one `text_usage` row: `kind`, `charsIn`, `charsOut`, `ms`, `model`, `ok`. With
 `private: true` the character counts are `null`, so the row holds only the kind and timing.
 
+### Sync: settings and words (v0.4)
+
+All of these need a **session token**; a legacy `KUDKEYS_TOKENS` entry gets 401. Times are
+ISO 8601 with an offset (`2026-10-31T09:12:00.000Z`) or epoch milliseconds; answers are always
+ISO in UTC. A device time in the future is treated as the server's now (so a phone with a wrong
+clock can't win every merge forever). Validation errors are `400 {"error":"invalid","issues":[…]}`
+as for `/api/me`; a body over its limit is `413 {"error":"too_large","maxBytes"}`.
+
+| Call | Body | Answer |
+|---|---|---|
+| `GET /api/sync/settings` | — | `{prefs, updatedAt}`, or 404 `{"error":"not_found"}` before the first sync |
+| `PUT /api/sync/settings` | `{prefs: {…}, updatedAt, deviceId: 1–200 chars}` | `{prefs, updatedAt}`: the merged result. Write it back to the phone |
+| `GET /api/sync/words?since=<time>` | — | `{words: [{word, locale, count, source, deleted, updatedAt}], now}` |
+| `POST /api/sync/words` | `{words: [{word, locale, count, source, deleted, updatedAt}]}` (≤ 5,000) | `{accepted, changed, now}` |
+| `POST /api/sync/words/import` | `{locale, source: "swiftkey" \| "manual", words: [string]}` (≤ 50,000) | `{added, skipped}` |
+| `GET /api/sync/status` | — | Totals for the web app (below) |
+
+**Settings** merge **last writer wins per key**, by the `updatedAt` the device sends (its time of
+the change). Keys are leaf paths: nested objects are walked, so a flat `{"theme":"dark"}` and
+HeliBoard's grouped `{"boolean":{"vibrate_on":true}}` both merge key by key; arrays (string sets)
+and other non-objects are values. Rules:
+- a key whose stored time is newer than `updatedAt` keeps its value; otherwise the sent value
+  wins (a tie goes to the request, so a retried PUT is harmless);
+- **a key sent as `null` is removed** and stays removed until a newer write sets it;
+- **a key left out is kept**: sending part of the settings never deletes the rest;
+- **an empty object is an empty group, never a value**: HeliBoard's `{"float":{}}` adds and removes
+  nothing, so a key that later appears in that group merges like any other (send `null` per key to
+  remove one);
+- a path that is a prefix of another (a value where a group now is, or the reverse) is replaced by
+  the newer write;
+- the answer's `updatedAt` is the newest time of any key;
+- `prefs` (as stored after merging) is at most **256 KB** of JSON; the request body at most 320 KB.
+
+The phone leaves out anything secret or per-device (tokens, server URL, voice draft, account and
+sync bookkeeping, keyboard height/padding scales) before sending; the server stores what it gets.
+
+**Words** are rows keyed by `(word, locale)`:
+
+| Field | Rule |
+|---|---|
+| `word` | 1–48 characters (HeliBoard's maximum), **one word: no spaces**, control characters or line breaks (the keyboard's dictionaries hold single words). Case-sensitive: `Fenno` and `fenno` are two words |
+| `locale` | **Stored as the language**: the lowercase ISO 639 code, no region or script (`en`, `id`, `pt`). Any tag is accepted and normalised: `en_US`, `en-GB`, `EN` → `en`; Java's `in` and `id_ID` → `id` (also `iw` → `he`, `ji` → `yi`). The phone keys words the same way (one synced dictionary per language), so a tombstone from the phone always meets the row a web add or an import made. Answers always carry the canonical form |
+| `count` | integer 0–1,000,000,000 |
+| `source` | `typed` (learned on the phone), `swiftkey` (imported), `manual` (added on the web or in the app) |
+| `deleted` | `true` = a tombstone: the word was removed |
+| `updatedAt` | the device's time of this change |
+
+Merge rule (`POST`, applied in Postgres in one statement per 5,000 rows):
+- **union** by `(word, locale)`;
+- **`count = max`** of stored and sent (also for tombstones, so a word re-added later keeps its count);
+- **`deleted` follows the newer `updatedAt`**: a delete newer than the stored add wins; an older
+  add doesn't undo a newer delete; a newer add revives a tombstone. **On a tie the delete wins.**
+  `updatedAt` becomes the newer of the two;
+- `source` stays the first one seen, except that an add reviving a tombstone brings its own;
+- the same word twice in one call is merged by the same rule first.
+
+`accepted` is the number of distinct `(word, locale)` merged, `changed` how many of them actually
+changed. Sending a row that changes nothing (same count or lower, not newer) is a no-op and doesn't
+show up in anyone's `?since=`.
+
+**Pulling:** `GET /api/sync/words` without `since` returns every row, **tombstones included**
+(delete those locally; write the others into the synced dictionary). With `since`, only rows
+**changed on the server** at or after that time (server clock, not device `updatedAt`). Pass the
+`now` of your previous `GET` or `POST` as the next `since`. `now` is the server's time minus
+60 s, so a write that was still committing is read again next time; the merge is idempotent, so
+seeing a row twice is harmless. No pagination: 17k words is about 1.5 MB of JSON.
+
+**Import** adds words that aren't there yet with `count: 1`, `deleted: false` and the given
+`source`. Each word is trimmed; duplicates in the call, words already stored (**tombstones
+included**: an import never revives a removed word), and strings that aren't valid words are
+skipped, not refused. `added + skipped` = the number of strings sent. Body at most 8 MB.
+
+`GET /api/sync/status` (the web app):
+
+```json
+{"settings": {"updatedAt":"…","syncedAt":"…","deviceId":"…","keys":212} | null,
+ "words": {"total":17164,"removed":3,"bySource":{"swiftkey":17000,"typed":160,"manual":4},
+           "byLocale":{"id":12000,"en":5164},"lastChangedAt":"…"},
+ "backups": {"count":12,"totalBytes":48200000,"latestAt":"…"}}
+```
+
+`syncedAt` is the server time of the last settings PUT, `keys` the number of settings stored;
+`words.total` and its breakdowns count live words, `removed` the tombstones.
+
+`GET /api/words?q=&locale=&source=&removed=1&offset=0&limit=50` (the web app's Words page):
+`{total, offset, limit, words: [...]}`, most used first. `q` matches anywhere in the word, case
+insensitive (`%` and `_` are literal); `removed=1` lists tombstones instead of live words;
+`limit` ≤ 200; `locale` takes any form (`en_US` finds `en`).
+
+`POST /api/words` `{word, locale, deleted, source?}` (the web app's add, remove and restore) →
+`{changed, locale}`. The server stamps the write with **its own clock**, never the browser's, so a
+browser whose clock is behind can't lose to the row it is removing. `source` defaults to `manual`
+(a restore passes the word's own). `changed: false` means a newer change already holds the word
+(or it was already in that state); the page says so instead of claiming it worked.
+
+### Backups (v0.4)
+
+The phone's HeliBoard backup zip (learned-word dictionaries, user dictionaries, prefs JSON minus
+secrets), stored as one gzip-compressed blob in Postgres with its sha256. Session token only.
+
+| Call | Request | Answer |
+|---|---|---|
+| `GET /api/backups` | — | `[{id, createdAt, deviceName, kind, sizeBytes}]`, newest first |
+| `POST /api/backups` | the zip as the body, `Content-Type: application/zip` (or `application/octet-stream`); headers `X-Device-Id` (required, ≤ 200), `X-Device-Name` (optional, ≤ 200, ASCII), `X-Backup-Kind: auto \| manual` (required), `X-Backup-Sha256` (optional, hex: the zip's sha256; the phone always sends it) | `200 {id}`; `400 {"error":"checksum_mismatch"}` when the upload doesn't hash to `X-Backup-Sha256` (a truncated or corrupted upload is never stored) |
+| `GET /api/backups/:id` | — | the zip, byte for byte: `Content-Type: application/zip`, `Content-Length`, `Content-Disposition: attachment`, **`X-Backup-Sha256`** (hex; check it before restoring) and the same as `ETag` |
+| `DELETE /api/backups/:id` | — | `200 {"ok":true}` |
+
+- At most **20 MB** per zip: a larger `Content-Length` is refused at once, and an upload that
+  passes 20 MB while streaming is cut off; both `413 {"error":"too_large","maxBytes"}`. A body
+  that isn't a zip (doesn't start with `PK`) or is empty → 400; another content type → 415.
+- The upload is hashed and compressed as it streams in; only the compressed copy is held.
+- An unknown id, or another user's, → 404.
+- **Retention** per user, applied whenever a backup is added:
+  - **automatic** backups: of the **14 most recent days** (Jakarta time) that have one, the newest
+    of each day is kept; likewise the newest of each of the **8 most recent weeks**
+    (Monday–Sunday) that have one. A backup can count for both. This is restic's
+    `--keep-daily 14 --keep-weekly 8`. Days without backups don't count, so a phone that was off
+    for a month never loses its last ones;
+  - **manual** backups ("Back up now") are kept apart: the **newest 10**, whatever their day, so
+    the automatic backup that runs later the same day never replaces the one taken before an
+    experiment;
+  - the newest **full** automatic backup (at least half the size of the biggest automatic one) is
+    always kept, and an automatic backup **less than half the size of the previous one** (an
+    emptied keyboard after a reinstall) prunes nothing. A run of near-empty backups can never
+    push out the last good one; delete it by hand once it is no longer wanted.
+
+**Privacy:** words, settings values and backup contents are never logged. These routes log counts
+and sizes only (`words import: 120 sent, 118 added`, `backup stored: 812345 bytes …`), and an
+error in them is logged by its name and Postgres code, never its message (a constraint message
+can quote the row).
+
 ### Other endpoints
 
 | Path | What |
@@ -315,6 +450,11 @@ token, none, revoked, removed from the allowlist), keyword merge into the prompt
 rows with no text. `test/text.test.ts` covers `/api/text/*` against a fake Groq chat server:
 session-only auth, validation, the profile in the prompt, question offsets checked in code,
 the retry on invalid JSON, 429/503 mapping, the per-user limit and usage rows without text.
+`test/sync.test.ts` runs the sync and backup API against the real migrations on PGlite (made-up
+words only): session-only auth, the size limits, the merge rules (max count, tombstone ordering,
+ties, clamped future times), `?since=`, import dedupe, per-key settings merge, the backup round
+trip with its sha256, retention pruning, and that no word, setting or backup byte reaches the
+log even when the database errors.
 `test/auth-hardening.test.ts` covers 503 (not 401) when the database fails
 during a session lookup, the sign-in rate limit by `cf-connecting-ip` / socket address with a
 spoofed `X-Forwarded-For`, and `KUDKEYS_SIGNUP_OPEN=false`. `test/migration.test.ts` applies

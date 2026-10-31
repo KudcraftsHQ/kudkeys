@@ -1,6 +1,7 @@
 // Smoke test of a running server (e.g. the Docker image): sign up an allowed
-// email, read /api/me, call /api/text/fix, stream two seconds of tone with the
-// session token and see the usage row. Never point it at production: it creates an account.
+// email, read /api/me, call /api/text/fix, sync settings and (made-up) words,
+// upload and download a backup, stream two seconds of tone with the session
+// token and see the usage row. Never point it at production: it creates an account.
 //
 //   bun server/scripts/smoke.ts http://localhost:8080 hammas@example.com
 
@@ -29,6 +30,48 @@ console.log('me', JSON.stringify(me))
 res = await fetch(`${base}/api/text/fix`, { method: 'POST', headers: { ...json, ...auth }, body: JSON.stringify({ text: 'smoke test' }) })
 if (res.status !== 200) fail(`/api/text/fix ${res.status} ${await res.text()}`)
 console.log('text fix', JSON.stringify(await res.json()))
+
+// Sync: settings, words, import, and a backup round trip (raw SQL through Prisma and pgbouncer, bytea included).
+const syncAt = new Date().toISOString()
+res = await fetch(`${base}/api/sync/settings`, {
+  method: 'PUT',
+  headers: { ...json, ...auth },
+  body: JSON.stringify({ prefs: { smoke_theme: 'dark', smoke_vibrate: true }, updatedAt: syncAt, deviceId: 'smoke' }),
+})
+if (res.status !== 200) fail(`PUT /api/sync/settings ${res.status} ${await res.text()}`)
+const settings = (await (await fetch(`${base}/api/sync/settings`, { headers: auth })).json()) as { prefs: Record<string, unknown> }
+if (settings.prefs.smoke_theme !== 'dark') fail(`GET /api/sync/settings ${JSON.stringify(settings)}`)
+res = await fetch(`${base}/api/sync/words`, {
+  method: 'POST',
+  headers: { ...json, ...auth },
+  body: JSON.stringify({ words: [{ word: 'smokezorb', locale: 'en', count: 2, source: 'typed', deleted: false, updatedAt: syncAt }] }),
+})
+const pushed = (await res.json()) as { accepted: number; now: string }
+if (pushed.accepted !== 1) fail(`POST /api/sync/words ${JSON.stringify(pushed)}`)
+res = await fetch(`${base}/api/sync/words/import`, {
+  method: 'POST',
+  headers: { ...json, ...auth },
+  body: JSON.stringify({ locale: 'en', source: 'swiftkey', words: ['smokezorb', 'smokeflib'] }),
+})
+const imported = (await res.json()) as { added: number; skipped: number }
+if (imported.added + imported.skipped !== 2) fail(`import ${JSON.stringify(imported)}`)
+const pulled = (await (await fetch(`${base}/api/sync/words?since=${encodeURIComponent(pushed.now)}`, { headers: auth })).json()) as {
+  words: { word: string; count: number }[]
+}
+if (pulled.words.find((w) => w.word === 'smokezorb')?.count !== 2) fail(`GET /api/sync/words ${JSON.stringify(pulled).slice(0, 300)}`)
+const zip = new Uint8Array(4096).map((_, i) => (i < 4 ? [0x50, 0x4b, 0x03, 0x04][i]! : (i * 31) & 0xff))
+res = await fetch(`${base}/api/backups`, {
+  method: 'POST',
+  headers: { ...auth, 'content-type': 'application/zip', 'x-device-id': 'smoke', 'x-device-name': 'Smoke', 'x-backup-kind': 'manual' },
+  body: zip,
+})
+const backup = (await res.json()) as { id: string }
+if (!backup.id) fail(`POST /api/backups ${res.status} ${JSON.stringify(backup)}`)
+const back = new Uint8Array(await (await fetch(`${base}/api/backups/${backup.id}`, { headers: auth })).arrayBuffer())
+if (back.length !== zip.length || back.some((b, i) => b !== zip[i])) fail(`backup round trip: ${back.length} bytes back`)
+res = await fetch(`${base}/api/backups/${backup.id}`, { method: 'DELETE', headers: auth })
+if (res.status !== 200) fail(`DELETE /api/backups ${res.status}`)
+console.log('sync', JSON.stringify({ settings: Object.keys(settings.prefs).length, words: pulled.words.length, imported, backupBytes: back.length }))
 
 const before = ((await (await fetch(`${base}/api/me/usage`, { headers: auth })).json()) as { sessions: unknown[] }).sessions.length
 const ws = new WebSocket(`${base.replace(/^http/, 'ws')}/v1/stream`, { headers: auth } as unknown as string[])

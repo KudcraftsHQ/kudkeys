@@ -101,7 +101,9 @@ describe("/v1/stream with Groq", () => {
   test("two phrases separated by a pause become two finals, in order, with confidence", async () => {
     const { code, messages } = await session([quiet(500), tone(1500), quiet(1000), tone(1000)], {}, { keywords: ["Fenno", "TypeMap"] });
     expect(code).toBe(1000);
-    const finals = messages.filter((m) => m.type === "final");
+    // Phrases are transcribed in parallel, so finals can arrive out of order (the contract says to place them by
+    // segment); under load the shorter second phrase sometimes comes back first.
+    const finals = messages.filter((m) => m.type === "final").sort((a, b) => a.segment - b.segment);
     expect(finals.map((f) => f.segment)).toEqual([0, 1]);
     expect(finals[0].text).toBe("phrase of 2.0 s"); // 300 ms pre-roll + 1.5 s + 200 ms tail
     expect(finals[0].confidence).toBe(0.9);

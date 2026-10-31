@@ -552,6 +552,7 @@ object KudDestination {
     const val PhysicalKeyboard = "kud_physical_keyboard"
     const val More = "kud_advanced"
     const val Account = "kud_account"
+    const val Backups = "kud_backups"
 }
 
 // ---- rows ----

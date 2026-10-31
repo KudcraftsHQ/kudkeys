@@ -1,0 +1,13 @@
+{
+  "kind": "instruct",
+  "about": "A tone instruction must be applied fully: 'bikin lebih sopan' on a barked command. The old answer 'Woi, tolong kirim invoicenya ya' kept the rude opener. Stays casual Indonesian (no saya/Anda), adds nothing but softeners.",
+  "input": {
+    "instruction": "bikin lebih sopan",
+    "text": "woi kirim invoicenya sekarang"
+  },
+  "keywords": [],
+  "expect": {
+    "contains": ["invoice"],
+    "notContains": ["woi", "Anda", "saya"]
+  }
+}

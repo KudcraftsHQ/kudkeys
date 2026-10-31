@@ -1655,6 +1655,10 @@ public class LatinIME extends InputMethodService implements
     @Override
     public void removeSuggestion(final String word) {
         mDictionaryFacilitator.removeWord(word);
+        // kudkeys: the server gets a tombstone and the word leaves the synced dictionaries (v0.4)
+        final android.content.Context appContext = getApplicationContext();
+        helium314.keyboard.latin.utils.ExecutorUtils.getBackgroundExecutor(helium314.keyboard.latin.utils.ExecutorUtils.KEYBOARD).execute(() ->
+                helium314.keyboard.kudkeys.sync.KudSync.suggestionRemoved(appContext, word));
     }
 
     @Override
