@@ -72,12 +72,12 @@ export const api = {
     if (s.removed) q.set('removed', '1')
     return call<WordPage>(`/api/words?${q}`)
   },
-  /** Add (deleted: false) or remove (deleted: true, a tombstone) one word, as of now. */
-  putWord: (w: Pick<Word, 'word' | 'locale' | 'count' | 'source' | 'deleted'>) =>
-    call<{ accepted: number }>('/api/sync/words', {
-      method: 'POST',
-      body: JSON.stringify({ words: [{ ...w, updatedAt: new Date().toISOString() }] }),
-    }),
+  /**
+   * Add (deleted: false), remove (deleted: true, a tombstone) or restore one word. The server stamps it with its
+   * own clock; `changed: false` means a newer change already holds the word.
+   */
+  putWord: (w: Pick<Word, 'word' | 'locale' | 'deleted'> & { source?: WordSource }) =>
+    call<{ changed: boolean; locale: string }>('/api/words', { method: 'POST', body: JSON.stringify(w) }),
   backups: () => call<BackupRow[]>('/api/backups'),
   deleteBackup: (id: string) => call<{ ok: true }>(`/api/backups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }

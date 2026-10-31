@@ -26,7 +26,7 @@ export function BackupsPage() {
     <>
       <PageHeader
         title="Backups"
-        sub="Your phone backs up the keyboard once a day: learned words, your dictionaries and settings. The newest of each of the last 14 days and 8 weeks are kept."
+        sub="Your phone backs up the keyboard once a day: learned words, your dictionaries and settings. The newest automatic backup of each of the last 14 days and 8 weeks is kept, plus your last 10 manual ones."
       />
       {error && <ErrorNote>{error.message}</ErrorNote>}
       {!data && !error && <Skeleton className="h-40 w-full" />}

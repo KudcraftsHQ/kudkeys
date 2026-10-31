@@ -54,7 +54,7 @@ function Totals({ status }: { status: SyncStatus }) {
         <div className="col-span-2 sm:col-span-4 flex flex-wrap gap-1.5 text-[12.5px] text-ink-soft">
           {locales.map(([l, n]) => (
             <span key={l} className="chip">
-              {l} <span className="tabular text-muted">{n.toLocaleString('en-US')}</span>
+              {languageName(l)} <span className="tabular text-muted">{n.toLocaleString('en-US')}</span>
             </span>
           ))}
           {w.removed > 0 && <span className="chip !text-muted">removed {w.removed.toLocaleString('en-US')}</span>}
@@ -74,42 +74,58 @@ function Tile({ label, value, sub }: { label: string; value: number; sub?: strin
   )
 }
 
+// Words are stored per language (en, id), the way the keyboard keeps one synced dictionary per language.
+const LANGUAGES: Record<string, string> = { id: 'Indonesian', en: 'English' }
+const languageName = (l: string) => LANGUAGES[l] ?? l
+
 function AddWord({ locales }: { locales: string[] }) {
+  const options = [...new Set(['id', 'en', ...locales])]
   const [word, setWord] = useState('')
-  const [locale, setLocale] = useState(locales[0] ?? 'en')
+  const [locale, setLocale] = useState(locales[0] ?? 'id')
+  const trimmed = word.trim()
+  const hasSpace = /\s/.test(trimmed)
   const add = useMutation({
-    mutationFn: () => api.putWord({ word: word.trim(), locale: locale.trim(), count: 1, source: 'manual', deleted: false }),
-    onSuccess: () => {
-      toast(`Added. Your phone picks it up at its next sync.`)
+    mutationFn: () => api.putWord({ word: trimmed, locale, deleted: false }),
+    onSuccess: (r) => {
+      toast(r.changed ? `Added “${trimmed}”. Your phone picks it up at its next sync.` : `“${trimmed}” is already there.`)
       setWord('')
       refresh()
     },
   })
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (word.trim()) add.mutate()
+    if (trimmed && !hasSpace) add.mutate()
   }
   return (
     <form onSubmit={handleSubmit} className="panel p-4 flex flex-col gap-2">
-      <div className="flex gap-2">
-        <Input value={word} onChange={(e) => setWord(e.target.value)} maxLength={48} placeholder="Add a word" aria-label="Word" />
+      <div className="flex flex-col sm:flex-row gap-2">
         <Input
-          value={locale}
-          onChange={(e) => setLocale(e.target.value)}
-          list="word-locales"
-          className="w-24"
-          aria-label="Language"
-          placeholder="en"
+          value={word}
+          onChange={(e) => setWord(e.target.value)}
+          maxLength={48}
+          placeholder="Add a word"
+          aria-label="Word"
+          aria-invalid={hasSpace || undefined}
         />
-        <datalist id="word-locales">
-          {locales.map((l) => (
-            <option key={l} value={l} />
-          ))}
-        </datalist>
-        <Button type="submit" variant="outline" disabled={!word.trim() || add.isPending}>
-          <Plus /> Add
-        </Button>
+        <div className="flex gap-2">
+          <select
+            value={locale}
+            onChange={(e) => setLocale(e.target.value)}
+            aria-label="Language"
+            className="h-9 rounded-md border border-line-strong bg-paper px-2.5 text-[13.5px] text-ink"
+          >
+            {options.map((l) => (
+              <option key={l} value={l}>
+                {languageName(l)}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" variant="outline" disabled={!trimmed || hasSpace || add.isPending}>
+            <Plus /> Add
+          </Button>
+        </div>
       </div>
+      {hasSpace && <p className="text-[12.5px] text-muted">One word at a time: the keyboard's dictionary keeps single words, no spaces.</p>}
       {add.error && <ErrorNote>{add.error.message}</ErrorNote>}
     </form>
   )
@@ -134,9 +150,10 @@ function WordList({ locales }: { locales: string[] }) {
   }
 
   const change = useMutation({
-    mutationFn: (w: Word) => api.putWord({ ...w, deleted: !w.deleted }),
-    onSuccess: (_, w) => {
-      toast(w.deleted ? `“${w.word}” is back.` : `Removed “${w.word}”. Your phone stops suggesting it after its next sync.`)
+    mutationFn: (w: Word) => api.putWord({ word: w.word, locale: w.locale, deleted: !w.deleted, source: w.source }),
+    onSuccess: (r, w) => {
+      if (!r.changed) toast(`Nothing changed: a newer change to “${w.word}” came from your phone. Try again after it syncs.`)
+      else toast(w.deleted ? `“${w.word}” is back.` : `Removed “${w.word}”. Your phone stops suggesting it after its next sync.`)
       refresh()
     },
     onError: (e) => toast(e.message),
@@ -167,7 +184,7 @@ function WordList({ locales }: { locales: string[] }) {
           {locales.length > 1 &&
             locales.map((l) => (
               <Pill key={l} on={locale === l} onClick={() => setFilter(() => setLocale(locale === l ? undefined : l))}>
-                {l}
+                {languageName(l)}
               </Pill>
             ))}
         </div>
