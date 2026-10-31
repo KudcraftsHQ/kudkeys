@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Copyright (C) 2011 The Android Open Source Project
+    modified
+    SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
+-->
+<!-- kudkeys: one bar. Fix on the far left; Instruct and Mic on the far right (Mic outermost). The middle holds the
+     suggestions, and on top of them the Private pill, the quick-voice row and short messages. -->
+<merge
+    xmlns:android="http://schemas.android.com/apk/res/android">
+    <LinearLayout
+        android:id="@+id/suggestions_strip_wrapper"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:hapticFeedbackEnabled="false"
+        android:soundEffectsEnabled="false">
+        <ImageButton
+            android:id="@+id/kud_fix_key"
+            android:layout_width="@dimen/kud_bar_icon_width"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:src="@drawable/kud_ic_fix"
+            style="?attr/suggestionWordStyle"
+            android:contentDescription="@string/kud_fix" />
+        <FrameLayout
+            android:id="@+id/kud_bar_middle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <!-- While suggestions show in a private field, a compact Private tag sits before them and the
+                 suggestions get the rest of the width. -->
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+                <TextView
+                    android:id="@+id/kud_private_tag"
+                    android:layout_width="wrap_content"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="2dp"
+                    android:gravity="center"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:background="@drawable/kud_private_pill"
+                    android:text="@string/kud_private"
+                    android:textColor="#1F1600"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+                <LinearLayout
+                    android:id="@+id/suggestions_strip"
+                    android:orientation="horizontal"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="match_parent"
+                    android:gravity="center_horizontal"
+                    android:hapticFeedbackEnabled="false"
+                    android:soundEffectsEnabled="false" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/kud_private_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:background="@drawable/kud_private_pill"
+                android:text="@string/kud_private"
+                android:textColor="#1F1600"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+            <LinearLayout
+                android:id="@+id/kud_voice_row"
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:paddingStart="6dp"
+                android:paddingEnd="4dp"
+                android:visibility="gone">
+                <View
+                    android:id="@+id/kud_voice_dot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/kud_voice_dot" />
+                <TextView
+                    android:id="@+id/kud_voice_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:fontFeatureSettings="tnum"
+                    android:textSize="13sp" />
+                <TextView
+                    android:id="@+id/kud_voice_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:singleLine="true"
+                    android:ellipsize="start"
+                    android:textSize="15sp" />
+                <TextView
+                    android:id="@+id/kud_voice_hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:singleLine="true"
+                    android:text="@string/kud_slide_to_cancel"
+                    android:textSize="12sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/kud_bar_message"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textSize="14sp"
+                android:visibility="gone" />
+        </FrameLayout>
+        <ImageButton
+            android:id="@+id/kud_instruct_key"
+            android:layout_width="@dimen/kud_bar_icon_width"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:src="@drawable/kud_ic_instruct"
+            style="?attr/suggestionWordStyle"
+            android:contentDescription="@string/kud_instruct" />
+        <ImageButton
+            android:id="@+id/kud_mic_key"
+            android:layout_width="@dimen/kud_bar_icon_width"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:src="@drawable/sym_keyboard_voice_lxx"
+            style="?attr/suggestionWordStyle"
+            android:contentDescription="@string/kud_mic" />
+    </LinearLayout>
+</merge>

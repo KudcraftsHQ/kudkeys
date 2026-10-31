@@ -1,0 +1,60 @@
+# Kud Keys Android CI: unit tests, a debug APK and an unsigned minified release APK for pull requests and pushes that touch android/.
+# Releases (signed APK on a v* tag) live in release.yaml.
+name: android
+
+on:
+  pull_request:
+    paths: ['android/**', '.github/workflows/android.yaml']
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+    paths: ['android/**', '.github/workflows/android.yaml']
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Android NDK
+        run: |
+          NDK=$(sed -n 's/.*ndkVersion = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK" > /dev/null
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      # Unsigned (no KC_KEYSTORE_FILE here): catches R8 and lintVitalRelease problems before a tag does.
+      - name: Release APK (unsigned, minified)
+        run: ./gradlew --no-daemon assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-report
+          path: android/app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kudkeys-debug
+          path: android/app/build/outputs/apk/debug/*.apk

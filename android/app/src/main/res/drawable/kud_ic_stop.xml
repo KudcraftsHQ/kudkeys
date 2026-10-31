@@ -1,0 +1,6 @@
+<!-- kudkeys: stop button for locked quick voice SPDX-License-Identifier: GPL-3.0-only -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp" android:height="28dp" android:viewportWidth="28" android:viewportHeight="28">
+    <path android:fillColor="#FF3B30" android:pathData="M14,1a13,13 0,1 1,0 26a13,13 0,1 1,0 -26z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M10.5,9.5h7a1,1 0,0 1,1 1v7a1,1 0,0 1,-1 1h-7a1,1 0,0 1,-1 -1v-7a1,1 0,0 1,1 -1z"/>
+</vector>
