@@ -47,6 +47,9 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
     private int mSlideOffsetY;
     // Kud Keys: how far right of the default key's centre the long-pressing finger started (see anchorSlideStart)
     private int mSlideOffsetX;
+    // Kud Keys: true only for long-press popups (anchorSlideStart ran). Other panels (more suggestions, emoji
+    // skin tones) keep HeliBoard's behaviour: sliding off the sides cancels.
+    private boolean mSlideAnchored;
     private Key mCurrentKey;
 
     private int mActivePointerId;
@@ -183,6 +186,7 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
         mOriginY = y + container.getPaddingTop() + (int) getY();
         mSlideOffsetY = 0;
         mSlideOffsetX = 0;
+        mSlideAnchored = false;
         controller.onShowPopupKeysPanel(this);
         final PopupKeysKeyboardAccessibilityDelegate accessibilityDelegate = mAccessibilityDelegate;
         if (accessibilityDelegate != null
@@ -215,6 +219,7 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
             bottomRowAnchorY = Math.max(bottomRowAnchorY, key.getY() + key.getHeight() - key.getHeight() / 4);
         }
         if (bottomRowAnchorY == Integer.MIN_VALUE) return;
+        mSlideAnchored = true;
         // x and y are already translated with the current offsets, so add them back to get the raw distances
         final int touchY = mKeyDetector.getTouchY(y + mSlideOffsetY);
         mSlideOffsetY = Math.max(0, touchY - bottomRowAnchorY);
@@ -282,8 +287,8 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
     private Key detectKey(int x, int y) {
         final Key oldKey = mCurrentKey;
         final Keyboard keyboard = getKeyboard();
-        if (keyboard != null) {
-            // Kud Keys: sliding sideways past either end keeps the end key instead of cancelling
+        if (keyboard != null && mSlideAnchored) {
+            // Kud Keys: sliding sideways past either end keeps the end key instead of cancelling (long-press only)
             final int touchX = mKeyDetector.getTouchX(x);
             final int clampedTouchX = Math.max(0, Math.min(keyboard.mOccupiedWidth - 1, touchX));
             x += clampedTouchX - touchX;
