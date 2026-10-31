@@ -1,0 +1,9 @@
+{
+  "files": [],
+  // bun:test reads this file, not the referenced ones: the same alias, so tests can import '@/…'.
+  "compilerOptions": { "paths": { "@/*": ["./src/*"] } },
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
