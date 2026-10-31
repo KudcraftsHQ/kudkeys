@@ -203,6 +203,11 @@ class VoiceClient(
         } finally {
             s.source.close()
         }
+        // The mic failed while still recording: end the session (mic released above), keeping what arrived,
+        // instead of showing Recording with nothing captured.
+        if (s.capturing && s.source.failed) synchronized(lock) {
+            if (current === s) endWithError(s, VoiceErrorKind.Mic, "mic read failed")
+        }
     }
 
     private inner class Listener(val s: Session) : WebSocketListener() {

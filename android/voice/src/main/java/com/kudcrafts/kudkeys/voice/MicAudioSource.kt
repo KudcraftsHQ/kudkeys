@@ -14,6 +14,9 @@ class MicAudioSource : AudioSource {
     private var record: AudioRecord? = null
     private var reading = false
     private var closed = false
+    @Volatile private var readFailed = false
+
+    override val failed: Boolean get() = readFailed
 
     @SuppressLint("MissingPermission")
     override fun open() {
@@ -48,7 +51,11 @@ class MicAudioSource : AudioSource {
         try {
             while (filled < buffer.size) {
                 val n = rec.read(buffer, filled, buffer.size - filled)
-                if (n <= 0) break
+                if (n <= 0) {
+                    // An error code (or nothing) while still open: the mic went away under us.
+                    if (!synchronized(lock) { closed }) readFailed = true
+                    break
+                }
                 filled += n
                 if (synchronized(lock) { closed }) break
             }

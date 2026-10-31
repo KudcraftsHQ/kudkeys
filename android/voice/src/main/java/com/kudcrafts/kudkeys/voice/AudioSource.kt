@@ -21,6 +21,12 @@ interface AudioSource {
 
     /** Stop capturing and free the device now. Idempotent, any thread, may interrupt [read]. */
     fun close()
+
+    /**
+     * True when [read] ended because the device failed (route change, mic taken by another app), not because
+     * the source was closed or simply ran out. [VoiceClient] then ends the session with [VoiceErrorKind.Mic].
+     */
+    val failed: Boolean get() = false
 }
 
 /** Mic level 0..1 from a PCM16 LE frame: RMS on a -60..0 dBFS scale. */

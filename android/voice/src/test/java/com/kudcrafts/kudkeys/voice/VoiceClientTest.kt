@@ -225,4 +225,48 @@ class VoiceClientTest {
         assertTrue("level ${s.level}", s.level in 0.5f..1f) // a -12 dBFS tone
         c.cancel()
     }
+
+    /** A mic that delivers frames until told to fail, like AudioRecord after a route change. */
+    private class FailingMic : AudioSource {
+        @Volatile var fail = false
+        @Volatile var closed = false
+        override val failed get() = fail
+        override fun open() = Unit
+        override fun read(buffer: ByteArray): Int {
+            if (closed || fail) return -1
+            Thread.sleep(20)
+            buffer.fill(0)
+            return buffer.size
+        }
+        override fun close() { closed = true }
+    }
+
+    @Test fun micReadFailure_endsWithMicError_keepsText_releasesMic() {
+        val fake = Fake()
+        upgrade(fake)
+        val mic = FailingMic()
+        val c = client(mic)
+        assertTrue(c.start())
+        await { c.state.first { it is VoiceState.Listening } }
+        fake.final(0, "sampai sini")
+        await { c.state.first { it is VoiceState.Listening && it.text == "sampai sini" } }
+        mic.fail = true
+        val end = await { c.state.first { !it.isActive } } as VoiceState.Error
+        assertEquals(VoiceErrorKind.Mic, end.kind)
+        assertEquals("sampai sini", end.text)
+        assertTrue(mic.closed)
+    }
+
+    @Test fun sourceRunningOut_isNotAnError() {
+        // A WAV that ends (failed = false) keeps the session listening, as before.
+        upgrade(Fake())
+        val (source, _) = wavSource(0.2)
+        val c = client(source)
+        assertTrue(c.start())
+        await { c.state.first { it is VoiceState.Listening } }
+        until { source.exhausted }
+        Thread.sleep(100)
+        assertTrue(c.state.value is VoiceState.Listening)
+        c.cancel()
+    }
 }
