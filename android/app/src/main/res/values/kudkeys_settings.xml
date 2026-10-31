@@ -43,6 +43,8 @@
     <string name="kud_cursor_control_summary" translatable="false">Slide your finger along the spacebar to move the cursor</string>
     <string name="kud_quick_delete" translatable="false">Quick delete</string>
     <string name="kud_quick_delete_summary" translatable="false">Slide from the delete key to select and delete text</string>
+    <string name="kud_delete_words_when_held" translatable="false">Delete words when held</string>
+    <string name="kud_delete_words_when_held_summary" translatable="false">Hold the delete key to delete whole words after the first few letters</string>
     <string name="kud_physical_keyboard" translatable="false">Physical keyboard</string>
     <string name="kud_physical_keyboard_summary" translatable="false">Adjust the settings for your physical keyboard. These settings do not affect your on-screen keyboard.</string>
     <string name="kud_clear_typing_data" translatable="false">Clear typing data</string>

@@ -46,6 +46,7 @@ import androidx.core.content.edit
 import helium314.keyboard.keyboard.KeyboardActionListener
 import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.keyboard.internal.keyboard_parser.LocaleKeyboardInfos
+import helium314.keyboard.kudkeys.KudHoldDelete
 import helium314.keyboard.kudkeys.KudSettings
 import helium314.keyboard.kudkeys.KudTypingData
 import helium314.keyboard.latin.AudioAndHapticFeedbackManager
@@ -237,6 +238,7 @@ fun KudTypingScreen(onClickBack: () -> Unit) = SearchSettingsScreen(
         Settings.PREF_AUTOSPACE_AFTER_PUNCTUATION,
         KudSettingKeys.CURSOR_CONTROL,
         Settings.PREF_DELETE_SWIPE,
+        KudHoldDelete.PREF_DELETE_WORDS_WHEN_HELD,
         KudSettingKeys.PHYSICAL_KEYBOARD,
         KudSettingKeys.CLEAR_TYPING_DATA,
     )
@@ -302,6 +304,9 @@ fun KudSoundScreen(onClickBack: () -> Unit) = SearchSettingsScreen(
 fun createKudSettings(context: Context) = listOf(
     Setting(context, KudSettings.PREF_QUICK_PREDICTION_INSERT, R.string.kud_quick_prediction, R.string.kud_quick_prediction_summary) {
         SwitchPreference(it, KudSettings.DEFAULT_QUICK_PREDICTION_INSERT)
+    },
+    Setting(context, KudHoldDelete.PREF_DELETE_WORDS_WHEN_HELD, R.string.kud_delete_words_when_held, R.string.kud_delete_words_when_held_summary) {
+        SwitchPreference(it, KudHoldDelete.DEFAULT_DELETE_WORDS_WHEN_HELD)
     },
     Setting(context, KudSettingKeys.CURSOR_CONTROL, R.string.kud_cursor_control, R.string.kud_cursor_control_summary) { setting ->
         val prefs = rememberPrefChanges()
