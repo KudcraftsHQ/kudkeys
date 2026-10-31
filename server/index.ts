@@ -4,7 +4,7 @@
 import { resolve } from 'node:path'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { createApp } from './app'
-import { createAuth, trustedOrigins } from './auth'
+import { createAuth, lookupSession, signUpOpen, trustedOrigins } from './auth'
 import { parseAllowlist } from './lib/allowlist'
 import { db } from './lib/db'
 import { prismaStore } from './lib/store'
@@ -17,14 +17,12 @@ if (!process.env.BETTER_AUTH_SECRET) {
 const cfg = loadConfig()
 const allowlist = parseAllowlist(process.env.KUDKEYS_ALLOWED_EMAILS)
 if (allowlist.size === 0) console.warn('[kudkeys] KUDKEYS_ALLOWED_EMAILS is empty — nobody can sign up or sign in')
+if (!signUpOpen()) console.log('[kudkeys] KUDKEYS_SIGNUP_OPEN=false — sign-up is closed')
 if (cfg.tokens.length === 0) console.warn('[kudkeys] KUDKEYS_TOKENS is empty — /v1/stream accepts account sessions only')
 
 const auth = createAuth({ database: prismaAdapter(db, { provider: 'postgresql' }), allowlist })
 const store = prismaStore(db)
-const getSession = async (headers: Headers) => {
-  const s = await auth.api.getSession({ headers })
-  return s ? { id: s.user.id, email: s.user.email, name: s.user.name ?? null } : null
-}
+const getSession = (headers: Headers) => lookupSession(auth, headers)
 const model = activeModel(cfg)
 
 const app = createApp({

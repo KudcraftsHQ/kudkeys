@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { memoryAdapter } from 'better-auth/adapters/memory'
 import { createApp } from '../app'
-import { createAuth } from '../auth'
+import { createAuth, lookupSession } from '../auth'
 import { parseAllowlist } from '../lib/allowlist'
 import { memoryStore } from '../lib/store'
 import { periodStarts } from '../lib/usage'
@@ -27,10 +27,7 @@ const auth = createAuth({
   baseURL: 'http://localhost:8080',
   secret: 'test-secret-test-secret-test-secret-123',
 })
-const getSession = async (headers: Headers) => {
-  const s = await auth.api.getSession({ headers })
-  return s ? { id: s.user.id, email: s.user.email, name: s.user.name ?? null } : null
-}
+const getSession = (headers: Headers) => lookupSession(auth, headers)
 
 let groq: ReturnType<typeof Bun.serve>
 let server: ReturnType<typeof createServer>
@@ -235,6 +232,12 @@ describe('/v1/stream auth', () => {
     allowlist.delete('second@kudcrafts.com')
     expect(await upgradeStatus(bearer(second))).toBe(401)
     expect((await fetch(`${base}/api/me`, { headers: bearer(second) })).status).toBe(403)
+  })
+
+  test('sign-out as the app sends it (bearer + Origin of the server) revokes the token', async () => {
+    const t = await signIn()
+    expect((await post('/api/auth/sign-out', {}, { ...bearer(t), origin: 'http://localhost:8080' })).status).toBe(200)
+    expect(await upgradeStatus(bearer(t))).toBe(401)
   })
 
   test('signing out revokes the token for the stream', async () => {

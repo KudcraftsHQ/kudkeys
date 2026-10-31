@@ -17,7 +17,11 @@ export type AppEnv = { Variables: { user: SessionUser } }
 export interface AppDeps {
   store: Store
   allowlist: Set<string>
-  /** The signed-in user for this request (cookie or bearer token), or null. */
+  /**
+   * The signed-in user for this request (cookie or bearer token), or null when
+   * there is no valid session. Throws when the lookup itself failed (database
+   * down): that is answered 503, never 401, so the app keeps its token.
+   */
   getSession: (headers: Headers) => Promise<SessionUser | null>
   /** Better Auth's handler, mounted at /api/auth/*. */
   authHandler?: (req: Request) => Promise<Response>
@@ -83,7 +87,13 @@ export function createApp(deps: AppDeps) {
   const trusted = new Set((deps.trustedOrigins ?? []).map((o) => o.replace(/\/+$/, '')))
   const requireUser: MiddlewareHandler<AppEnv> = async (c, next) => {
     if (isCrossSiteWrite(c.req.raw, trusted)) return c.json({ error: 'forbidden', reason: 'cross_site_request' }, 403)
-    const user = await deps.getSession(c.req.raw.headers).catch(() => null)
+    let user: SessionUser | null
+    try {
+      user = await deps.getSession(c.req.raw.headers)
+    } catch (e) {
+      console.error(`[kudkeys] session lookup failed: ${(e as Error).message}`)
+      return c.json({ error: 'unavailable', reason: 'session_lookup_failed' }, 503)
+    }
     if (!user) return c.json({ error: 'unauthorized' }, 401)
     if (!isAllowed(deps.allowlist, user.email)) return c.json({ error: 'forbidden', reason: 'not_allowed' }, 403)
     c.set('user', user)

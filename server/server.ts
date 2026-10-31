@@ -3,6 +3,7 @@
 // (voice/protocol.ts, README): transcript text is never logged or stored.
 
 import type { SessionUser } from './app'
+import { CLIENT_IP_HEADER } from './auth'
 import { isAllowed } from './lib/allowlist'
 import type { Store } from './lib/store'
 import { activeModel, type Config } from './voice/config'
@@ -24,6 +25,7 @@ export function providerFactory(cfg: Config): TranscriberFactory | null {
   return (opts, events) => new OpenAITranscriber({ apiKey, ...rest }, opts, events);
 }
 
+/** null = no valid credentials (401). Throws when the lookup itself failed (503). */
 export type StreamAuthenticator = (req: Request) => Promise<StreamAuth | null>;
 
 /**
@@ -40,12 +42,25 @@ export function streamAuthenticator(deps: {
     if (!/^Bearer\s+\S/i.test(req.headers.get("authorization") ?? "")) return null;
     if (authorized(req, deps.tokens)) return { kind: "token" };
     if (!deps.getSession || !deps.store || !deps.allowlist) return null;
-    const user = await deps.getSession(req.headers).catch(() => null);
+    const user = await deps.getSession(req.headers); // a database error throws → 503
     if (!user || !isAllowed(deps.allowlist, user.email)) return null;
     const profile = await deps.store.getProfile(user.id);
     if (!profile) return null;
     return { kind: "user", userId: user.id, voiceKeywords: profile.voiceKeywords, languages: profile.languages };
   };
+}
+
+/**
+ * The request with CLIENT_IP_HEADER set to cf-connecting-ip (Cloudflare sets
+ * it and overwrites any the client sent) or else the socket address. A value
+ * the client put in CLIENT_IP_HEADER or X-Forwarded-For is never used.
+ */
+export function withClientIp(req: Request, socketAddress: string | undefined): Request {
+  const headers = new Headers(req.headers);
+  const ip = req.headers.get("cf-connecting-ip")?.trim() || socketAddress;
+  if (ip) headers.set(CLIENT_IP_HEADER, ip);
+  else headers.delete(CLIENT_IP_HEADER);
+  return new Request(req, { headers });
 }
 
 export type ServerDeps = {
@@ -71,12 +86,18 @@ export function createServer(cfg: Config, deps: ServerDeps = {}) {
     async fetch(req, server) {
       const url = new URL(req.url);
       if (url.pathname === "/v1/stream") {
-        const auth = await authenticate(req);
+        let auth: StreamAuth | null;
+        try {
+          auth = await authenticate(req);
+        } catch (e) {
+          console.error(`stream auth lookup failed: ${(e as Error).message}`);
+          return Response.json({ error: "unavailable", reason: "session_lookup_failed" }, { status: 503 });
+        }
         if (!auth) return new Response("unauthorized\n", { status: 401 });
         if (server.upgrade(req, { data: { session: null, auth } })) return undefined;
         return new Response("expected a WebSocket upgrade\n", { status: 426 });
       }
-      if (deps.app) return deps.app.fetch(req);
+      if (deps.app) return deps.app.fetch(withClientIp(req, server.requestIP(req)?.address));
       if (url.pathname === "/health" || url.pathname === "/api/health") {
         return Response.json({ ok: true, transcription: model });
       }
