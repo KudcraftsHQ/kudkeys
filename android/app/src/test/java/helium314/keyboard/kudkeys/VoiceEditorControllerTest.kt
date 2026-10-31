@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.kudkeys
 
+import com.kudcrafts.kudkeys.voice.Fixed
+import com.kudcrafts.kudkeys.voice.Segment
 import com.kudcrafts.kudkeys.voice.TextResult
 import com.kudcrafts.kudkeys.voice.Tidied
 import com.kudcrafts.kudkeys.voice.TidyQuestion
@@ -272,5 +274,184 @@ class VoiceEditorControllerTest {
         val d = VoiceDraft("a\n\nb \"q\"", "a b", listOf(TidyQuestion("x", "b", 3, 4, listOf("B", "bee"))))
         assertEquals(d, VoiceDraft.fromJson(d.toJson()))
         assertNull(VoiceDraft.fromJson("{broken"))
+    }
+
+    // ---- v0.3 review fixes ---------------------------------------------------------------------------------
+
+    /** H1: the words are in the store the moment the dictation ends, before tidy answers; tidy then swaps them. */
+    @Test fun rawIsSavedAtStop_beforeTidyAnswers_thenSwapped() {
+        tidyWithQuestion()
+        text.hold = CompletableDeferred()
+        editor.open()
+        engine.say(ramble)
+        assertEquals(EditorMode.Tidying, last.mode)
+        val saved = VoiceDraft.fromJson(store.json!!)!!
+        assertEquals(ramble, saved.text)
+        assertEquals(listOf(TextSpan(0, ramble.length)), saved.untidied)
+        text.release()
+        assertEquals(tidied, last.text)
+        assertEquals(emptyList(), editor.currentDraft.untidied)
+        assertEquals(tidied, VoiceDraft.fromJson(store.json!!)!!.text)
+        assertFalse(last.canTidy)
+        editor.undo() // one Undo steps back over the whole dictation, as before
+        assertEquals("", last.text)
+    }
+
+    /** H1: the keyboard dies while tidy runs: the next keyboard has the words, and offers Tidy. */
+    @Test fun killedWhileTidying_keepsTheWords() {
+        text.hold = CompletableDeferred()
+        editor.open()
+        engine.say("tiga menit ngomong")
+        editor.destroy()
+        editor = newController()
+        editor.open()
+        assertEquals("tiga menit ngomong", last.text)
+        assertTrue(last.canTidy)
+    }
+
+    /** H1: a recording's words are saved every few seconds, and at destroy. */
+    @Test fun recordingWordsArePersistedWhileRecording_andAtDestroy() {
+        editor.setTidy(false)
+        editor.open()
+        engine.state.value = VoiceState.Listening(2000, "satu dua", 0.4f)
+        scheduler.fire(VoiceEditorController.PERSIST_MS)
+        assertEquals("satu dua", VoiceDraft.fromJson(store.json!!)!!.text)
+        assertEquals("", editor.currentDraft.text) // only stored: the draft gets them at Done
+        engine.state.value = VoiceState.Listening(4000, "satu dua tiga", 0.4f)
+        editor.destroy()
+        val d = VoiceDraft.fromJson(store.json!!)!!
+        assertEquals("satu dua tiga", d.text)
+        assertEquals(listOf(TextSpan(0, 13)), d.untidied)
+    }
+
+    /** H4: a failed or busy tidy leaves a Tidy button; the message says when to try again. */
+    @Test fun tidyBusy_offersTidy_withRetryAfter() {
+        text.tidyResult = { TextResult.RateLimited(20) }
+        editor.open()
+        engine.say("kata kata")
+        assertEquals("kata kata", last.text)
+        assertEquals("Tidy busy — try again in 20 s", last.message)
+        assertTrue(last.canTidy)
+        text.tidyResult = { TextResult.Ok(Tidied("Kata-kata.", emptyList())) }
+        editor.tidyNow()
+        assertEquals("Kata-kata.", last.text)
+        assertFalse(last.canTidy)
+        editor.undo() // the Tidy button's tidy is one Undo
+        assertEquals("kata kata", last.text)
+        assertTrue(last.canTidy)
+    }
+
+    @Test fun tidyTooLong_keptAsIs() {
+        text.tidyResult = { TextResult.TooLong }
+        editor.open()
+        engine.say("panjang")
+        assertEquals(TextAction.TOO_LONG_TO_TIDY, last.message)
+        assertEquals("panjang", last.text)
+    }
+
+    /** H4: tidy off keeps the words as said, and Tidy tidies just that part of the draft. */
+    @Test fun tidyOff_thenTidyButton_tidiesOnlyTheUntidiedPart() {
+        text.tidyResult = { TextResult.Ok(Tidied("Halo semua.", emptyList())) }
+        editor.open()
+        engine.say("halo semua")
+        editor.setTidy(false)
+        editor.onMicButton()
+        engine.say("ini mentah")
+        assertEquals("Halo semua. ini mentah", last.text)
+        assertTrue(last.canTidy)
+        text.tidyResult = { TextResult.Ok(Tidied("Ini mentah.", emptyList())) }
+        editor.tidyNow()
+        assertEquals(listOf("tidy:halo semua", "tidy:ini mentah"), text.calls)
+        assertEquals("Halo semua. Ini mentah.", last.text)
+    }
+
+    /** M3: dictating more while Raw is shown keeps the tidied draft and its answers. */
+    @Test fun continueWhileRawShown_keepsTheTidiedDraft() {
+        tidyWithQuestion()
+        editor.open()
+        engine.say(ramble)
+        editor.answer("Fenno")
+        editor.toggleRaw()
+        assertTrue(last.showingRaw)
+        editor.setTidy(false)
+        editor.onMicButton()
+        assertFalse(last.showingRaw)
+        engine.say("tambah lagi")
+        assertEquals(tidied.replaceFirst("Feno", "Fenno") + "\n\ntambah lagi", last.text)
+    }
+
+    /** L2: tidied text that starts with whitespace still highlights the right word. */
+    @Test fun leadingWhitespaceInTidyKeepsQuestionOffsets() {
+        text.tidyResult = { TextResult.Ok(Tidied("  Cek Feno.", listOf(TidyQuestion("q1", "Feno", 6, 10, listOf("Fenno"))))) }
+        editor.open()
+        engine.say("cek feno")
+        assertEquals("Cek Feno.", last.text)
+        assertEquals("Feno", last.text.substring(last.question!!.start, last.question!!.end))
+    }
+
+    /** L6: privateness is the field's when recording started, not when tidy is sent. */
+    @Test fun privateIsCapturedAtStart() {
+        private = true
+        text.hold = CompletableDeferred()
+        editor.open()
+        engine.state.value = VoiceState.Listening(100, "rahasia", 0.4f)
+        private = false
+        editor.onMicButton()
+        engine.state.value = VoiceState.Done("rahasia")
+        text.release()
+        assertEquals(listOf(true), text.privates)
+    }
+
+    /** L5: the recogniser's confidence goes with tidy. */
+    @Test fun segmentsGoToTidy() {
+        editor.open()
+        engine.state.value = VoiceState.Done("cek feno", listOf(Segment("cek feno", 0.4f)))
+        assertEquals(listOf(listOf(Segment("cek feno", 0.4f))), text.segments)
+    }
+
+    /** V3: the top bar's ✦ Fix works on the editor's text. */
+    @Test fun fixDraft_replacesTheTextWithUndo_andRefusesARewrite() {
+        editor.setTidy(false)
+        editor.open()
+        engine.say("halo apa kabr")
+        text.fixResult = { TextResult.Ok(Fixed("Halo, apa kabar?", true)) }
+        editor.fixDraft()
+        assertEquals(listOf("fix:halo apa kabr"), text.calls)
+        assertEquals("Halo, apa kabar?", last.text)
+        assertEquals(VoiceEditorController.FIXED, last.message)
+        editor.undo()
+        assertEquals("halo apa kabr", last.text)
+
+        text.fixResult = { TextResult.ChangedTooMuch }
+        editor.fixDraft()
+        assertEquals(TextAction.FIX_CHANGED_TOO_MUCH, last.message)
+        assertEquals("halo apa kabr", last.text)
+        text.fixResult = { TextResult.Ok(Fixed(it, false)) }
+        editor.fixDraft()
+        assertEquals(TextActionsController.LOOKS_GOOD, last.message)
+    }
+
+    /** L3: a spoken edit of a draft over 20,000 chars is refused, not truncated. */
+    @Test fun instructOnHugeDraftIsRefused() {
+        editor.setTidy(false)
+        editor.open()
+        engine.say("x".repeat(20_001))
+        holdInstruct("ringkas")
+        assertEquals(TextAction.TOO_LONG_TO_EDIT, last.message)
+        assertFalse(text.calls.any { it.startsWith("instruct") })
+        assertEquals(20_001, last.text.length)
+    }
+
+    @Test fun draftSpans_shiftWithAnswers_andRoundTrip() {
+        val d = VoiceDraft("Cek Feno. mentah sini", "cek feno mentah sini",
+            listOf(TidyQuestion("q1", "Feno", 4, 8, listOf("Fenno"))), listOf(TextSpan(10, 21)))
+        val a = d.answer(d.questions[0], "Fenno")
+        assertEquals(listOf(TextSpan(11, 22)), a.untidied)
+        assertEquals("mentah sini", a.textOf(a.untidied[0]))
+        assertEquals(a, VoiceDraft.fromJson(a.toJson()))
+        // a stale span (the text changed) is not replaced
+        assertNull(a.tidySpan(TextSpan(11, 22), "other text!", "X", emptyList()))
+        val t = a.tidySpan(TextSpan(11, 22), "mentah sini", "Mentah sini:\n\n- satu", emptyList())!!
+        assertEquals("Cek Fenno.\n\nMentah sini:\n\n- satu", t.text) // a list after it: a blank line before it
     }
 }

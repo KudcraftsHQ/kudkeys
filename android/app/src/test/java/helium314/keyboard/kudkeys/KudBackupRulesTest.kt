@@ -41,14 +41,16 @@ class KudBackupRulesTest {
 
     @Test fun legacyBackupExcludesVoicePrefsAndDraftOnly() {
         assertEquals(
-            listOf(voicePrefs, draftPrefs).flatMap { listOf(Triple("", "sharedpref", it), Triple("", "device_sharedpref", it)) }.toSet(),
+            (listOf(voicePrefs, draftPrefs).flatMap { listOf(Triple("", "sharedpref", it), Triple("", "device_sharedpref", it)) } +
+                listOf(Triple("", "file", PrefsDraftStore.DRAFT_FILE), Triple("", "device_file", PrefsDraftStore.DRAFT_FILE))).toSet(),
             excludes(R.xml.kud_backup_rules).toSet(),
         )
     }
 
     @Test fun cloudBackupAndTransferExcludeVoicePrefsOnly() {
         val expected = listOf("cloud-backup", "device-transfer").flatMap { section ->
-            listOf(voicePrefs, draftPrefs).flatMap { listOf(Triple(section, "sharedpref", it), Triple(section, "device_sharedpref", it)) }
+            listOf(voicePrefs, draftPrefs).flatMap { listOf(Triple(section, "sharedpref", it), Triple(section, "device_sharedpref", it)) } +
+                listOf(Triple(section, "file", PrefsDraftStore.DRAFT_FILE), Triple(section, "device_file", PrefsDraftStore.DRAFT_FILE))
         }.toSet()
         assertEquals(expected, excludes(R.xml.kud_data_extraction_rules).toSet())
     }

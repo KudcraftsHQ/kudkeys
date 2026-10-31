@@ -2,6 +2,7 @@
 package helium314.keyboard.kudkeys
 
 import com.kudcrafts.kudkeys.voice.Fixed
+import com.kudcrafts.kudkeys.voice.Segment
 import com.kudcrafts.kudkeys.voice.TextResult
 import com.kudcrafts.kudkeys.voice.TextService
 import com.kudcrafts.kudkeys.voice.Tidied
@@ -36,6 +37,7 @@ class FakeVoiceEngine : VoiceEngine {
 class FakeTextService : TextService {
     val calls = mutableListOf<String>()
     val privates = mutableListOf<Boolean>()
+    val segments = mutableListOf<List<Segment>>()
     var tidyResult: (String) -> TextResult<Tidied> = { TextResult.Ok(Tidied(it, emptyList())) }
     var fixResult: (String) -> TextResult<Fixed> = { TextResult.Ok(Fixed(it, false)) }
     var instructResult: (String, String) -> TextResult<String> = { _, t -> TextResult.Ok(t) }
@@ -44,8 +46,8 @@ class FakeTextService : TextService {
     private suspend fun gate() { hold?.await() }
     fun release() { hold?.complete(Unit); hold = null }
 
-    override suspend fun tidy(text: String, private: Boolean): TextResult<Tidied> {
-        calls += "tidy:$text"; privates += private; gate(); return tidyResult(text)
+    override suspend fun tidy(text: String, private: Boolean, segments: List<Segment>): TextResult<Tidied> {
+        calls += "tidy:$text"; privates += private; this.segments += segments; gate(); return tidyResult(text)
     }
     override suspend fun fix(text: String, private: Boolean): TextResult<Fixed> {
         calls += "fix:$text"; privates += private; gate(); return fixResult(text)
@@ -57,8 +59,9 @@ class FakeTextService : TextService {
 
 class MemoryDraftStore : DraftStore {
     var json: String? = null
+    var saves = 0
     override fun load() = json?.let(VoiceDraft::fromJson)
-    override fun save(draft: VoiceDraft?) { json = draft?.takeIf { !it.isEmpty }?.toJson() }
+    override fun save(draft: VoiceDraft?) { saves++; json = draft?.takeIf { !it.isEmpty }?.toJson() }
     override var tidyOn = true
 }
 
