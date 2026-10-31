@@ -29,11 +29,15 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.common.Colors
 import helium314.keyboard.latin.settings.Settings
 import kotlin.math.roundToInt
+import android.os.Build
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 /**
  * The full voice editor (spec item 1). It sits over the key area in `main_keyboard_frame.xml` and takes exactly the
@@ -84,10 +88,12 @@ class KudVoiceEditorView @JvmOverloads constructor(
     private var lastScrollFor: String? = null
     private val END = Any()
 
+    private val root = LinearLayout(context)
+
     init {
         isClickable = true // the keys underneath never get a touch
         setWillNotDraw(false)
-        val root = LinearLayout(context).apply {
+        root.apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpi(12), dpi(2), dpi(8), dpi(6))
         }
@@ -186,7 +192,26 @@ class KudVoiceEditorView @JvmOverloads constructor(
     }
 
     /** The key area's height: the tallest other child of the keyboard wrapper (keys or emoji), never more. */
+    /**
+     * The editor covers the keys' whole area, including the strip under the bottom row where the phone's navigation
+     * buttons sit (Android 15+ draws them over the keyboard). Keep the buttons above it: the larger of the
+     * navigation bar inset and the keyboard's own gap under its bottom row.
+     */
+    private fun bottomGap(): Int {
+        val nav = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM)
+            ViewCompat.getRootWindowInsets(this)?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+        else 0
+        val keyboard = runCatching { KeyboardSwitcher.getInstance().keyboard }.getOrNull()
+        val underKeys = keyboard?.let { k ->
+            val lastRowBottom = k.sortedKeys.maxOfOrNull { it.y + it.height } ?: return@let 0
+            (k.mOccupiedHeight - lastRowBottom).coerceAtLeast(0)
+        } ?: 0
+        return maxOf(nav, underKeys)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val bottom = dpi(6) + bottomGap()
+        if (root.paddingBottom != bottom) root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, bottom)
         if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) return super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         val parent = parent as? ViewGroup
         var h = 0
