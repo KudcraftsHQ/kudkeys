@@ -90,7 +90,7 @@ Better Auth, mounted at `/api/auth/*`; its errors are `{"code","message"}`. The 
 | Call | Body | Answer |
 |---|---|---|
 | `POST /api/auth/sign-in/email` | `{"email","password"}` | 200 `{user, token, redirect}`, and the session token in the **`set-auth-token`** response header. 401 `INVALID_EMAIL_OR_PASSWORD`; 429 after 5 tries a minute from one IP |
-| `POST /api/auth/sign-up/email` | `{"email","password","name"}` | Same as sign-in (signed in straight away). 403 `EMAIL_NOT_ALLOWED` outside `KUDKEYS_ALLOWED_EMAILS`; 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED` when `KUDKEYS_SIGNUP_OPEN=false`; 422 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; 400 `PASSWORD_TOO_SHORT` (< 10) |
+| `POST /api/auth/sign-up/email` | `{"email","password","name"}` | Same as sign-in (signed in straight away). 403 `EMAIL_NOT_ALLOWED` outside `KUDKEYS_ALLOWED_EMAILS`; 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED` when `KUDKEYS_SIGNUP_OPEN=false`; 422 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; 400 `PASSWORD_TOO_SHORT` (< 8) |
 | `GET /api/auth/get-session` | — | `{session, user}`, or `null` when the token is no longer valid |
 | `POST /api/auth/sign-out` | `{}` | 200; this token stops working, `/v1/stream` included (other devices stay signed in). The app sends `Origin: <server base>` here so Better Auth's origin check passes |
 | `GET /api/auth/list-sessions` | — | Every signed-in device (`token`, `userAgent`, `ipAddress`, `createdAt`, `updatedAt`) |
