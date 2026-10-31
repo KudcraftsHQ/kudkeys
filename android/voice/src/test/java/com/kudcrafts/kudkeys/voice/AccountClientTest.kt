@@ -1,6 +1,7 @@
 package com.kudcrafts.kudkeys.voice
 
 import java.net.ServerSocket
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
@@ -129,14 +130,48 @@ class AccountClientTest {
         assertEquals("/api/me/usage", server.takeRequest().path)
     }
 
-    @Test fun signOut_callsServerAndForgetsToken() = runBlocking {
+    @Test fun signOut_callsServerWithOriginAndForgetsToken() = runBlocking {
         settings.signedIn("tok.sig", "Hammas", "h@example.com")
         server.enqueue(json(200, """{"success":true}"""))
-        account.signOut()
+        account.signOut(this)!!.join()
         val req = server.takeRequest()
         assertEquals("/api/auth/sign-out", req.path)
         assertEquals("Bearer tok.sig", req.getHeader("Authorization"))
+        assertEquals(AccountClient.originOf(settings.apiBase), req.getHeader("Origin"))
+        assertEquals("http://${server.hostName}:${server.port}", req.getHeader("Origin"))
         assertFalse(settings.isSignedIn)
         assertFalse(settings.wasSignedOut)
+    }
+
+    @Test fun signOut_forgetsTokenBeforeTheServerAnswers_andIgnoresFailures() = runBlocking {
+        settings.signedIn("tok.sig", "Hammas", "h@example.com")
+        server.enqueue(json(500, """{"error":"boom"}""").setHeadersDelay(1, TimeUnit.SECONDS))
+        val job = account.signOut(this)!!
+        assertFalse(settings.isSignedIn) // already gone while the server is still thinking
+        assertTrue(job.isActive)
+        job.join()
+        assertFalse(settings.isSignedIn)
+    }
+
+    @Test fun signOut_offline_stillSignsOut() = runBlocking {
+        settings.signedIn("tok.sig", "Hammas", "h@example.com")
+        settings.serverUrl = "ws://127.0.0.1:${ServerSocket(0).use { it.localPort }}/v1/stream"
+        account.signOut(this)!!.join()
+        assertFalse(settings.isSignedIn)
+    }
+
+    @Test fun originOf_dropsPathAndDefaultPort() {
+        assertEquals("https://keys.kudcrafts.com", AccountClient.originOf("https://keys.kudcrafts.com"))
+        assertEquals("https://keys.kudcrafts.com", AccountClient.originOf("https://keys.kudcrafts.com:443/api/"))
+        assertEquals("http://10.0.2.2:8080", AccountClient.originOf("http://10.0.2.2:8080"))
+    }
+
+    @Test fun me_503_keepsTheToken() = runBlocking {
+        settings.signedIn("tok.sig", "Hammas", "h@example.com")
+        server.enqueue(json(503, """{"error":"unavailable","reason":"session_lookup_failed"}"""))
+        assertEquals(AccountResult.Unreachable, account.me())
+        assertTrue(settings.isSignedIn)
+        assertFalse(settings.wasSignedOut)
+        assertEquals("tok.sig", settings.sessionToken)
     }
 }

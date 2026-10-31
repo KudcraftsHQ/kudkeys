@@ -62,7 +62,7 @@ class AccountLocalTest {
 
         // sign out: the token is dead on the server too, so a stream with it is refused
         val dead = settings.sessionToken
-        account.signOut()
+        account.signOut(this)?.join()
         assertFalse(settings.isSignedIn)
         val deadSettings = VoiceSettings(FakePrefs()).apply { serverUrl = settings.serverUrl; signedIn(dead, "x", "x") }
         val c2 = VoiceClient(deadSettings::endpoint, { File.createTempFile("tone", ".wav").let { writeWav(it, tonePcm(1.0)); WavAudioSource(it, 100) } },

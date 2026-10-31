@@ -64,6 +64,11 @@ enum class VoiceErrorKind(val userMessage: String) {
     Provider("Voice: transcription failed"),
     /** Server `limit`: session or rate limit. */
     Limit("Voice: limit reached"),
+    /**
+     * HTTP 5xx on the upgrade (e.g. 503: the server could not check the session because its database is down).
+     * Not a sign-out: the token is kept and the next try may work.
+     */
+    Unavailable("Voice: server unavailable, try again"),
     /** Server `internal`, close 1011, any other HTTP error or close code. */
     Server("Voice: server error"),
 }

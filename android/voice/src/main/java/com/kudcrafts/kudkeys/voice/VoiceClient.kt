@@ -267,6 +267,8 @@ class VoiceClient(
                         endWithError(s, VoiceErrorKind.SignedOut, "HTTP 401")
                     }
                     response?.code == 401 -> endWithError(s, VoiceErrorKind.TokenRejected, "HTTP 401")
+                    // only a 401 signs out; a 5xx (database blip, redeploy) keeps the token
+                    response != null && response.code >= 500 -> endWithError(s, VoiceErrorKind.Unavailable, "HTTP ${response.code}")
                     response != null -> endWithError(s, VoiceErrorKind.Server, "HTTP ${response.code}")
                     t is IOException -> endWithError(s, VoiceErrorKind.NoConnection, t.javaClass.simpleName)
                     else -> endWithError(s, VoiceErrorKind.Server, t.javaClass.simpleName)

@@ -18,6 +18,8 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -79,8 +81,12 @@ class AccountClient(
         }
     }
 
+    /**
+     * Revokes [token] on the server. Sends `Origin: <server base>`: Better Auth turns the bearer token into a
+     * cookie, and then refuses a cookie write that names no trusted origin.
+     */
     suspend fun signOut(token: String): AccountResult<Unit> =
-        call("POST", "/api/auth/sign-out", token, JsonObject(emptyMap())) { _, _ -> AccountResult.Ok(Unit) }
+        call("POST", "/api/auth/sign-out", token, JsonObject(emptyMap()), sendOrigin = true) { _, _ -> AccountResult.Ok(Unit) }
 
     suspend fun me(token: String): AccountResult<Profile> =
         call("GET", "/api/me", token, null) { _, json -> parseProfile(json) }
@@ -118,11 +124,13 @@ class AccountClient(
         token: String?,
         body: JsonObject?,
         signIn: Boolean = false,
+        sendOrigin: Boolean = false,
         ok: (Response, JsonElement?) -> AccountResult<T>,
     ): AccountResult<T> = withContext(Dispatchers.IO) {
         val request = try {
             Request.Builder().url(baseUrl().trimEnd('/') + path).apply {
                 if (token != null) header("Authorization", "Bearer $token")
+                if (sendOrigin) header("Origin", originOf(baseUrl()))
                 userAgent()?.let { header("User-Agent", it) }
                 header("Accept", "application/json")
                 method(method, body?.toString()?.toRequestBody(JSON))
@@ -152,6 +160,12 @@ class AccountClient(
 
     companion object {
         private val JSON = "application/json".toMediaType()
+
+        /** `https://keys.kudcrafts.com/x` → `https://keys.kudcrafts.com` (the port only when it isn't the default). */
+        fun originOf(base: String): String {
+            val u = base.toHttpUrl()
+            return HttpUrl.Builder().scheme(u.scheme).host(u.host).port(u.port).build().toString().trimEnd('/')
+        }
 
         private val defaultHttp: OkHttpClient by lazy {
             OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()

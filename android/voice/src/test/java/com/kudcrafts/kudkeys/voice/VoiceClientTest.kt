@@ -225,6 +225,26 @@ class VoiceClientTest {
         assertEquals("legacy-token-0123456789abcdef", settings.endpoint().token)
     }
 
+    @Test fun sessionToken503_keepsTheToken_andSaysServerUnavailable() {
+        server.enqueue(MockResponse().setResponseCode(503).setHeader("Content-Type", "application/json")
+            .setBody("""{"error":"unavailable","reason":"session_lookup_failed"}"""))
+        val settings = VoiceSettings(FakePrefs()).apply {
+            serverUrl = url()
+            signedIn("sess.sig", "Hammas", "h@example.com")
+        }
+        var rejected = false
+        val (source, _) = wavSource(30.0, frameDelayMs = 20)
+        val c = VoiceClient(settings::endpoint, { source }, onSessionRejected = { rejected = true; settings.markSignedOut() })
+        c.start()
+        val end = await { c.state.first { !it.isActive } } as VoiceState.Error
+        assertEquals(VoiceErrorKind.Unavailable, end.kind)
+        assertEquals("Voice: server unavailable, try again", end.kind.userMessage)
+        assertFalse(rejected)
+        assertTrue(settings.isSignedIn)
+        assertEquals("sess.sig", settings.endpoint().token)
+        assertTrue(source.closed)
+    }
+
     @Test fun sessionToken_isSentOverLegacyToken_withoutLanguagesOrKeywords() {
         val fake = Fake { t -> if (type(t) == "stop") { ws.send("""{"type":"done"}"""); ws.close(1000, null) } }
         upgrade(fake)

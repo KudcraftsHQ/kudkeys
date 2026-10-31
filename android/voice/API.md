@@ -49,6 +49,7 @@ cancel() from anywhere → Idle
 | `BadRequest`, `NotStarted` | server `bad_request`/`not_started`, close 1008 | Voice: request rejected |
 | `Provider` | server `provider` | Voice: transcription failed |
 | `Limit` | server `limit` | Voice: limit reached |
+| `Unavailable` | HTTP 5xx on upgrade (503: the server could not check the session). The token is kept | Voice: server unavailable, try again |
 | `Server` | server `internal`, close 1011, other HTTP codes | Voice: server error |
 
 ## Hold-to-talk (quick voice mode)

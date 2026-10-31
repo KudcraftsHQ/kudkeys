@@ -1,10 +1,16 @@
 package com.kudcrafts.kudkeys.voice
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * The signed-in account, as the settings screens use it: [AccountClient] calls with the stored session token.
- * Sign-in stores the token; a 401 on any call marks the account signed out; sign-out forgets it.
+ * Sign-in stores the token; only a 401 on a call marks the account signed out (a 5xx or no network keeps it);
+ * sign-out forgets it.
  */
 class Account(val settings: VoiceSettings, val client: AccountClient = AccountClient({ settings.apiBase })) {
     constructor(context: Context) : this(VoiceSettings(context.applicationContext))
@@ -22,11 +28,16 @@ class Account(val settings: VoiceSettings, val client: AccountClient = AccountCl
 
     suspend fun usage(): AccountResult<Usage> = authed { client.usage(it) }
 
-    /** Tells the server (best effort: offline still signs out here), then forgets the token. */
-    suspend fun signOut() {
+    /**
+     * Forgets the token on this phone first (so closing the screen, a slow network or being offline cannot leave
+     * it behind), then revokes it on the server best effort, on [background] so it outlives the screen.
+     * Failures are ignored. Returns the server call, for tests.
+     */
+    fun signOut(background: CoroutineScope = signOutScope): Job? {
         val token = settings.sessionToken
-        if (token.isNotEmpty()) client.signOut(token)
         settings.signOut()
+        if (token.isEmpty()) return null
+        return background.launch { runCatching { client.signOut(token) } }
     }
 
     private suspend fun <T> authed(block: suspend (String) -> AccountResult<T>): AccountResult<T> {
@@ -39,5 +50,10 @@ class Account(val settings: VoiceSettings, val client: AccountClient = AccountCl
 
     private fun remember(r: AccountResult<Profile>) {
         if (r is AccountResult.Ok) settings.updateAccount(r.value.name, r.value.email)
+    }
+
+    private companion object {
+        /** App-wide: a server sign-out keeps going after the profile screen is gone. */
+        val signOutScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 }
