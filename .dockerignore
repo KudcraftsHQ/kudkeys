@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+server/public
+*.log
+android
+docs
+.env
+.env.*
+!.env.example
+.git
+.github
+*.tsbuildinfo
+.cache
+**/.prisma
