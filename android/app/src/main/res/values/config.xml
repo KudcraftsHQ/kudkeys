@@ -16,9 +16,10 @@
 
     <!-- Preferable keyboard height in absolute scale: 1.285in -->
     <!-- This config_default_keyboard_height value should match with keyboard-heights.xml -->
-    <dimen name="config_default_keyboard_height">205.6dp</dimen>
+    <!-- Kud Keys: SwiftKey's rows are ~51.6dp each on a 411dp wide phone (205.6dp / -61.8%p upstream) -->
+    <dimen name="config_default_keyboard_height">213dp</dimen>
     <fraction name="config_max_keyboard_height">46%p</fraction>
-    <fraction name="config_min_keyboard_height">-61.8%p</fraction>
+    <fraction name="config_min_keyboard_height">-50%p</fraction>
 
     <dimen name="config_popup_keys_keyboard_key_height">52.8dp</dimen>
     <!-- Amount of allowance for selecting keys in a mini popup keyboard by sliding finger. -->
@@ -36,7 +37,7 @@
     <dimen name="config_key_preview_offset_lxx">0dp</dimen>
     <fraction name="config_key_preview_text_ratio">82%</fraction>
     <fraction name="config_key_letter_ratio_holo">55%</fraction>
-    <fraction name="config_key_letter_ratio_lxx">55%</fraction>
+    <fraction name="config_key_letter_ratio_lxx">40%</fraction><!-- Kud Keys: SwiftKey size, upstream 55% -->
     <fraction name="config_key_large_letter_ratio_holo">65%</fraction>
     <fraction name="config_key_large_letter_ratio_lxx">90%</fraction>
     <fraction name="config_key_label_ratio_holo">34%</fraction>

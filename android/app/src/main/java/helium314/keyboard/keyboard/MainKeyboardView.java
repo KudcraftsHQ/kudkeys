@@ -51,7 +51,6 @@ import helium314.keyboard.latin.common.ColorType;
 import helium314.keyboard.latin.common.Colors;
 import helium314.keyboard.latin.common.Constants;
 import helium314.keyboard.latin.common.CoordinateUtils;
-import helium314.keyboard.latin.define.DebugFlags;
 import helium314.keyboard.latin.settings.DebugSettings;
 import helium314.keyboard.latin.settings.Defaults;
 import helium314.keyboard.latin.settings.Settings;
@@ -84,6 +83,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     private final float mLanguageOnSpacebarTextRatio;
     private float mLanguageOnSpacebarTextSize;
     private final int mLanguageOnSpacebarTextColor;
+    private final int mKudHintColor;
     private final float mLanguageOnSpacebarTextShadowRadius;
     private final int mLanguageOnSpacebarTextShadowColor;
     private static final float LANGUAGE_ON_SPACEBAR_TEXT_SHADOW_RADIUS_DISABLED = -1.0f;
@@ -169,6 +169,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
                 * Settings.getValues().mFontSizeMultiplier;
         final Colors colors = Settings.getValues().mColors;
         mLanguageOnSpacebarTextColor = colors.get(ColorType.SPACE_BAR_TEXT);
+        mKudHintColor = colors.get(ColorType.KEY_HINT_TEXT);
         mLanguageOnSpacebarTextShadowRadius = mainKeyboardViewAttr.getFloat(
                 R.styleable.MainKeyboardView_languageOnSpacebarTextShadowRadius,
                 LANGUAGE_ON_SPACEBAR_TEXT_SHADOW_RADIUS_DISABLED);
@@ -710,16 +711,51 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         super.onDrawKeyTopVisuals(key, canvas, paint, params);
         final int code = key.getCode();
         if (code == Constants.CODE_SPACE) {
-            // If input language are explicitly selected.
-            if (mLanguageOnSpacebarFormatType != LanguageOnSpacebarUtils.FORMAT_TYPE_NONE) {
-                drawLanguageOnSpacebar(key, canvas, paint);
-            }
+            // Kud Keys: always show the languages, like SwiftKey ("‹  en/id  ›")
+            drawLanguageOnSpacebar(key, canvas, paint);
             // Whether space key needs to show the "..." popup hint for special purposes
             if (key.isLongPressEnabled() && mHasMultipleEnabledIMEsOrSubtypes && Settings.getValues().mSpaceForLangChange) {
                 drawKeyPopupHint(key, canvas, paint, params);
             }
         } else if (code == KeyCode.LANGUAGE_SWITCH) {
             drawKeyPopupHint(key, canvas, paint, params);
+        } else if (isSwiftKeyPunctuationKey(key)) {
+            drawSwiftKeyPunctuationHint(key, canvas, paint);
+        }
+    }
+
+    /** Kud Keys: the alphabet bottom row's comma and period, which show SwiftKey's hints above a lowered label. */
+    private boolean isSwiftKeyPunctuationKey(@NonNull final Key key) {
+        final Keyboard keyboard = getKeyboard();
+        if (keyboard == null || !keyboard.mId.getElement().isAlphabet()) return false;
+        final int code = key.getCode();
+        return (code == ',' || code == '.') && key.getBackgroundType() == Key.BACKGROUND_TYPE_FUNCTIONAL;
+    }
+
+    @Override
+    protected float getLabelBaselineOffset(@NonNull final Key key) {
+        return isSwiftKeyPunctuationKey(key) ? key.getHeight() * 0.11f : 0f;
+    }
+
+    /** a small mic above the comma (long press = voice), and ",!?" above the period (long press = punctuation) */
+    private void drawSwiftKeyPunctuationHint(@NonNull final Key key, @NonNull final Canvas canvas, @NonNull final Paint paint) {
+        final float centerX = key.getDrawWidth() / 2f;
+        final float hintCenterY = key.getHeight() * 0.24f;
+        if (key.getCode() == ',') {
+            final Keyboard keyboard = getKeyboard();
+            final android.graphics.drawable.Drawable mic = keyboard.mIconsSet.getIconDrawable("shortcut_key");
+            if (mic == null) return;
+            final int size = (int) (key.getHeight() * 0.25f);
+            mic.setColorFilter(mKudHintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+            drawIcon(canvas, mic, (int) (centerX - size / 2f), (int) (hintCenterY - size / 2f), size, size);
+            mic.clearColorFilter();
+        } else {
+            paint.setTypeface(Typeface.DEFAULT);
+            paint.setTextAlign(Align.CENTER);
+            paint.setTextSize(key.getHeight() * 0.24f);
+            paint.setColor(mKudHintColor);
+            final float capHeight = TypefaceUtils.getReferenceCharHeight(paint);
+            canvas.drawText(",!?", centerX, hintCenterY + capHeight / 2f, paint);
         }
     }
 
@@ -786,6 +822,38 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         return "";
     }
 
+    /** Kud Keys: SwiftKey's "en/id" label, built from the main and secondary languages, lower case. */
+    private String swiftKeyLanguageLabel(final RichInputMethodSubtype subtype) {
+        final StringBuilder sb = new StringBuilder(subtype.getLocale().getLanguage());
+        for (Locale locale : withoutDuplicateLanguages(Settings.getValues().mSecondaryLocales, subtype.getLocale().getLanguage())) {
+            sb.append('/');
+            // Java may still report Indonesian as the legacy "in"
+            sb.append(locale.getLanguage().equals("in") ? "id" : locale.getLanguage());
+        }
+        return sb.toString().toLowerCase(Locale.ROOT);
+    }
+
+    /** the thin "‹" and "›" near the ends of SwiftKey's space bar */
+    private void drawSpacebarChevrons(final int width, final int height, final Canvas canvas, final Paint paint) {
+        final float density = getResources().getDisplayMetrics().density;
+        final float chevronHeight = height * 0.26f;
+        final float chevronWidth = chevronHeight * 0.5f;
+        final float inset = 10 * density;
+        final float top = (height - chevronHeight) / 2f;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.2f * density);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setColor(mLanguageOnSpacebarTextColor);
+        paint.setAlpha(mLanguageOnSpacebarAnimAlpha * 6 / 10);
+        final float left = inset;
+        final float right = width - inset;
+        canvas.drawLine(left + chevronWidth, top, left, top + chevronHeight / 2f, paint);
+        canvas.drawLine(left, top + chevronHeight / 2f, left + chevronWidth, top + chevronHeight, paint);
+        canvas.drawLine(right - chevronWidth, top, right, top + chevronHeight / 2f, paint);
+        canvas.drawLine(right, top + chevronHeight / 2f, right - chevronWidth, top + chevronHeight, paint);
+        paint.setStyle(Paint.Style.FILL);
+    }
+
     private List<Locale> withoutDuplicateLanguages(List<Locale> locales, String mainLanguage) {
         ArrayList<String> languages = new ArrayList<String>() {{ add(mainLanguage); }};
         ArrayList<Locale> newLocales = new ArrayList<>();
@@ -816,12 +884,10 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final String spaceText;
         if (!customText.isEmpty()) {
             spaceText = customText;
-        } else if (DebugFlags.DEBUG_ENABLED) {
-            final String l = KeyboardSwitcher.getInstance().getLocaleAndConfidenceInfo();
-            spaceText = l != null ? l : layoutLanguageOnSpacebar(paint, keyboard.mId.getSubtype(), width);
+        } else {
+            spaceText = swiftKeyLanguageLabel(keyboard.mId.getSubtype());
+            drawSpacebarChevrons(width, height, canvas, paint);
         }
-        else
-            spaceText = layoutLanguageOnSpacebar(paint, keyboard.mId.getSubtype(), width);
         paint.setTypeface(KeyboardTypeface.resolve(spaceText, Typeface.DEFAULT));
         // Draw language text with shadow
         final float descent = paint.descent();

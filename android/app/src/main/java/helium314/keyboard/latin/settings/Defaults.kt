@@ -54,7 +54,7 @@ object Defaults {
     const val PREF_CUSTOM_ICON_NAMES = ""
     const val PREF_TOOLBAR_CUSTOM_KEY_CODES = ""
     const val PREF_AUTO_CAP = true
-    const val PREF_VIBRATE_ON = false
+    const val PREF_VIBRATE_ON = true // Kud Keys: SwiftKey ticks on every key press (system haptic, see PREF_VIBRATION_DURATION_SETTINGS)
     const val PREF_VIBRATE_IN_DND_MODE = false
     const val PREF_SOUND_ON = false
     const val PREF_SUGGEST_EMOJIS = true
@@ -152,7 +152,7 @@ object Defaults {
     const val PREF_LOCALIZED_NUMBER_ROW = true
     const val PREF_SHOW_NUMBER_ROW_HINTS = false
     const val PREF_CUSTOM_CURRENCY_KEY = ""
-    const val PREF_SHOW_HINTS = true
+    const val PREF_SHOW_HINTS = false // Kud Keys: SwiftKey shows no hints on letter keys
     const val PREF_POPUP_KEYS_ORDER = POPUP_KEYS_ORDER_DEFAULT
     const val PREF_POPUP_KEYS_HINT_ORDER = POPUP_KEYS_LABEL_DEFAULT
     const val PREF_SHOW_POPUP_HINTS = false

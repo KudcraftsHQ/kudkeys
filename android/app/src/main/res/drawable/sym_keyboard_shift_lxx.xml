@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    SPDX-FileCopyrightText: Material Design Authors / Google LLC
-    SPDX-License-Identifier: Apache-2.0
--->
+<!-- Kud Keys: SwiftKey-like shift icon. SPDX-License-Identifier: GPL-3.0-only -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-    <path android:fillColor="#FFF"
-        android:pathData="M320,840L320,520L120,520L480,80L840,520L640,520L640,840L320,840ZM400,760L560,760L560,440L671,440L480,206L289,440L400,440L400,760ZM480,440L480,440L480,440L480,440L480,440L480,440L480,440Z"/>
+    android:width="31dp"
+    android:height="31dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+<!-- lower case: outlined arrow -->
+    <path android:strokeColor="#FFF" android:strokeWidth="1.2" android:strokeLineJoin="round" android:pathData="M12,2.6L21.2,12.6L16.2,12.6L16.2,18.2L7.8,18.2L7.8,12.6L2.8,12.6Z"/>
 </vector>

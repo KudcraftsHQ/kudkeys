@@ -164,16 +164,19 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
                     ContextCompat.getColor(context, R.color.key_hint_letter_color_lxx_light),
                     keyboardBackground = backgroundImage
                 )
+                // Kud Keys: flat near-black like SwiftKey's dark theme (colours sampled from a SwiftKey screenshot).
+                // Without key borders, keys only show their background (#333333) while pressed, and the
+                // space bar is the same colour as the keyboard, so it is invisible until pressed.
                 THEME_DARK -> DefaultColors(
                     themeStyle,
                     hasBorders,
                     ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
-                    "#263238".toColorInt(),
-                    "#364248".toColorInt(),
-                    "#2d393f".toColorInt(),
-                    "#364248".toColorInt(),
-                    ContextCompat.getColor(context, R.color.key_text_color_lxx_dark),
-                    ContextCompat.getColor(context, R.color.key_hint_letter_color_lxx_dark),
+                    "#171717".toColorInt(), // background
+                    "#333333".toColorInt(), // key (pressed)
+                    "#333333".toColorInt(), // functional key (pressed)
+                    "#171717".toColorInt(), // space bar
+                    "#d6d6d6".toColorInt(), // key text
+                    "#787878".toColorInt(), // hints, space bar text
                     keyboardBackground = backgroundImage
                 )
                 THEME_HOLO_WHITE -> DefaultColors(

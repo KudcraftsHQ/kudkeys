@@ -397,7 +397,7 @@ public class KeyboardView extends View {
             final float labelCharWidth = TypefaceUtils.getReferenceCharWidth(paint);
 
             // Vertical label text alignment.
-            labelBaseline = centerY + labelCharHeight / 2.0f;
+            labelBaseline = centerY + labelCharHeight / 2.0f + getLabelBaselineOffset(key);
 
             // Horizontal label text alignment
             if (key.isAlignLabelOffCenter() && mShowsHints) {
@@ -547,6 +547,11 @@ public class KeyboardView extends View {
             setKeyIconColor(key, icon, keyboard);
             drawIcon(canvas, icon, iconX, iconY, iconWidth, iconHeight);
         }
+    }
+
+    /** extra downward shift of a key's label, for keys that draw a hint above it */
+    protected float getLabelBaselineOffset(@NonNull final Key key) {
+        return 0f;
     }
 
     // Draw popup hint "..." at the center or bottom right corner of the key, depending on style.

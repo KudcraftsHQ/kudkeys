@@ -61,6 +61,20 @@ cd android
 - Number-hint visibility on letter keys: `PREF_SHOW_NUMBER_ROW_HINTS` / popup hint settings in `Defaults.kt`.
 - Layout unit tests: `app/src/test/java/helium314/keyboard/LayoutTest.kt`, `KeyboardParserTest.kt`.
 
+## SwiftKey look (v0.1)
+
+- Measured from SwiftKey's dark theme on a 411 dp phone: rows ~51.6 dp (`config_default_keyboard_height` 213dp,
+  min `-50%p`), letters at 40% of key height (`config_key_letter_ratio_lxx`), keys 0.1 wide, shift/delete 0.15,
+  bottom row `123` · emoji · `,` · space · `.` · enter (`functional_keys.json`; enter is `"type": "function"` so it
+  has no accent circle).
+- Colours: `THEME_DARK` in `KeyboardTheme.kt` is SwiftKey's (#171717 background, #d6d6d6 glyphs, #787878 hints).
+- Space bar `‹ en/id ›` and the mic / `,!?` hints above comma and period are drawn in `MainKeyboardView`
+  (`swiftKeyLanguageLabel`, `drawSpacebarChevrons`, `drawSwiftKeyPunctuationHint`). Letter hints are off
+  (`PREF_SHOW_HINTS = false`); key-press vibration on.
+- Icons: `res/drawable/sym_keyboard_{shift,shifted,shift_lock,delete,return}_lxx.xml`.
+- `KudKeysLayoutScreenshotTest` renders letters / shifted / symbols to `$TMPDIR/kudkeys-layout/*.png`; compare
+  them with the SwiftKey screenshot by eye after any layout change.
+
 ## Toolbar and suggestion strip (the toolbar/voice-UI work)
 
 - The whole top bar is `J/latin/suggestions/SuggestionStripView.kt`: suggestions, the toolbar (expand key,
