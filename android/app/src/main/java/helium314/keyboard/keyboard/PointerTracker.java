@@ -1190,6 +1190,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (popupKeysPanel == null) {
             return;
         }
+        // Kud Keys: the finger's starting height counts as the bottom row, so sliding sideways selects at once
+        popupKeysPanel.anchorSlideStart(popupKeysPanel.translateX(mLastX), popupKeysPanel.translateY(mLastY));
         final int translatedX = popupKeysPanel.translateX(mLastX);
         final int translatedY = popupKeysPanel.translateY(mLastY);
         popupKeysPanel.onDownEvent(translatedX, translatedY, mPointerId, SystemClock.uptimeMillis());
