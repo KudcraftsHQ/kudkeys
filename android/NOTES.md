@@ -319,3 +319,16 @@ cd android
   (~35 s, cached) and passes its path as `kudkeys.hostJni`; only `KudSyncedDictionaryTest` loads it, in its own
   Robolectric sandbox (`ShadowOwnSandboxForNativeCode`), so the other tests still run without native code. No g++
   (macOS) → that test is skipped.
+
+## SwiftKey touch behaviours (popup slide, hold delete)
+
+- **Popup slide**: when a long-press opens popup keys, `PointerTracker.onLongPressed` calls
+  `PopupKeysPanel.anchorSlideStart`; `PopupKeysKeyboardView` shifts its y mapping (`mSlideOffsetY`) so the finger's
+  starting height is the middle of the bottom row. Sideways picks by x at once, one popup row up reaches the row
+  above, sliding far away still cancels as HeliBoard did. Test: `KudPopupSlideTest` (real touch events).
+- **Hold delete** (Typing → Delete words when held, `KudHoldDelete`, default on): 8 character repeats (400 ms start
+  + 7 × 50 ms ≈ 750 ms), then `KeyCode.DELETE_WORD` every 175 ms. The rule (`charCountToDelete`) is ctrl+backspace:
+  trailing spaces + the word; ' ’ - inside a word stay with it; punctuation/emoji runs are a word; marks, ZWJ,
+  variation selectors and skin tones never split; a line break goes on its own. Selection, TYPE_NULL or unknown
+  cursor → normal backspace. Quick delete (slide from delete) is untouched: it stops once repeating starts, as before.
+  Test: `KudHoldDeleteTest`.
