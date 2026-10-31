@@ -615,19 +615,15 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             barMessage.isClickable = m.opensSettings
         } else if (textMessage) showTextMessage(textBarState as TextBarState.Message)
         val message = !editor && !voice && (voiceMessage || textMessage)
-        val stripEmpty = !isExternalSuggestionVisible && suggestedWords.isEmpty
         // in the editor the middle is empty but for the Private pill: suggestions belong to typing
-        val pill = isPrivateField && !voice && !message && (stripEmpty || editor)
+        // Kud Keys: no amber Private marker (Hammas, 2026-10-31); the incognito look alone shows a private field.
+        val pill = false
         val hideStrip = voice || message || pill || editor
         voiceRow.isVisible = voice
         barMessage.isVisible = message
         privatePill.isVisible = pill
         // The tag keeps its space (INVISIBLE) under the pill, so the strip width doesn't jump when typing starts.
-        privateTag.visibility = when {
-            !isPrivateField -> GONE
-            hideStrip -> INVISIBLE
-            else -> VISIBLE
-        }
+        privateTag.visibility = GONE
         suggestionsStrip.visibility = if (hideStrip) INVISIBLE else VISIBLE
         if (voice || message || editor) dismissMoreSuggestionsPanel()
     }
