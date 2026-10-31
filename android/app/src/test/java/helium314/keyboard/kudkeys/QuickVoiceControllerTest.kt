@@ -36,10 +36,14 @@ class QuickVoiceControllerTest {
         val renders = mutableListOf<VoiceBarState>()
         val haptics = mutableListOf<Unit>()
         var permissionRequests = 0
+        var blocked = false
+        var settingsOpened = 0
         val pending = mutableListOf<Pair<Long, () -> Unit>>()
         override fun hasToken() = token
         override fun hasMicPermission() = mic
         override fun requestMicPermission() { permissionRequests++ }
+        override fun isMicBlocked() = blocked
+        override fun openMicSettings() { settingsOpened++ }
         override fun isPrivateField() = private
         override fun haptic() { haptics += Unit }
         override fun insert(text: String) { inserted += text }
@@ -184,6 +188,147 @@ class QuickVoiceControllerTest {
         holdToRecord()
         controller.onMicTouchCancelled()
         assertEquals(listOf("start", "cancel"), engine.calls)
+    }
+
+    // --- field identity (H2) -------------------------------------------------------------------------
+
+    @Test fun anotherFieldCancelsALockedRecording() {
+        controller.onField("chat")
+        holdToRecord()
+        controller.onMicMove(945f, 1360f) // lock
+        engine.state.value = VoiceState.Listening(3000, "untuk chat", 0.3f)
+        controller.onField("search") // the page moved focus with restartInput
+        assertEquals(listOf("start", "cancel"), engine.calls)
+        assertEquals(QuickVoiceController.Phase.Idle, controller.phase)
+        controller.onMicDown(950f, 1500f); controller.onMicUp() // a tap on Mic now is just a tap
+        engine.state.value = VoiceState.Done("untuk chat")
+        assertTrue(host.inserted.isEmpty())
+    }
+
+    @Test fun anotherFieldDuringTheFinishingWaitDropsTheText() {
+        controller.onField("chat")
+        holdToRecord()
+        engine.state.value = VoiceState.Listening(2000, "untuk chat", 0.3f)
+        controller.onMicUp()
+        assertEquals(QuickVoiceController.Phase.Finishing, controller.phase)
+        controller.onField("search")
+        assertEquals(listOf("start", "stop", "cancel"), engine.calls)
+        engine.state.value = VoiceState.Done("untuk chat") // a late done is ignored
+        assertTrue(host.inserted.isEmpty())
+    }
+
+    @Test fun sameFieldAgainKeepsTheSession() {
+        controller.onField("chat")
+        holdToRecord()
+        controller.onField("chat") // onStartInputView again for the same field
+        assertEquals(listOf("start"), engine.calls)
+        controller.onMicUp()
+        engine.state.value = VoiceState.Done("halo")
+        assertEquals(listOf("halo"), host.inserted)
+    }
+
+    // --- hiding the keyboard, screen off (L1, L3) --------------------------------------------------
+
+    @Test fun hidingWhileFinishingStillInsertsIntoTheSameField() {
+        controller.onField("chat")
+        holdToRecord()
+        engine.state.value = VoiceState.Listening(2000, "jangan hilang", 0.3f)
+        controller.onMicUp()
+        controller.onHidden() // swipe down / Back within the wait
+        assertEquals(listOf("start", "stop"), engine.calls)
+        engine.state.value = VoiceState.Done("jangan hilang")
+        assertEquals(listOf("jangan hilang"), host.inserted)
+    }
+
+    @Test fun hidingOrScreenOffDuringALockedRecordingCancelsIt() {
+        controller.onField("chat")
+        holdToRecord()
+        controller.onMicMove(945f, 1360f)
+        assertEquals(QuickVoiceController.Phase.Locked, controller.phase)
+        controller.onHidden()
+        assertEquals(listOf("start", "cancel"), engine.calls)
+        assertEquals(QuickVoiceController.Phase.Idle, controller.phase)
+    }
+
+    @Test fun fieldFinishedWhileFinishingDropsTheText() {
+        controller.onField("chat")
+        holdToRecord()
+        controller.onMicUp()
+        controller.onHidden()
+        controller.onField(null) // onFinishInput: the field is gone
+        assertEquals(listOf("start", "stop", "cancel"), engine.calls)
+        assertTrue(host.inserted.isEmpty())
+    }
+
+    // --- errors keep the text (M1) -----------------------------------------------------------------
+
+    @Test fun errorWhileLockedInsertsWhatArrived() {
+        holdToRecord()
+        controller.onMicMove(945f, 1360f)
+        engine.state.value = VoiceState.Listening(120_000, "dua menit dikte", 0.3f)
+        engine.state.value = VoiceState.Error(VoiceErrorKind.NoConnection, "handover", "dua menit dikte")
+        assertEquals(listOf("dua menit dikte"), host.inserted)
+        assertEquals(VoiceBarState.Message("Voice: no connection"), host.last)
+        assertEquals(QuickVoiceController.Phase.Idle, controller.phase)
+    }
+
+    @Test fun errorWhileHoldingInsertsWhatArrived() {
+        holdToRecord()
+        engine.state.value = VoiceState.Error(VoiceErrorKind.Mic, "mic read failed", "sampai sini")
+        assertEquals(listOf("sampai sini"), host.inserted)
+        assertEquals(VoiceBarState.Message("Voice: microphone unavailable"), host.last)
+        controller.onMicUp() // the release after the error does nothing
+        assertEquals(listOf("start", "reset"), engine.calls)
+    }
+
+    // --- mic blocked for good (M2) -----------------------------------------------------------------
+
+    @Test fun blockedMicShowsATappableMessageInsteadOfTheActivity() {
+        host.mic = false
+        host.blocked = true
+        holdToRecord()
+        assertEquals(0, host.permissionRequests)
+        assertEquals(VoiceBarState.Message(QuickVoiceController.MIC_BLOCKED, opensSettings = true), host.last)
+        controller.onMicUp()
+        assertEquals(VoiceBarState.Message(QuickVoiceController.MIC_BLOCKED, opensSettings = true), host.last)
+        controller.onMessageTapped()
+        assertEquals(1, host.settingsOpened)
+        assertEquals(VoiceBarState.Idle, host.last)
+        controller.onMessageTapped() // the message is gone: a second tap does nothing
+        assertEquals(1, host.settingsOpened)
+        holdToRecord() // still blocked: the message again, never the permission activity
+        assertEquals(0, host.permissionRequests)
+        assertEquals(emptyList(), engine.calls)
+    }
+
+    @Test fun plainMessagesDontOpenSettings() {
+        controller.onMicDown(950f, 1500f)
+        controller.onMicUp() // "Hold to talk"
+        controller.onMessageTapped()
+        assertEquals(0, host.settingsOpened)
+    }
+
+    // --- comma long-press: hands-free start --------------------------------------------------------
+
+    @Test fun startLockedRecordsHandsFreeAndStopButtonInserts() {
+        controller.onField("chat")
+        controller.startLocked()
+        assertEquals(listOf("start"), engine.calls)
+        assertEquals(QuickVoiceController.Phase.Locked, controller.phase)
+        assertEquals(VoiceBarState.Recording(0, "", true), host.last)
+        engine.state.value = VoiceState.Listening(1500, "tanpa tangan", 0.3f)
+        controller.onMicDown(950f, 1500f) // the first touch on the stop button stops
+        controller.onMicUp()
+        assertEquals(listOf("start", "stop"), engine.calls)
+        engine.state.value = VoiceState.Done("tanpa tangan")
+        assertEquals(listOf("tanpa tangan"), host.inserted)
+    }
+
+    @Test fun startLockedWithoutTokenShowsTheHint() {
+        host.token = false
+        controller.startLocked()
+        assertEquals(emptyList(), engine.calls)
+        assertEquals(VoiceBarState.Message("Set your voice token in settings"), host.last)
     }
 
     @Test fun leadingSpace() {

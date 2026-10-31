@@ -197,6 +197,9 @@ public class LatinIME extends InputMethodService implements
     private final ClipboardHistoryManager mClipboardHistoryManager = new ClipboardHistoryManager(this);
     /** kudkeys: hold-to-talk on the Mic icon */
     private KudQuickVoice mQuickVoice;
+    // kudkeys: onStartInput found the field's privacy changed and reloaded settings; onStartInputView treats it as
+    // a different field even when restarting with the same input type.
+    private boolean mKudPrivacyChanged;
 
     public static final class UIHandler extends LeakGuardHandlerWrapper<LatinIME> {
         private static final int MSG_UPDATE_SHIFT_STATE = 0;
@@ -856,6 +859,15 @@ public class LatinIME extends InputMethodService implements
 
     private void onStartInputInternal(EditorInfo editorInfo, boolean restarting) {
         super.onStartInput(editorInfo, restarting);
+        // kudkeys: a new (or restarted) field drops a voice session started elsewhere, and privacy is re-checked
+        // every time, also for restartInput on the same view (a web page moving to its search box).
+        if (mQuickVoice != null) mQuickVoice.onField(editorInfo);
+        if (kudPrivacyDiffers(editorInfo)) {
+            mKudPrivacyChanged = true;
+            loadSettings();
+            if (hasSuggestionStripView())
+                mSuggestionStripView.updatePrivacy();
+        }
 
         RichInputMethodSubtype subtypeForApp = editorInfo == null
             ? null :
@@ -870,9 +882,16 @@ public class LatinIME extends InputMethodService implements
         }
     }
 
+    /** kudkeys: whether the loaded settings say private and [editorInfo] doesn't, or the other way round. */
+    private boolean kudPrivacyDiffers(@Nullable final EditorInfo editorInfo) {
+        if (editorInfo == null) return false;
+        return KudPrivacy.isPrivate(editorInfo) != mSettings.getCurrent().mInputAttributes.mIsPrivate;
+    }
+
     void onStartInputViewInternal(final EditorInfo editorInfo, final boolean restarting) {
         super.onStartInputView(editorInfo, restarting);
         KudPrivacy.INSTANCE.refreshHomePackage(this); // the default launcher counts as a search field
+        if (mQuickVoice != null) mQuickVoice.onField(editorInfo); // kudkeys: another field cancels voice
 
 
         mDictionaryFacilitator.onStartInput();
@@ -886,7 +905,10 @@ public class LatinIME extends InputMethodService implements
         // settings, so currentSettingsValues can't be final.
         SettingsValues currentSettingsValues = mSettings.getCurrent();
         boolean inputTypeChanged = !currentSettingsValues.isSameInputType(editorInfo);
-        boolean isDifferentTextField = !restarting || inputTypeChanged;
+        // kudkeys: a change in privacy is a different field too (same input type, but now a search box)
+        boolean privacyChanged = mKudPrivacyChanged || kudPrivacyDiffers(editorInfo);
+        mKudPrivacyChanged = false;
+        boolean isDifferentTextField = !restarting || inputTypeChanged || privacyChanged;
 
         // we want to reload the settings before calling updateKeyboardTheme, because updateKeyboardTheme reads SettingsValues.mToolbarMode
         if (isDifferentTextField || !currentSettingsValues.hasSameOrientation(getResources().getConfiguration())) {
@@ -1042,6 +1064,7 @@ public class LatinIME extends InputMethodService implements
     void onFinishInputInternal() {
         super.onFinishInput();
         Log.i(TAG, "onFinishInput");
+        if (mQuickVoice != null) mQuickVoice.onFieldFinished(); // kudkeys: the field is gone
 
         mDictionaryFacilitator.onFinishInput();
         final MainKeyboardView mainKeyboardView = mKeyboardSwitcher.getMainKeyboardView();
@@ -1053,7 +1076,12 @@ public class LatinIME extends InputMethodService implements
     void onFinishInputViewInternal(final boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         Log.i(TAG, "onFinishInputView");
-        if (mQuickVoice != null) mQuickVoice.cancel(); // kudkeys: leaving the field drops a recording, releases the mic
+        // kudkeys: leaving the field drops a recording and releases the mic. Only hiding the keyboard (field still
+        // bound) lets a released recording finish and insert.
+        if (mQuickVoice != null) {
+            if (finishingInput) mQuickVoice.onFieldFinished();
+            else mQuickVoice.onHidden();
+        }
         cleanupInternalStateForFinishInput();
     }
 
@@ -1137,7 +1165,7 @@ public class LatinIME extends InputMethodService implements
     @Override
     public void hideWindow() {
         Log.i(TAG, "hideWindow");
-        if (mQuickVoice != null) mQuickVoice.cancel(); // kudkeys: hiding the keyboard drops a recording
+        if (mQuickVoice != null) mQuickVoice.onHidden(); // kudkeys: hiding drops a recording; a released one still finishes
         mKeyboardSwitcher.onHideWindow();
 
         if (TRACE) Debug.stopMethodTracing();
@@ -1429,7 +1457,9 @@ public class LatinIME extends InputMethodService implements
     // completely replace #onCodeInput.
     public void onEvent(@NonNull final Event event) {
         if (KeyCode.VOICE_INPUT == event.getKeyCode()) {
-            mRichImm.switchToShortcutIme(this);
+            // kudkeys: the voice key (comma long-press) starts our own quick voice, hands-free; it never switches
+            // to the system / Google voice IME.
+            if (mQuickVoice != null) mQuickVoice.startLocked();
         }
         final InputTransaction completeInputTransaction =
                 mInputLogic.onCodeInput(mSettings.getCurrent(), event,

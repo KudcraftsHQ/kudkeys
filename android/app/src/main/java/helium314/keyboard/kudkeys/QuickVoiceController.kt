@@ -34,8 +34,11 @@ class VoiceClientEngine(private val client: VoiceClient) : VoiceEngine {
 /** What the top bar shows for quick voice. */
 sealed interface VoiceBarState {
     data object Idle : VoiceBarState
-    /** A short message in the middle of the bar ("Hold to talk", an error). Goes away by itself. */
-    data class Message(val text: String) : VoiceBarState
+    /**
+     * A short message in the middle of the bar ("Hold to talk", an error). Goes away by itself.
+     * [opensSettings]: tapping it opens the app's settings page (the mic is blocked).
+     */
+    data class Message(val text: String, val opensSettings: Boolean = false) : VoiceBarState
     /** Recording: red dot, elapsed time, live text. [locked]: hands-free, the Mic spot is a stop button. */
     data class Recording(val elapsedMs: Long, val text: String, val locked: Boolean) : VoiceBarState
     /** Released, waiting for the last words. */
@@ -46,6 +49,9 @@ sealed interface VoiceBarState {
  * Hold-to-talk on the Mic icon (spec item 6). Hold → record; release → insert; slide left past
  * [CANCEL_FRACTION] of the bar → cancel; slide up past the lock distance → lock (tap the stop button to insert).
  * A short tap shows "Hold to talk". Touch coordinates are raw screen pixels.
+ *
+ * Text only goes into the field the session started in: the IME reports every field with [onField], and a
+ * different field cancels the session (an app can switch fields with restartInput, without onFinishInputView).
  */
 class QuickVoiceController(
     private val engine: VoiceEngine,
@@ -56,6 +62,10 @@ class QuickVoiceController(
         fun hasToken(): Boolean
         fun hasMicPermission(): Boolean
         fun requestMicPermission()
+        /** The user denied the mic for good ("don't ask again"): asking again would only flash an activity. */
+        fun isMicBlocked(): Boolean
+        /** Open this app's page in system settings, where the mic can be allowed. */
+        fun openMicSettings()
         fun isPrivateField(): Boolean
         fun haptic()
         fun insert(text: String)
@@ -80,6 +90,10 @@ class QuickVoiceController(
     /** In locked mode: the finger that locked is still down, its release must not stop. */
     private var lockingTouchDown = false
     private var lastState: VoiceState = VoiceState.Idle
+    private var messageOpensSettings = false
+    /** The field the IME is on now ([onField]) and the one the running session started in. */
+    private var field: Any? = null
+    private var sessionField: Any? = null
     private val collector: Job = scope.launch { engine.state.collect { onEngineState(it) } }
 
     fun onMicDown(x: Float, y: Float) {
@@ -132,6 +146,41 @@ class QuickVoiceController(
         }
     }
 
+    /**
+     * The IME started input in [key] (any value that is equal for the same field). A different field drops the
+     * session, including one waiting for its last words, so its text can't land in the new field.
+     */
+    fun onField(key: Any?) {
+        if (key == field) return
+        field = key
+        cancelSession()
+    }
+
+    /**
+     * The keyboard was hidden (or the screen went off) while the field stays bound. A recording is dropped and the
+     * mic released; a released one waiting for its last words still finishes, and inserts if the field is the same.
+     */
+    fun onHidden() {
+        if (phase == Phase.Finishing) return
+        cancelSession()
+    }
+
+    /** Start hands-free (locked) recording without a finger on Mic: the comma long-press. */
+    fun startLocked() {
+        if (phase != Phase.Idle) return
+        clearHold()
+        startRecording(locked = true)
+    }
+
+    /** The bar message was tapped. */
+    fun onMessageTapped() {
+        if (messageShowing && messageOpensSettings) {
+            clearMessage()
+            if (phase == Phase.Idle) host.render(VoiceBarState.Idle)
+            host.openMicSettings()
+        }
+    }
+
     /** Leaving the field or hiding the keyboard: drop everything and release the mic. */
     fun cancelSession() {
         clearHold()
@@ -150,15 +199,29 @@ class QuickVoiceController(
         cancelHold = null
         if (phase != Phase.Pressed) return
         phase = Phase.Idle
+        startRecording(locked = false)
+    }
+
+    private fun startRecording(locked: Boolean) {
         if (!host.hasToken()) return message(VoiceErrorKind.NoToken.userMessage)
-        if (!host.hasMicPermission()) return host.requestMicPermission()
+        if (!host.hasMicPermission()) {
+            return if (host.isMicBlocked()) message(MIC_BLOCKED, opensSettings = true)
+            else host.requestMicPermission()
+        }
+        sessionField = field
         if (engine.start(VoiceStart(private = host.isPrivateField()))) {
-            phase = Phase.Recording
+            phase = if (locked) Phase.Locked else Phase.Recording
+            lockingTouchDown = false
             clearMessage()
             host.haptic()
             renderRecording(engine.state.value)
         }
         // on false the engine is in Error, and the collector shows it
+    }
+
+    /** Insert only into the field the session started in. */
+    private fun insert(text: String) {
+        if (field == sessionField) host.insert(text)
     }
 
     private fun finish() {
@@ -180,13 +243,14 @@ class QuickVoiceController(
             is VoiceState.Finishing -> renderFinishing(s)
             is VoiceState.Done -> {
                 // Done can also come without a release, when the server ends the session itself.
-                if (phase != Phase.Idle && phase != Phase.Pressed) host.insert(s.text)
+                if (phase != Phase.Idle && phase != Phase.Pressed) insert(s.text)
                 phase = Phase.Idle
                 engine.reset()
                 if (!messageShowing) host.render(VoiceBarState.Idle)
             }
             is VoiceState.Error -> {
-                if (phase == Phase.Finishing && s.text.isNotEmpty()) host.insert(s.text)
+                // Keep what arrived before the failure, whether or not Mic was released yet.
+                if (phase != Phase.Idle && phase != Phase.Pressed && s.text.isNotEmpty()) insert(s.text)
                 if (phase != Phase.Pressed) phase = Phase.Idle
                 engine.reset()
                 message(s.kind.userMessage)
@@ -213,13 +277,15 @@ class QuickVoiceController(
         host.render(VoiceBarState.Finishing(s.liveText))
     }
 
-    private fun message(text: String) {
+    private fun message(text: String, opensSettings: Boolean = false) {
         clearMessage()
         messageShowing = true
-        host.render(VoiceBarState.Message(text))
-        cancelMessage = host.schedule(MESSAGE_MS) {
+        messageOpensSettings = opensSettings
+        host.render(VoiceBarState.Message(text, opensSettings))
+        cancelMessage = host.schedule(if (opensSettings) ACTION_MESSAGE_MS else MESSAGE_MS) {
             cancelMessage = null
             messageShowing = false
+            messageOpensSettings = false
             if (phase == Phase.Idle || phase == Phase.Pressed) host.render(VoiceBarState.Idle)
         }
     }
@@ -228,6 +294,7 @@ class QuickVoiceController(
         cancelMessage?.invoke()
         cancelMessage = null
         messageShowing = false
+        messageOpensSettings = false
     }
 
     private fun clearHold() {
@@ -239,9 +306,12 @@ class QuickVoiceController(
         /** A press shorter than this is a tap. */
         const val HOLD_MS = 250L
         const val MESSAGE_MS = 2_500L
+        /** A message you can tap stays longer. */
+        const val ACTION_MESSAGE_MS = 6_000L
         /** Slide left past this fraction of the bar width to cancel. */
         const val CANCEL_FRACTION = 0.3f
         const val HINT_HOLD = "Hold to talk"
         const val HINT_SLIDE = "‹ Slide to cancel"
+        const val MIC_BLOCKED = "Microphone blocked — tap to open settings"
     }
 }

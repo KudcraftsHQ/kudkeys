@@ -48,7 +48,7 @@ class KudPrivacyLearningTest {
         latinIME.prefs().edit { clear() }
     }
 
-    private fun startField(type: Int, options: Int = 0, pkg: String? = "com.whatsapp") {
+    private fun startField(type: Int, options: Int = 0, pkg: String? = "com.whatsapp", restarting: Boolean = false) {
         ShadowInputMethodService.currentInputType = type
         ShadowInputMethodService.currentImeOptions = options
         ShadowInputMethodService.currentPackageName = pkg
@@ -56,8 +56,8 @@ class KudPrivacyLearningTest {
         ShadowInputMethodService.selectionStart = 0
         ShadowInputMethodService.selectionEnd = 0
         val ei = EditorInfo().apply { inputType = type; imeOptions = options; packageName = pkg }
-        latinIME.mHandler.onStartInput(ei, false)
-        latinIME.mHandler.onStartInputView(ei, false)
+        latinIME.mHandler.onStartInput(ei, restarting)
+        latinIME.mHandler.onStartInputView(ei, restarting)
         handleMessages()
     }
 
@@ -107,5 +107,24 @@ class KudPrivacyLearningTest {
     @Test fun passwordAndUrlLearnNothing() {
         assertEquals("", learnedAfterTyping(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD))
         assertEquals("", learnedAfterTyping(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI))
+    }
+
+    // H1: Chrome moves focus from a text input to the page's search box with restartInput on the same view:
+    // restarting = true and the same inputType, only the action changes.
+    @Test fun restartIntoASearchBoxOnTheSameViewBecomesPrivate() {
+        assertEquals("there", learnedAfterTyping(InputType.TYPE_CLASS_TEXT, pkg = "com.android.chrome"))
+        startField(InputType.TYPE_CLASS_TEXT, EditorInfo.IME_ACTION_SEARCH, "com.android.chrome", restarting = true)
+        assertTrue(Settings.getValues().mInputAttributes.mIsPrivate)
+        assertTrue(Settings.getValues().mIncognitoModeEnabled)
+        ShadowFacilitator2.lastAddedWord = ""
+        type("secret query ")
+        assertEquals("", ShadowFacilitator2.lastAddedWord)
+    }
+
+    @Test fun restartOutOfAPrivateFieldLearnsAgain() {
+        startField(InputType.TYPE_CLASS_TEXT, EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING, "com.android.chrome")
+        assertTrue(Settings.getValues().mIncognitoModeEnabled)
+        startField(InputType.TYPE_CLASS_TEXT, 0, "com.android.chrome", restarting = true)
+        assertFalse(Settings.getValues().mIncognitoModeEnabled)
     }
 }
