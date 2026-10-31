@@ -93,14 +93,6 @@ fun WelcomeWizard(
                 textAlign = TextAlign.Center,
                 color = titleColor,
             )
-            if (JniUtils.sHaveGestureLib)
-                Text(
-                    stringResource(R.string.setup_welcome_additional_description),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.End,
-                    color = titleColor,
-                    modifier = Modifier.fillMaxWidth()
-                )
         }
     }
     @Composable

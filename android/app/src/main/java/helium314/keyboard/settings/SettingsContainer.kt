@@ -10,7 +10,6 @@ import helium314.keyboard.settings.screens.createAboutSettings
 import helium314.keyboard.settings.screens.createAdvancedSettings
 import helium314.keyboard.settings.screens.createAppearanceSettings
 import helium314.keyboard.settings.screens.createCorrectionSettings
-import helium314.keyboard.settings.screens.createGestureTypingSettings
 import helium314.keyboard.settings.screens.createLayoutSettings
 import helium314.keyboard.settings.screens.createPreferencesSettings
 import helium314.keyboard.settings.screens.createToolbarSettings
@@ -64,8 +63,7 @@ class Setting(
 // intentionally not putting individual debug settings in here so user knows the context
 private fun createSettings(context: Context) = createAboutSettings(context) + createAppearanceSettings(context) +
         createCorrectionSettings(context) + createPreferencesSettings(context) + createToolbarSettings(context) +
-        createLayoutSettings(context) + createAdvancedSettings(context) +
-        if (JniUtils.sHaveGestureLib) createGestureTypingSettings(context) else emptyList()
+        createLayoutSettings(context) + createAdvancedSettings(context)
 
 object SettingsWithoutKey {
     const val EDIT_PERSONAL_DICTIONARY = "edit_personal_dictionary"
@@ -80,7 +78,6 @@ object SettingsWithoutKey {
     const val SAVE_LOG = "save_log"
     const val BACKUP_RESTORE = "backup_restore"
     const val DEBUG_SETTINGS = "screen_debug"
-    const val LOAD_GESTURE_LIB = "load_gesture_library"
     const val BACKGROUND_IMAGE = "background_image"
     const val BACKGROUND_IMAGE_LANDSCAPE = "background_image_landscape"
     const val CUSTOM_FONT = "custom_font"
