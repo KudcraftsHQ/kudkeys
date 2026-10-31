@@ -15,10 +15,13 @@ export type ChatRequest = {
   signal: AbortSignal
 }
 
-/** What the endpoint answers when the model cannot be used. */
+/**
+ * What the endpoint answers when the model cannot be used: 413 too_long (the request can never fit the model's
+ * tokens per minute), 422 changed_too_much (a Fix that rewrote the text), 429 rate limited, 503 unavailable.
+ */
 export class TextModelError extends Error {
   constructor(
-    readonly status: 429 | 503,
+    readonly status: 413 | 422 | 429 | 503,
     readonly reason: string,
     readonly retryAfter?: number,
   ) {
@@ -70,6 +73,11 @@ export async function chatJson(cfg: ChatConfig, req: ChatRequest): Promise<unkno
   if (res.status === 429) {
     await res.body?.cancel()
     throw new TextModelError(429, 'model_rate_limited', retryAfterSeconds(res))
+  }
+  // Groq refuses a request whose prompt + max_completion_tokens can never fit the model's limits.
+  if (res.status === 413) {
+    await res.body?.cancel()
+    throw new TextModelError(413, 'too_long')
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { code?: string } } | null

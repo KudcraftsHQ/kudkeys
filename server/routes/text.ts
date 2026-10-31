@@ -131,6 +131,8 @@ export function textRouter(deps: TextRouterDeps) {
         c.header('Retry-After', String(after))
         return c.json({ error: 'rate_limited', reason: failure.reason, retryAfter: after }, 429)
       }
+      if (failure.status === 413) return c.json({ error: 'too_long', reason: failure.reason }, 413)
+      if (failure.status === 422) return c.json({ error: 'changed_too_much', reason: failure.reason }, 422)
       return c.json({ error: 'unavailable', reason: failure.reason }, 503)
     }
     return c.json(result!)

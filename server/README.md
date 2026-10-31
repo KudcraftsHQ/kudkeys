@@ -173,24 +173,36 @@ refused with 401. Every prompt carries the profile's `voiceKeywords` (spelling o
   checked here, not trusted: `text.slice(start, end) === original` on word boundaries, always;
   a question whose word isn't in the text, or has no option, is dropped. At most 5, in text
   order, never overlapping; `options` are 1–3 alternatives to `original` (offer "keep as is"
-  yourself). Empty `text` → `{"text":"","questions":[]}` with no model call.
+  yourself); an option equal to `original` apart from case or punctuation is dropped. `text` is
+  trimmed and the offsets index it. A transcript over ~7,500 chars is tidied in chunks cut at
+  paragraph breaks, sentence ends or spaces, in parallel, and joined in order (offsets adjusted).
+  Empty `text` → `{"text":"","questions":[]}` with no model call.
 - **fix** corrects typos, punctuation and capitalisation only; meaning, language mix, slang and
   chat abbreviations (yg, bgt, btw) stay. `changed` is `false` exactly when the returned text
-  equals the input (compared here, not taken from the model).
+  equals the input (compared here, not taken from the model). A "fix" whose edit distance is more
+  than 40% of the input (at least 8 characters) rewrote the text instead of fixing it (a pasted
+  "ignore previous instructions…", a model that answered) and is refused with 422.
 - **instruct** applies `instruction` to `text` and returns the whole result. With empty `text`
   it writes from the instruction ("write a polite reply saying I'll be 10 minutes late"). It
   answers in the language of the text, or with no text in the instruction's language.
 
 Errors: `400 {"error":"invalid","issues":[…]}` bad input · `401` no or invalid session (or a
 legacy token) · `429 {"error":"rate_limited","retryAfter"}` with a `Retry-After` header (seconds):
-over **30 calls a minute** per user (`KUDKEYS_TEXT_RPM`), or Groq's own limit · `503
-{"error":"unavailable","reason"}`: Groq down or refused, a timeout (15 s fix, 45 s tidy and
-instruct), invalid JSON from the model twice, or no `GROQ_API_KEY`.
+over **30 calls a minute** per user (`KUDKEYS_TEXT_RPM`), the token budget below, or Groq's own
+limit · `413 {"error":"too_long"}`: the request can never fit the model's tokens per minute (or
+Groq said 413); the app keeps the text as it is · `422 {"error":"changed_too_much"}` (fix only, see
+above) · `503 {"error":"unavailable","reason"}`: Groq down or refused, a timeout (15 s fix, 45 s
+tidy and instruct), invalid JSON from the model twice, or no `GROQ_API_KEY`.
 
 Groq's free tier allows **8,000 tokens a minute per model** (tidy and fix/instruct run on
-different models, so each has its own budget), and one call costs roughly the prompt
-(~1,000 tokens) plus twice the text. Expect a 429 after a few long tidies in a row;
-retry after `Retry-After`. A paid Groq plan lifts this.
+different models, so each has its own budget) and counts what a request *asks* for: prompt +
+`max_completion_tokens`. So `max_completion_tokens` follows the input (≈ input tokens × 1.25 +
+768; instruct at least 1,536), tokens are estimated as chars ÷ 3, and the server keeps its own
+per-model count (`KUDKEYS_TEXT_TPM`). A request that can never fit answers 413 at once; one that
+fits once earlier calls age out answers 429 with that wait in `Retry-After`, without calling Groq.
+The retry on invalid JSON only happens when the budget has room. In practice a tidy of up to
+~7,000 chars (about 6 minutes of speech) fits on the free tier; longer ones need a paid plan (raise
+`KUDKEYS_TEXT_TPM`).
 
 **Privacy:** request and response text are never logged or stored. Each call that reaches the
 model writes one `text_usage` row: `kind`, `charsIn`, `charsOut`, `ms`, `model`, `ok`. With
@@ -283,6 +295,7 @@ Close codes: 1000 normal, 1008 the keyboard broke the protocol, 1011 provider or
 | `KUDKEYS_TEXT_MODEL` | `openai/gpt-oss-120b` for fix and instruct, `qwen/qwen3.8-27b` for tidy | Groq chat model for `/api/text/*`; when set, used for all three. Chosen by `scripts/eval-text.ts` (see Tests) |
 | `KUDKEYS_TIDY_MODEL` | `KUDKEYS_TEXT_MODEL` | Overrides the model for tidy only |
 | `KUDKEYS_TEXT_RPM` | `30` | Text calls per user per minute |
+| `KUDKEYS_TEXT_TPM` | `8000` | Groq tokens per minute per text model (Groq's free tier); `0` = not counted |
 | `GROQ_CHAT_URL` | Groq's | Chat completions URL (tests and CI point it at a fake) |
 | `KUDKEYS_LANGUAGES` | `id,en` | Default when neither `start` nor the profile names any (legacy tokens) |
 | `OPENAI_API_KEY` | — | Only for `KUDKEYS_PROVIDER=openai` |

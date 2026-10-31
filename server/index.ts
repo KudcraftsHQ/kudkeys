@@ -25,7 +25,7 @@ const auth = createAuth({ database: prismaAdapter(db, { provider: 'postgresql' }
 const store = prismaStore(db)
 const getSession = (headers: Headers) => lookupSession(auth, headers)
 const model = activeModel(cfg)
-const textEngine = cfg.text.apiKey ? createTextEngine({ apiKey: cfg.text.apiKey, url: cfg.text.url, model: cfg.text.model, tidyModel: cfg.text.tidyModel }) : null
+const textEngine = cfg.text.apiKey ? createTextEngine({ apiKey: cfg.text.apiKey, url: cfg.text.url, model: cfg.text.model, tidyModel: cfg.text.tidyModel, tokensPerMinute: cfg.text.tokensPerMinute }) : null
 
 const app = createApp({
   store,
