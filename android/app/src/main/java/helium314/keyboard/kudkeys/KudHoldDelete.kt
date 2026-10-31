@@ -4,30 +4,35 @@ package helium314.keyboard.kudkeys
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode
 
 /**
- * Typing → Delete words when held (SwiftKey behaviour). Holding backspace repeats characters first; once the
- * hold has lasted [CHAR_REPEATS] repeats it deletes a whole word per repeat, a little slower.
+ * Typing → Delete words when held (SwiftKey behaviour). A tap deletes one character. Holding waits a little
+ * longer than a normal key repeat ([HOLD_START_MS]), then deletes a whole word per repeat — never characters —
+ * starting slowly and speeding up ([WORD_INTERVAL_START_MS] × [WORD_INTERVAL_RAMP] per word) to a top speed of one
+ * word per [WORD_INTERVAL_MIN_MS].
  *
- * Timing: HeliBoard starts repeating 400 ms after the press and repeats every 50 ms
- * (`config_key_repeat_start_timeout` / `config_key_repeat_interval`), so the 8th character repeat lands at
- * 750 ms. From there one word goes every [WORD_REPEAT_INTERVAL_MS] ms (first word at ~925 ms).
+ * Timeline: 550 ms → first word, then 320, 272, 231, 197, 167, 142, 121, 110, 110… ms between words.
  *
  * The repeat timer lives in `PointerTracker` (`onKeyRepeat` / `startKeyRepeatTimer`); word repeats reach
  * `InputLogic` as [KeyCode.DELETE_WORD], which falls back to a normal backspace when it cannot read the text.
+ * With the setting off (or any other repeating key) HeliBoard's own timing and codes apply.
  */
 object KudHoldDelete {
     const val PREF_DELETE_WORDS_WHEN_HELD = "kudkeys_delete_words_when_held"
     const val DEFAULT_DELETE_WORDS_WHEN_HELD = true
 
-    /** Character repeats before the hold switches to words (~750 ms into the hold). */
-    const val CHAR_REPEATS = 8
-    /** Delay between word repeats. */
-    const val WORD_REPEAT_INTERVAL_MS = 175
+    /** How long backspace must be held before the first word goes (HeliBoard's normal repeat starts at 400). */
+    const val HOLD_START_MS = 550
+    /** Gap before the second word; each next gap is [WORD_INTERVAL_RAMP] times the last … */
+    const val WORD_INTERVAL_START_MS = 320
+    const val WORD_INTERVAL_RAMP = 0.85
+    /** … until this top speed. */
+    const val WORD_INTERVAL_MIN_MS = 110
+
     /** How far back to look for the word; a longer run (a URL) goes in pieces of this size. */
     const val LOOK_BEHIND = 128
 
-    /** Whether key repeat number [repeatCount] (1-based) of [code] deletes a word. */
+    /** Whether key repeat number [repeatCount] (1-based) of [code] deletes a word: every repeat of a held backspace. */
     fun isWordRepeat(enabled: Boolean, code: Int, repeatCount: Int) =
-        enabled && code == KeyCode.DELETE && repeatCount > CHAR_REPEATS
+        enabled && code == KeyCode.DELETE && repeatCount >= 1
 
     /** The code to send for key repeat number [repeatCount] of [code]. */
     @JvmStatic
@@ -36,10 +41,10 @@ object KudHoldDelete {
 
     /** Delay before key repeat number [repeatCount] of [code]; HeliBoard's own timing for anything but a word repeat. */
     @JvmStatic
-    fun delayBeforeRepeat(enabled: Boolean, code: Int, repeatCount: Int, startTimeout: Int, interval: Int) = when {
-        repeatCount == 1 -> startTimeout
-        isWordRepeat(enabled, code, repeatCount) -> WORD_REPEAT_INTERVAL_MS
-        else -> interval
+    fun delayBeforeRepeat(enabled: Boolean, code: Int, repeatCount: Int, startTimeout: Int, interval: Int): Int = when {
+        !isWordRepeat(enabled, code, repeatCount) -> if (repeatCount == 1) startTimeout else interval
+        repeatCount == 1 -> HOLD_START_MS
+        else -> maxOf(WORD_INTERVAL_MIN_MS, Math.round(WORD_INTERVAL_START_MS * Math.pow(WORD_INTERVAL_RAMP, (repeatCount - 2).toDouble())).toInt())
     }
 
     /**

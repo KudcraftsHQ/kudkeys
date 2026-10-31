@@ -254,7 +254,10 @@ class ShadowInputMethodService {
         // delete beforeLength before cursor position, and afterLength after cursor position
         // chars, not codepoints or glyphs
         // todo: may delete only one half of a surrogate pair, but this should be avoided by RichInputConnection (maybe throw error)
-        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+        override fun deleteSurroundingText(requestedBefore: Int, requestedAfter: Int): Boolean {
+            // like a real InputConnection, deleting past the start or end just deletes what's there
+            val beforeLength = requestedBefore.coerceIn(0, textBeforeCursor.length)
+            val afterLength = requestedAfter.coerceIn(0, textAfterCursor.length)
             // delete only before or after selection
             text = textBeforeCursor.substring(0, textBeforeCursor.length - beforeLength) +
                 text.substring(selectionStart, selectionEnd) +
