@@ -77,7 +77,7 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
             Settings.getInstance().loadSettings(this, resources.configuration.locale(), inputAttributes)
         }
         ExecutorUtils.getBackgroundExecutor(ExecutorUtils.KEYBOARD).execute { cleanUnusedMainDicts(this) }
-        crashReportFiles.value = findCrashReports(!BuildConfig.DEBUG && !DebugFlags.DEBUG_ENABLED)
+        crashReportFiles.value = findCrashReports(false) // Kud Keys: release builds show crash reports too
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         if (!UncachedInputMethodManagerUtils.isThisImeCurrent(this, imm))
             KeyboardIconsSet.instance.loadIcons(this) // otherwise we may crash when displaying toolbar keys
