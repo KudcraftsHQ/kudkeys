@@ -32,10 +32,10 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
     private var strip: SuggestionStripView? = null
     private var editorView: KudVoiceEditorView? = null
     private val textApi = TextApi(settings)
-    val controller = QuickVoiceController(VoiceClientEngine(VoiceClient.create(ime)), this, scope)
+    val controller = QuickVoiceController(VoiceClientEngine(VoiceClient.create(ime)) { KudLanguages.active(ime) }, this, scope)
 
     val editor = VoiceEditorController(
-        VoiceClientEngine(VoiceClient.create(ime)), textApi, PrefsDraftStore(ime),
+        VoiceClientEngine(VoiceClient.create(ime)) { KudLanguages.active(ime) }, textApi, PrefsDraftStore(ime),
         object : VoiceEditorController.Host {
             override fun hasVoiceToken() = settings.hasToken
             override fun hasMicPermission() = this@KudQuickVoice.hasMicPermission()
@@ -53,7 +53,7 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
     )
 
     val textActions = TextActionsController(
-        VoiceClientEngine(VoiceClient.create(ime)), textApi,
+        VoiceClientEngine(VoiceClient.create(ime)) { KudLanguages.active(ime) }, textApi,
         InputConnectionFieldEditor({ ime.currentInputConnection }, ime::kudExpectedSelection, ime::kudPrepareExternalEdit),
         object : TextActionsController.Host {
             override fun isSignedIn() = settings.isSignedIn

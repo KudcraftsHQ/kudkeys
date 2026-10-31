@@ -22,9 +22,14 @@ interface VoiceEngine {
     fun close()
 }
 
-class VoiceClientEngine(private val client: VoiceClient) : VoiceEngine {
+class VoiceClientEngine(
+    private val client: VoiceClient,
+    /** The keyboard's active languages, sent with every start so nothing else is transcribed. */
+    private val activeLanguages: () -> List<String> = { emptyList() },
+) : VoiceEngine {
     override val state get() = client.state
-    override fun start(options: VoiceStart) = client.start(options)
+    override fun start(options: VoiceStart) =
+        client.start(if (options.languages != null) options else options.copy(languages = activeLanguages().ifEmpty { null }))
     override fun stop() = client.stop()
     override fun cancel() = client.cancel()
     override fun reset() = client.reset()
