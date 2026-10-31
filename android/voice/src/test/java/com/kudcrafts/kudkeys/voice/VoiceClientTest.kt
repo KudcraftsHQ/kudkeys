@@ -89,7 +89,8 @@ class VoiceClientTest {
         await { c.state.first { it is VoiceState.Listening && it.text == "satu ka" } }
 
         val end = await { c.stopAndWait() }
-        assertEquals(VoiceState.Done("Satu, dua."), end)
+        assertEquals("Satu, dua.", (end as VoiceState.Done).text)
+        assertEquals(listOf("Satu,", "dua."), end.segments.map { it.text }) // with confidence, for tidy
         assertTrue(source.closed)
 
         val start = Json.parseToJsonElement(fake.texts.first()).jsonObject
@@ -113,7 +114,7 @@ class VoiceClientTest {
         await { c.state.first { it is VoiceState.Listening && it.text == "dua ti" } }
         fake.final(2, "tiga")
         await { c.state.first { it is VoiceState.Listening && it.text == "dua tiga" } }
-        assertEquals(VoiceState.Done("satu dua tiga"), await { c.stopAndWait() })
+        assertEquals("satu dua tiga", (await { c.stopAndWait() } as VoiceState.Done).text)
     }
 
     @Test fun stopWithoutDone_finishesWithWhatItHasAfterTimeout() {
@@ -129,7 +130,7 @@ class VoiceClientTest {
         assertTrue("mic released at stop", source.closed)
         val end = await { c.state.first { !it.isActive } }
         val waited = (System.nanoTime() - t0) / 1_000_000
-        assertEquals(VoiceState.Done("halo"), end)
+        assertEquals("halo", (end as VoiceState.Done).text)
         assertTrue("waited $waited ms", waited in 550..3_000)
     }
 

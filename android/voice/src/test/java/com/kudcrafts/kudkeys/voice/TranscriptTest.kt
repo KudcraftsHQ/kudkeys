@@ -34,4 +34,15 @@ class TranscriptPartialTest {
         t.partial(1, "late")
         assertEquals("", t.partialTail)
     }
+
+    @Test fun segments_carryConfidenceInOrder() {
+        val t = Transcript()
+        t.final(1, "kirim invoice", 0.9f)
+        t.final(0, "cek feno", 0.4f)
+        t.final(2, "  ")
+        t.partial(3, "lagi")
+        assertEquals(listOf(Segment("cek feno", 0.4f), Segment("kirim invoice", 0.9f)), t.segments)
+        assertEquals(Protocol.Msg.Final(0, "x", 0.5f), Protocol.parse("""{"type":"final","segment":0,"text":"x","confidence":0.5}"""))
+        assertEquals(Protocol.Msg.Final(0, "x", null), Protocol.parse("""{"type":"final","segment":0,"text":"x"}"""))
+    }
 }

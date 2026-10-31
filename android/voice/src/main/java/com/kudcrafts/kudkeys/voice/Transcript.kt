@@ -9,6 +9,7 @@ import java.util.TreeMap
  */
 internal class Transcript {
     private val finals = TreeMap<Int, String>()
+    private val confidence = HashMap<Int, Float>()
     private var partialSegment = -1
     private var partialText = ""
 
@@ -18,8 +19,9 @@ internal class Transcript {
         partialText = text
     }
 
-    fun final(segment: Int, text: String) {
+    fun final(segment: Int, text: String, confidence: Float? = null) {
         finals[segment] = text
+        if (confidence != null) this.confidence[segment] = confidence else this.confidence.remove(segment)
         if (segment == partialSegment) clearPartial()
     }
 
@@ -42,4 +44,8 @@ internal class Transcript {
             if (partialSegment >= 0) parts[partialSegment] = partialText
             return parts.values.map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
         }
+
+    /** The settled phrases in order, with the recogniser's confidence when the server sent one (for tidy). */
+    val segments: List<Segment>
+        get() = finals.mapNotNull { (n, t) -> t.trim().takeIf { it.isNotEmpty() }?.let { Segment(it, confidence[n]) } }
 }

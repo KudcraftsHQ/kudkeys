@@ -108,7 +108,7 @@ class VoiceClient(
                 s.pump?.join() // the last captured frame goes out before `stop`
                 synchronized(lock) { if (current === s) s.ws.send(Protocol.STOP) }
                 delay(doneTimeoutMs)
-                synchronized(lock) { if (current === s) end(s, VoiceState.Done(s.transcript.text), cancelSocket = true) }
+                synchronized(lock) { if (current === s) end(s, VoiceState.Done(s.transcript.text, s.transcript.segments), cancelSocket = true) }
             }
         }
     }
@@ -221,9 +221,9 @@ class VoiceClient(
                 when (val m = Protocol.parse(text)) {
                     is Protocol.Msg.Ready -> if (s.phase == Phase.Connecting) s.phase = Phase.Listening
                     is Protocol.Msg.Partial -> s.transcript.partial(m.segment, m.text)
-                    is Protocol.Msg.Final -> s.transcript.final(m.segment, m.text)
+                    is Protocol.Msg.Final -> s.transcript.final(m.segment, m.text, m.confidence)
                     Protocol.Msg.Done -> {
-                        end(s, VoiceState.Done(s.transcript.text), cancelSocket = false)
+                        end(s, VoiceState.Done(s.transcript.text, s.transcript.segments), cancelSocket = false)
                         webSocket.close(1000, null)
                         return
                     }
@@ -251,7 +251,7 @@ class VoiceClient(
                 if (current !== s) return
                 when (code) {
                     // Closed normally without `done` (e.g. the server's session cap): keep what arrived.
-                    1000 -> end(s, VoiceState.Done(s.transcript.text), cancelSocket = true)
+                    1000 -> end(s, VoiceState.Done(s.transcript.text, s.transcript.segments), cancelSocket = true)
                     1008 -> endWithError(s, VoiceErrorKind.BadRequest, "closed 1008")
                     else -> endWithError(s, VoiceErrorKind.Server, "closed $code")
                 }
