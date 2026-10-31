@@ -719,12 +719,12 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final int width = (int) (getWidth() * 0.31f);
         final int height = width * mKudIncognitoWatermark.getIntrinsicHeight() / Math.max(1, mKudIncognitoWatermark.getIntrinsicWidth());
         final int left = (getWidth() - width) / 2;
-        final int top = (int) (getHeight() * 0.53f) - height / 2;
+        final int top = (int) (getHeight() * 0.54f) - height / 2;
         mKudIncognitoWatermark.setBounds(left, top, left + width, top + height);
         mKudIncognitoWatermark.draw(canvas);
     }
 
-    private static final int KUD_WATERMARK_ALPHA = 28;
+    private static final int KUD_WATERMARK_ALPHA = 32;
     @Nullable private android.graphics.drawable.Drawable mKudIncognitoWatermark;
 
     @Override

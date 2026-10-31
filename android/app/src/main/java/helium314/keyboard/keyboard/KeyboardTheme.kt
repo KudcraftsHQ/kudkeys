@@ -159,10 +159,11 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
             ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
             KUD_INCOGNITO_BACKGROUND,
             "#2a2e37".toColorInt(), // letter keys
-            KUD_INCOGNITO_BACKGROUND, // functional keys: no shape, only a highlight while pressed
+            "#2a2e37".toColorInt(), // functional keys: no shape, this colour only while pressed
             "#2a2e37".toColorInt(), // space bar
             "#e2e4e9".toColorInt(), // key text
             "#7d828d".toColorInt(), // hints, space bar text
+            kudBorderlessFunctionalKeys = true,
         )
 
         val KUD_INCOGNITO_BACKGROUND = "#1c1f26".toColorInt()
