@@ -45,11 +45,12 @@ object Defaults {
     const val PREF_THEME_STYLE = KeyboardTheme.STYLE_MATERIAL
     fun PREF_ICON_STYLE(prefs: SharedPreferences) = prefs.getString(Settings.PREF_THEME_STYLE, PREF_THEME_STYLE)!!
     const val PREF_ACCENT_SHIFTED_ICON = false
-    const val PREF_THEME_COLORS = KeyboardTheme.THEME_LIGHT
+    // kudkeys: dark theme by default, no day/night switching
+    const val PREF_THEME_COLORS = KeyboardTheme.THEME_DARK
     const val PREF_THEME_COLORS_NIGHT = KeyboardTheme.THEME_DARK
     const val PREF_THEME_KEY_BORDERS = false
     @JvmField
-    val PREF_THEME_DAY_NIGHT = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+    val PREF_THEME_DAY_NIGHT = false
     const val PREF_CUSTOM_ICON_NAMES = ""
     const val PREF_TOOLBAR_CUSTOM_KEY_CODES = ""
     const val PREF_AUTO_CAP = true
@@ -79,7 +80,11 @@ object Defaults {
     const val PREF_SHOW_EMOJI_KEY = false
     const val PREF_SHOW_DPAD_KEY = true
     const val PREF_VARIABLE_TOOLBAR_DIRECTION = true
-    const val PREF_ADDITIONAL_SUBTYPES = "de${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwerty${Separators.SETS}" +
+    /** kudkeys: English (US) with Indonesian as secondary locale, so both are typed together (multilingual typing) */
+    const val KUDKEYS_DEFAULT_SUBTYPE = "en-US${Separators.SET}${ExtraValue.SECONDARY_LOCALES}=id," +
+            "SupportTouchPositionCorrection,TrySuppressingImeSwitcher" // same extra values as the en-US resource subtype
+    const val PREF_ADDITIONAL_SUBTYPES = "$KUDKEYS_DEFAULT_SUBTYPE${Separators.SETS}" +
+            "de${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwerty${Separators.SETS}" +
             "fr${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwertz${Separators.SETS}" +
             "hu${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwerty"
     const val PREF_ENABLE_SPLIT_KEYBOARD = false
@@ -160,8 +165,8 @@ object Defaults {
     const val PREF_ADD_TO_PERSONAL_DICTIONARY = false
     @JvmField
     val PREF_NAVBAR_COLOR = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-    const val PREF_ENABLED_SUBTYPES = ""
-    const val PREF_SELECTED_SUBTYPE = ""
+    const val PREF_ENABLED_SUBTYPES = KUDKEYS_DEFAULT_SUBTYPE
+    const val PREF_SELECTED_SUBTYPE = KUDKEYS_DEFAULT_SUBTYPE
     const val PREF_URL_DETECTION = false
     const val PREF_DONT_SHOW_MISSING_DICTIONARY_DIALOG = false
     const val PREF_TOOLBAR_MODE = "EXPANDABLE"

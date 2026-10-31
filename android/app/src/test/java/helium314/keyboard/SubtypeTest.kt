@@ -12,6 +12,7 @@ import helium314.keyboard.latin.utils.LayoutType
 import helium314.keyboard.latin.utils.POPUP_KEYS_LAYOUT
 import helium314.keyboard.latin.utils.SubtypeSettings
 import helium314.keyboard.latin.utils.SubtypeUtilsAdditional
+import helium314.keyboard.latin.utils.locale
 import helium314.keyboard.latin.utils.prefs
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -59,13 +60,13 @@ class SubtypeTest {
         SubtypeSettings.addEnabledSubtype(prefs, from)
         val to = from.toSettingsSubtype().withLayout(LayoutType.SYMBOLS, "symbols_arabic")
         SubtypeUtilsAdditional.changeAdditionalSubtype(from.toSettingsSubtype(), to, latinIME)
-        assertEquals(to, SubtypeSettings.getEnabledSubtypes(false).single().toSettingsSubtype())
+        assertEquals(to, SubtypeSettings.getEnabledSubtypes(false).single { it.locale() == from.locale() }.toSettingsSubtype())
 
         // change the new subtype to effectively be the same as original resource subtype
         val toNew = to.withoutLayout(LayoutType.SYMBOLS)
         assertEquals(from.toSettingsSubtype(), toNew)
         SubtypeUtilsAdditional.changeAdditionalSubtype(to, toNew, latinIME)
         assertEquals(emptyList(), SubtypeSettings.getAdditionalSubtypes().map { it.toSettingsSubtype() })
-        assertEquals(from.toSettingsSubtype(), SubtypeSettings.getEnabledSubtypes(false).single().toSettingsSubtype())
+        assertEquals(from.toSettingsSubtype(), SubtypeSettings.getEnabledSubtypes(false).single { it.locale() == from.locale() }.toSettingsSubtype())
     }
 }

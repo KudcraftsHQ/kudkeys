@@ -6,6 +6,7 @@ import helium314.keyboard.latin.BuildConfig
 import helium314.keyboard.latin.common.Links
 import helium314.keyboard.latin.common.LocaleUtils.constructLocale
 import helium314.keyboard.latin.utils.getKnownDictionariesForLocale
+import org.junit.Ignore
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
@@ -14,6 +15,8 @@ import java.net.URL
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+// kudkeys: these check live URLs (HeliBoard README, wiki, Codeberg); network-dependent, so not run in CI
+@Ignore("network-dependent link check")
 @RunWith(RobolectricTestRunner::class)
 class XLinkTest { // Without the X, SubtypeTests fail with ClassCastException. WTF?
     @Test fun knownDictionaries() {
