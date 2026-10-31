@@ -1,5 +1,16 @@
 import { GROQ_TRANSCRIPTIONS_URL } from "./providers/groq";
 import { OPENAI_REALTIME_URL } from "./providers/openai";
+import { GROQ_CHAT_URL } from "../text/groq-chat";
+
+/**
+ * Groq chat models for /api/text/* when KUDKEYS_TEXT_MODEL is unset, chosen with
+ * server/scripts/eval-text.ts (2026-10-31): gpt-oss-120b fixes typos and follows
+ * instructions best; qwen3.8-27b tidies dictation best (names fixed, useful
+ * questions) at a third of the latency. Groq's limits are per model, so the
+ * split also doubles the free tier's tokens per minute.
+ */
+export const DEFAULT_TEXT_MODEL = "openai/gpt-oss-120b";
+export const DEFAULT_TIDY_MODEL = "qwen/qwen3.8-27b";
 
 export type ProviderName = "groq" | "openai";
 
@@ -21,6 +32,16 @@ export type Config = {
     url: string;
     delay?: string;
     noiseReduction?: "near_field" | "far_field";
+  };
+  /** Groq chat for /api/text/* (tidy, fix, instruct). Uses GROQ_API_KEY whatever the voice provider. */
+  text: {
+    apiKey: string | null;
+    model: string;
+    tidyModel: string;
+    url: string;
+    perMinute: number;
+    /** Groq tokens per minute per model (free tier: 8,000); 0 = not counted. */
+    tokensPerMinute: number;
   };
   defaultLanguages: string[];
   maxSessionSeconds: number;
@@ -59,6 +80,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       url: env.OPENAI_REALTIME_URL?.trim() || OPENAI_REALTIME_URL,
       delay: env.KUDKEYS_DELAY?.trim() || undefined,
       noiseReduction: (noise as Config["openai"]["noiseReduction"]) || undefined,
+    },
+    text: {
+      apiKey: env.GROQ_API_KEY?.trim() || null,
+      // KUDKEYS_TEXT_MODEL sets all three kinds; KUDKEYS_TIDY_MODEL then overrides tidy.
+      model: env.KUDKEYS_TEXT_MODEL?.trim() || DEFAULT_TEXT_MODEL,
+      tidyModel: env.KUDKEYS_TIDY_MODEL?.trim() || env.KUDKEYS_TEXT_MODEL?.trim() || DEFAULT_TIDY_MODEL,
+      url: env.GROQ_CHAT_URL?.trim() || GROQ_CHAT_URL,
+      perMinute: int(env.KUDKEYS_TEXT_RPM, 30),
+      tokensPerMinute: env.KUDKEYS_TEXT_TPM === "0" ? 0 : int(env.KUDKEYS_TEXT_TPM, 8000),
     },
     defaultLanguages: list(env.KUDKEYS_LANGUAGES).length ? list(env.KUDKEYS_LANGUAGES) : ["id", "en"],
     maxSessionSeconds: int(env.KUDKEYS_MAX_SESSION_SECONDS, 600),

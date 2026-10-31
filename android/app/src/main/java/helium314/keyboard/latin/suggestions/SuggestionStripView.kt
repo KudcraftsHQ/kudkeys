@@ -48,7 +48,14 @@ import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.kudkeys.EditorMode
+import helium314.keyboard.kudkeys.EditorUi
+import helium314.keyboard.kudkeys.KudSpinnerDrawable
 import helium314.keyboard.kudkeys.QuickVoiceController
+import helium314.keyboard.kudkeys.TextAction
+import helium314.keyboard.kudkeys.TextActionsController
+import helium314.keyboard.kudkeys.TextBarState
+import helium314.keyboard.kudkeys.VoiceEditorController
 import helium314.keyboard.kudkeys.VoiceBarState
 import helium314.keyboard.kudkeys.VoiceText
 import helium314.keyboard.latin.utils.createToolbarKey
@@ -127,6 +134,13 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private var isPrivateField = false
     private var voiceBarState: VoiceBarState = VoiceBarState.Idle
     private var quickVoice: QuickVoiceController? = null
+    private var textActions: TextActionsController? = null
+    private var voiceEditor: VoiceEditorController? = null
+    private var textBarState: TextBarState = TextBarState.Idle
+    private var editorUi = EditorUi()
+    private var micIcon = R.drawable.sym_keyboard_voice_lxx
+    /** The small dot on Mic while a voice draft exists. */
+    private val micDot = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFFF5B83D.toInt()) }
 
     init {
         val colors = Settings.getValues().mColors
@@ -141,14 +155,19 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         barMessage.setTextColor(text)
         voiceTime.setTextColor(muted)
         voiceHint.setTextColor(muted)
-        val comingSoon = OnClickListener {
+        fixKey.setOnClickListener {
             AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
-            KeyboardSwitcher.getInstance().showToast(resources.getString(R.string.kud_coming_soon), true)
+            // in the editor ✦ Fix works on the draft, like Instruct (spec item 1: the top bar stays)
+            val editor = voiceEditor
+            if (editor != null && editorUi.open) editor.fixDraft() else textActions?.onFix()
         }
-        fixKey.setOnClickListener(comingSoon)
-        instructKey.setOnClickListener(comingSoon)
+        instructKey.setOnTouchListener { v, event -> onInstructTouch(v, event) }
         micKey.setOnTouchListener { v, event -> onMicTouch(v, event) }
-        barMessage.setOnClickListener { quickVoice?.onMessageTapped() }
+        barMessage.setOnClickListener {
+            if (textBarState is TextBarState.Message && voiceBarState !is VoiceBarState.Message) textActions?.onMessageTapped()
+            else quickVoice?.onMessageTapped()
+        }
+        micKey.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> placeMicDot(v) }
     }
 
     private lateinit var listener: Listener
@@ -441,6 +460,113 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         quickVoice = controller
     }
 
+    fun setTextTools(actions: TextActionsController?, editor: VoiceEditorController?) {
+        textActions = actions
+        voiceEditor = editor
+        actions?.let { renderTextAction(it.state) }
+        editor?.let { renderEditor(it.ui) }
+    }
+
+    /** ✦ Fix / Instruct: a spinner on the icon, the spoken instruction, or a short message ("Fixed · Undo"). */
+    fun renderTextAction(state: TextBarState) {
+        textBarState = state
+        updateBusyIcons()
+        when (state) {
+            is TextBarState.Listening -> {
+                voiceDot.alpha = 1f
+                voiceTime.isVisible = true
+                voiceTime.text = VoiceText.elapsed(state.elapsedMs)
+                voiceText.text = state.text.ifEmpty { resources.getString(R.string.kud_instruct_listening) }
+                voiceHint.isVisible = false
+            }
+            is TextBarState.Message -> if (voiceBarState !is VoiceBarState.Message) showTextMessage(state)
+            else -> Unit
+        }
+        updateMiddle()
+    }
+
+    private fun showTextMessage(state: TextBarState.Message) {
+        val text = state.text
+        val undoAt = text.lastIndexOf("Undo")
+        barMessage.text = if (state.undo && undoAt >= 0) android.text.SpannableString(text).apply {
+            setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), undoAt, text.length, 0)
+            setSpan(android.text.style.UnderlineSpan(), undoAt, text.length, 0)
+        } else text
+        barMessage.isClickable = state.undo
+    }
+
+    private fun setBusyIcon(key: ImageButton, busy: Boolean, icon: Int) {
+        val spinning = key.drawable is KudSpinnerDrawable
+        if (busy == spinning) return
+        if (busy) {
+            val d = KudSpinnerDrawable(18.dpToPx(resources), 2f * resources.displayMetrics.density,
+                Settings.getValues().mColors.get(ColorType.KEY_TEXT))
+            key.setImageDrawable(d)
+            d.start()
+        } else {
+            (key.drawable as? KudSpinnerDrawable)?.stop()
+            key.setImageResource(icon)
+        }
+        Settings.getValues().mColors.setColor(key, ColorType.TOOL_BAR_KEY)
+    }
+
+    /** A spinner on ✦ Fix / Instruct while their call runs: the field's, or the editor's while it is open. */
+    private fun updateBusyIcons() {
+        val busy = (textBarState as? TextBarState.Busy)?.action
+        val editorFixing = editorUi.open && editorUi.mode == EditorMode.Fixing
+        val editorInstructing = editorUi.open && (editorUi.mode == EditorMode.Instructing || editorUi.mode == EditorMode.InstructFinishing)
+        setBusyIcon(fixKey, busy == TextAction.Fix || editorFixing, R.drawable.kud_ic_fix)
+        setBusyIcon(instructKey, busy == TextAction.Instruct || editorInstructing, R.drawable.kud_ic_instruct)
+    }
+
+    /**
+     * Full voice mode: the bar stays as it is (spec item 1). ✦ Fix and Instruct act on the editor's text while it is
+     * open, Mic stops or continues dictation like the editor's big button; the editor's × goes back to the keys.
+     * Closed with a draft: a dot on Mic.
+     */
+    fun renderEditor(ui: EditorUi) {
+        editorUi = ui
+        val open = ui.open
+        micDot.alpha = if (!open && ui.hasDraft) 255 else 0
+        val idle = ui.mode == EditorMode.Idle
+        fixKey.isEnabled = !open || idle
+        fixKey.alpha = if (fixKey.isEnabled || ui.mode == EditorMode.Fixing) 1f else 0.4f
+        instructKey.isEnabled = !open || idle || ui.mode == EditorMode.InstructListening
+        instructKey.alpha = if (instructKey.isEnabled || ui.mode == EditorMode.Instructing || ui.mode == EditorMode.InstructFinishing) 1f else 0.4f
+        micKey.isEnabled = !open || idle || ui.mode == EditorMode.Recording
+        micKey.alpha = if (micKey.isEnabled) 1f else 0.4f
+        updateBusyIcons()
+        updateMicIcon()
+        updateMiddle()
+    }
+
+    private fun placeMicDot(v: View) {
+        val size = 7.dpToPx(resources)
+        val cx = v.width / 2 + 9.dpToPx(resources)
+        val cy = v.height / 2 - 8.dpToPx(resources)
+        micDot.setBounds(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
+        v.overlay.remove(micDot)
+        v.overlay.add(micDot)
+    }
+
+    /** Whether the draft dot is on Mic (for tests). */
+    val isMicDotShown get() = micDot.alpha > 0
+
+    private fun updateMicIcon() {
+        val locked = voiceBarState is VoiceBarState.Recording && (voiceBarState as VoiceBarState.Recording).locked
+        val (icon, desc) = when {
+            // in the editor Mic is the same as the big button: stop while recording, else continue dictating
+            editorUi.open && editorUi.mode == EditorMode.Recording -> R.drawable.kud_ic_stop to R.string.kud_stop
+            locked -> R.drawable.kud_ic_stop to R.string.kud_stop
+            else -> R.drawable.sym_keyboard_voice_lxx to R.string.kud_mic
+        }
+        if (icon == micIcon) return
+        micIcon = icon
+        micKey.setImageResource(icon)
+        if (icon != R.drawable.kud_ic_stop) Settings.getValues().mColors.setColor(micKey, ColorType.TOOL_BAR_KEY)
+        micKey.contentDescription = resources.getString(desc)
+    }
+
     /** Re-reads whether the current field is private (call after settings were reloaded for a new field). */
     fun updatePrivacy() = updateKeys()
 
@@ -469,19 +595,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             }
             VoiceBarState.Idle -> Unit
         }
-        val locked = state is VoiceBarState.Recording && state.locked
-        if (locked != (micKey.tag == STOP_TAG)) {
-            if (locked) {
-                micKey.tag = STOP_TAG
-                micKey.setImageResource(R.drawable.kud_ic_stop)
-                micKey.contentDescription = resources.getString(R.string.kud_stop)
-            } else {
-                micKey.tag = null
-                micKey.setImageResource(R.drawable.sym_keyboard_voice_lxx)
-                Settings.getValues().mColors.setColor(micKey, ColorType.TOOL_BAR_KEY)
-                micKey.contentDescription = resources.getString(R.string.kud_mic)
-            }
-        }
+        updateMicIcon()
         updateMiddle()
     }
 
@@ -490,25 +604,80 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
      * always there: the centred pill while the strip is empty, a compact tag before the suggestions while typing.
      */
     private fun updateMiddle() {
-        val voice = voiceBarState is VoiceBarState.Recording || voiceBarState is VoiceBarState.Finishing
-        val message = voiceBarState is VoiceBarState.Message
+        val editor = editorUi.open
+        val textListening = textBarState is TextBarState.Listening
+        val voice = !editor && (voiceBarState is VoiceBarState.Recording || voiceBarState is VoiceBarState.Finishing || textListening)
+        val voiceMessage = voiceBarState is VoiceBarState.Message
+        val textMessage = textBarState is TextBarState.Message
+        if (voiceMessage) {
+            val m = voiceBarState as VoiceBarState.Message
+            barMessage.text = m.text
+            barMessage.isClickable = m.opensSettings
+        } else if (textMessage) showTextMessage(textBarState as TextBarState.Message)
+        val message = !editor && !voice && (voiceMessage || textMessage)
         val stripEmpty = !isExternalSuggestionVisible && suggestedWords.isEmpty
-        val pill = isPrivateField && !voice && !message && stripEmpty
+        // in the editor the middle is empty but for the Private pill: suggestions belong to typing
+        val pill = isPrivateField && !voice && !message && (stripEmpty || editor)
+        val hideStrip = voice || message || pill || editor
         voiceRow.isVisible = voice
         barMessage.isVisible = message
         privatePill.isVisible = pill
         // The tag keeps its space (INVISIBLE) under the pill, so the strip width doesn't jump when typing starts.
         privateTag.visibility = when {
             !isPrivateField -> GONE
-            voice || message || pill -> INVISIBLE
+            hideStrip -> INVISIBLE
             else -> VISIBLE
         }
-        suggestionsStrip.visibility = if (voice || message || pill) INVISIBLE else VISIBLE
-        if (voice || message) dismissMoreSuggestionsPanel()
+        suggestionsStrip.visibility = if (hideStrip) INVISIBLE else VISIBLE
+        if (voice || message || editor) dismissMoreSuggestionsPanel()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun onInstructTouch(view: View, event: MotionEvent): Boolean {
+        val editor = voiceEditor
+        if (editor != null && editorUi.open) {
+            // a spoken edit of the editor's text
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
+                    view.isPressed = true
+                    AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
+                    editor.onInstructDown()
+                }
+                MotionEvent.ACTION_UP -> { view.isPressed = false; editor.onInstructUp() }
+                MotionEvent.ACTION_CANCEL -> { view.isPressed = false; editor.onInstructCancelled() }
+            }
+            return true
+        }
+        val controller = textActions ?: return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+                view.isPressed = true
+                AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
+                controller.onInstructDown()
+            }
+            MotionEvent.ACTION_UP -> { view.isPressed = false; controller.onInstructUp() }
+            MotionEvent.ACTION_CANCEL -> { view.isPressed = false; controller.onInstructCancelled() }
+        }
+        return true
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun onMicTouch(view: View, event: MotionEvent): Boolean {
+        // Full voice mode: Mic is a plain button there (stop, or continue dictating); no quick voice on top of it.
+        val editor = voiceEditor
+        if (editor != null && editorUi.open) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> view.isPressed = true
+                MotionEvent.ACTION_UP -> {
+                    view.isPressed = false
+                    editor.onMicButton()
+                }
+                MotionEvent.ACTION_CANCEL -> view.isPressed = false
+            }
+            return true
+        }
         val controller = quickVoice ?: return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -534,6 +703,5 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         var DEBUG_SUGGESTIONS = false
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
-        private const val STOP_TAG = "kud_stop"
     }
 }

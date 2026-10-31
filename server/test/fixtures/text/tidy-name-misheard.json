@@ -1,0 +1,17 @@
+{
+  "kind": "tidy",
+  "about": "A name misheard: 'Feno' should become the keyword 'Fenno'; 'type map' → 'TypeMap'. A low-confidence phrase should yield a question pointing at a word in the output.",
+  "input": {
+    "text": "bro tadi feno bilang dashboard type map nya error lagi pas dia buka dari laptop kantor bisa tolong cek log nya sebelum meeting sama pak darsono jam tiga",
+    "segments": [
+      { "text": "bro tadi feno bilang dashboard type map nya error lagi", "confidence": 0.62 },
+      { "text": "pas dia buka dari laptop kantor", "confidence": 0.9 },
+      { "text": "bisa tolong cek log nya sebelum meeting sama pak darsono jam tiga", "confidence": 0.55 }
+    ]
+  },
+  "keywords": ["Fenno", "TypeMap", "FaceMap", "Kud Keys"],
+  "expect": {
+    "contains": ["Fenno", "TypeMap", "bro", "nya"],
+    "notContains": ["Feno ", "type map"]
+  }
+}

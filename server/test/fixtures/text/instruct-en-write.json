@@ -1,0 +1,10 @@
+{
+  "kind": "instruct",
+  "about": "An English instruction with no text: write from scratch, in English.",
+  "input": {
+    "instruction": "write a polite reply saying I'll be 10 minutes late and they can start without me",
+    "text": ""
+  },
+  "keywords": [],
+  "expect": { "contains": ["10 minutes"] }
+}

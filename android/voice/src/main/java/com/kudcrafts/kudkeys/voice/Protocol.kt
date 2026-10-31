@@ -31,7 +31,7 @@ internal object Protocol {
     sealed interface Msg {
         data class Ready(val session: String) : Msg
         data class Partial(val segment: Int, val text: String) : Msg
-        data class Final(val segment: Int, val text: String) : Msg
+        data class Final(val segment: Int, val text: String, val confidence: Float? = null) : Msg
         data object Done : Msg
         data class Error(val code: String, val message: String) : Msg
         data object Unknown : Msg
@@ -48,7 +48,8 @@ internal object Protocol {
         return when (o["type"]?.jsonPrimitive?.contentOrNull) {
             "ready" -> Msg.Ready(str("session") ?: "")
             "partial" -> Msg.Partial(int("segment") ?: 0, str("text") ?: "")
-            "final" -> Msg.Final(int("segment") ?: 0, str("text") ?: "")
+            "final" -> Msg.Final(int("segment") ?: 0, str("text") ?: "",
+                (o["confidence"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.toFloatOrNull()?.takeIf { it in 0f..1f })
             "done" -> Msg.Done
             "error" -> Msg.Error(str("code") ?: "internal", str("message") ?: "")
             else -> Msg.Unknown

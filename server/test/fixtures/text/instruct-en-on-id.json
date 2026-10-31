@@ -1,0 +1,10 @@
+{
+  "kind": "instruct",
+  "about": "An English instruction on an Indonesian message: shorten it. The reply must stay Indonesian (the text's language), casual.",
+  "input": {
+    "instruction": "make it shorter and a bit more polite",
+    "text": "Mas, gue udah nungguin dari tadi tapi file nya belom masuk juga nih, tolong dong dikirim sekarang soalnya gue butuh banget buat presentasi jam dua nanti, kalo nggak gue bisa kena marah bos."
+  },
+  "keywords": [],
+  "expect": { "notContains": ["Please", "I need"] }
+}

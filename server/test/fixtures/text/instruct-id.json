@@ -1,0 +1,13 @@
+{
+  "kind": "instruct",
+  "about": "An Indonesian instruction on Indonesian text: make it a numbered list. Reply stays Indonesian, slang kept.",
+  "input": {
+    "instruction": "jadikan list bernomor terus hapus kalimat terakhir",
+    "text": "Besok gue mau beresin tiga hal. Beli kabel buat studio, kirim invoice ke klien, sama follow up desainer soal logo. Abis itu baru gue bisa santai. Oh iya jangan lupa makan siang."
+  },
+  "keywords": [],
+  "expect": {
+    "contains": ["1.", "2.", "3.", "gue"],
+    "notContains": ["makan siang"]
+  }
+}

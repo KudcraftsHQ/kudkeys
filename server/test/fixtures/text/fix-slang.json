@@ -1,0 +1,13 @@
+{
+  "kind": "fix",
+  "about": "Slang must stay slang while a real typo is fixed ('ksana' → 'ke sana' or 'kesana', 'jga' → 'juga').",
+  "input": {
+    "text": "gue gak bisa ksana sekarang, lu duluan aja deh. ntar gue nyusul, macet bgt soalnya jga"
+  },
+  "keywords": [],
+  "expect": {
+    "contains": ["gue", "gak", "lu", "aja", "deh", "ntar", "nyusul", "bgt"],
+    "notContains": ["tidak", "saya", "nanti", "banget"],
+    "changed": true
+  }
+}

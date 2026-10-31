@@ -39,6 +39,8 @@ class QuickVoiceControllerTest {
         var blocked = false
         var settingsOpened = 0
         val pending = mutableListOf<Pair<Long, () -> Unit>>()
+        var taps = 0
+        override fun onTap() { taps++ }
         override fun hasToken() = token
         override fun hasMicPermission() = mic
         override fun requestMicPermission() { permissionRequests++ }
@@ -93,14 +95,13 @@ class QuickVoiceControllerTest {
         assertEquals(QuickVoiceController.Phase.Idle, controller.phase)
     }
 
-    @Test fun shortTapShowsHint() {
+    @Test fun shortTapOpensTheEditor() {
         controller.onMicDown(950f, 1500f)
         controller.onMicUp()
         host.fire(QuickVoiceController.HOLD_MS) // the hold timer was cancelled
         assertEquals(emptyList(), engine.calls)
-        assertEquals(VoiceBarState.Message("Hold to talk"), host.last)
-        host.fire(QuickVoiceController.MESSAGE_MS)
-        assertEquals(VoiceBarState.Idle, host.last)
+        assertEquals(1, host.taps)
+        assertEquals(QuickVoiceController.Phase.Idle, controller.phase)
     }
 
     @Test fun slideLeftCancels() {
@@ -143,7 +144,7 @@ class QuickVoiceControllerTest {
         assertEquals(emptyList(), engine.calls)
         assertEquals(VoiceBarState.Message("Voice: sign in from settings"), host.last)
         controller.onMicUp()
-        assertEquals(VoiceBarState.Message("Voice: sign in from settings"), host.last) // no "Hold to talk" on top
+        assertEquals(VoiceBarState.Message("Voice: sign in from settings"), host.last)
     }
 
     @Test fun missingPermissionOpensActivity() {
@@ -302,8 +303,8 @@ class QuickVoiceControllerTest {
     }
 
     @Test fun plainMessagesDontOpenSettings() {
-        controller.onMicDown(950f, 1500f)
-        controller.onMicUp() // "Hold to talk"
+        holdToRecord()
+        engine.state.value = VoiceState.Error(VoiceErrorKind.NoConnection, "x")
         controller.onMessageTapped()
         assertEquals(0, host.settingsOpened)
     }

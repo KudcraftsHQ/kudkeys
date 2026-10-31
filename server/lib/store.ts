@@ -1,9 +1,10 @@
 // Everything the server reads and writes besides Better Auth's own tables:
-// the voice profile on the user row and the per-stream usage rows. One
+// the voice profile on the user row, the per-stream usage rows and the
+// per-call text usage rows. One
 // interface, two implementations — Postgres through Prisma, and memory for tests.
 //
-// No method takes or returns transcript text, and the VoiceSession table has
-// no column that could hold it.
+// No method takes or returns transcript or text, and neither usage table has
+// a column that could hold it.
 
 import type { PrismaClient } from '@prisma/client'
 import type { SessionSummary } from '../voice/session'
@@ -32,6 +33,16 @@ export type VoiceSessionRow = {
   model: string | null
 }
 
+/** One /api/text/* call. Counts only; null counts for private fields. */
+export type TextUsageRow = {
+  kind: 'tidy' | 'fix' | 'instruct'
+  charsIn: number | null
+  charsOut: number | null
+  ms: number
+  model: string
+  ok: boolean
+}
+
 export type UsageTotal = { sessions: number; audioSeconds: number }
 
 export interface Store {
@@ -41,6 +52,7 @@ export interface Store {
   /** Newest first. */
   recentVoiceSessions(userId: string, limit: number): Promise<VoiceSessionRow[]>
   usageSince(userId: string, since: Date): Promise<UsageTotal>
+  recordTextUsage(userId: string, row: TextUsageRow): Promise<void>
 }
 
 const PROFILE_SELECT = { id: true, email: true, name: true, image: true, voiceKeywords: true, languages: true } as const
@@ -79,6 +91,9 @@ export function prismaStore(db: PrismaClient): Store {
       })
       return { sessions: r._count._all, audioSeconds: r._sum.audioSeconds ?? 0 }
     },
+    async recordTextUsage(userId, row) {
+      await db.textUsage.create({ data: { userId, ...row } })
+    },
   }
 }
 
@@ -89,8 +104,12 @@ type MemoryUser = { id: string; email: string; name: string; image?: string | nu
  * to (its `kudkeysUser` table, which it replaces on every transaction), so a
  * user who signs up is found here too.
  */
-export function memoryStore(users: () => MemoryUser[]): Store & { voiceSessions: (VoiceSessionRow & { userId: string })[] } {
+export function memoryStore(users: () => MemoryUser[]): Store & {
+  voiceSessions: (VoiceSessionRow & { userId: string })[]
+  textUsage: (TextUsageRow & { userId: string })[]
+} {
   const voiceSessions: (VoiceSessionRow & { userId: string })[] = []
+  const textUsage: (TextUsageRow & { userId: string })[] = []
   const profile = (u: MemoryUser): Profile => ({
     id: u.id,
     email: u.email,
@@ -102,6 +121,10 @@ export function memoryStore(users: () => MemoryUser[]): Store & { voiceSessions:
   const since = (userId: string, t: Date) => voiceSessions.filter((s) => s.userId === userId && s.startedAt >= t)
   return {
     voiceSessions,
+    textUsage,
+    async recordTextUsage(userId, row) {
+      textUsage.push({ userId, ...row })
+    },
     async getProfile(userId) {
       const u = users().find((x) => x.id === userId)
       return u ? profile(u) : null

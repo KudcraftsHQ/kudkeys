@@ -1,0 +1,20 @@
+{
+  "kind": "tidy",
+  "about": "Long Indonesian–English ramble with a spoken numbered list. Expect: punctuation, an intro line, a 1/2/3 list with the ordinals dropped, slang kept (gue, nggak, udah, banget), no added content.",
+  "input": {
+    "text": "oke jadi gini gue udah ngobrol sama tim soal launch minggu depan dan ada beberapa hal yang harus kita beresin dulu pertama landing page nya masih belum responsive di hp jadi itu harus di fix sebelum kita naikin iklan kedua payment gateway nya udah jalan tapi email konfirmasinya kadang nggak kekirim jadi tolong cek lagi ya terus yang ketiga copy buat iklannya masih kaku banget kayak bahasa kantor gitu gue pengen yang lebih santai eh sama satu lagi jangan lupa kabarin gue kalo ada yang nge block soalnya gue mau target launch nya tetep hari kamis",
+    "segments": [
+      { "text": "oke jadi gini gue udah ngobrol sama tim soal launch minggu depan", "confidence": 0.93 },
+      { "text": "dan ada beberapa hal yang harus kita beresin dulu", "confidence": 0.95 },
+      { "text": "pertama landing page nya masih belum responsive di hp jadi itu harus di fix sebelum kita naikin iklan", "confidence": 0.9 },
+      { "text": "kedua payment gateway nya udah jalan tapi email konfirmasinya kadang nggak kekirim jadi tolong cek lagi ya", "confidence": 0.91 },
+      { "text": "terus yang ketiga copy buat iklannya masih kaku banget kayak bahasa kantor gitu gue pengen yang lebih santai", "confidence": 0.88 },
+      { "text": "eh sama satu lagi jangan lupa kabarin gue kalo ada yang nge block soalnya gue mau target launch nya tetep hari kamis", "confidence": 0.86 }
+    ]
+  },
+  "keywords": ["Fenno", "TypeMap", "FaceMap"],
+  "expect": {
+    "contains": ["gue", "nggak", "udah", "banget", "1.", "2.", "3."],
+    "notContains": ["tidak", "sudah", "saya"]
+  }
+}

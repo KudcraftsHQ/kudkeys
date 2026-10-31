@@ -1,0 +1,9 @@
+{
+  "kind": "fix",
+  "about": "Nothing to fix (casual but correct). Expect changed:false and the text unchanged.",
+  "input": {
+    "text": "Oke, nanti aku kabarin lagi ya. Makasih banyak!"
+  },
+  "keywords": [],
+  "expect": { "changed": false }
+}
