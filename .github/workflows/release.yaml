@@ -1,7 +1,7 @@
 # Kud Keys release, adapted from kud-widgets' release.yaml (signing, naming, SHA256SUMS) so Obtainium
 # tracks it the same way.
 # - Tags v<major>.<minor>.<patch> (e.g. v0.1.0): signed release APK published to GitHub Releases as
-#   kudkeys-<tag>.apk + SHA256SUMS. versionCode = major*10000 + minor*100 + patch.
+#   kudkeys-<tag>.apk + SHA256SUMS. versionCode = (major*10000 + minor*100 + patch)*100 + (rc ? N : 99).
 # - Tags with a '-' (v0.2.0-rc.1) are published as pre-releases, which Obtainium skips by default.
 # - Pull requests and pushes are covered by android.yaml (unit tests + debug APK).
 # Secrets (repo settings): KC_KEYSTORE_BASE64, KC_KEYSTORE_PASSWORD, KC_KEY_ALIAS, KC_KEY_PASSWORD.
@@ -38,14 +38,20 @@ jobs:
       - name: Version from tag
         run: |
           TAG="${GITHUB_REF_NAME}"
-          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
-            echo "Tag $TAG must look like v<major>.<minor>.<patch>[-pre]" >&2; exit 1
+          # vX.Y.Z-rc.N or vX.Y.Z. versionCode = (major*10000 + minor*100 + patch)*100 + (rc ? N : 99), so every rc
+          # sorts before its final and each build of a version has its own code.
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$ ]]; then
+            echo "Tag $TAG must look like v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-rc.<n>" >&2; exit 1
           fi
-          MAJOR=${BASH_REMATCH[1]}; MINOR=${BASH_REMATCH[2]}; PATCH=${BASH_REMATCH[3]}
+          MAJOR=${BASH_REMATCH[1]}; MINOR=${BASH_REMATCH[2]}; PATCH=${BASH_REMATCH[3]}; RC=${BASH_REMATCH[5]}
           if [ "$MINOR" -gt 99 ] || [ "$PATCH" -gt 99 ]; then
-            echo "minor and patch must be 0..99 (versionCode = major*10000 + minor*100 + patch)" >&2; exit 1
+            echo "minor and patch must be 0..99" >&2; exit 1
           fi
-          CODE=$((10#$MAJOR * 10000 + 10#$MINOR * 100 + 10#$PATCH))
+          if [ -n "$RC" ] && { [ "$((10#$RC))" -lt 1 ] || [ "$((10#$RC))" -gt 98 ]; }; then
+            echo "rc number must be 1..98 (99 is the final release)" >&2; exit 1
+          fi
+          BUILD=99; [ -n "$RC" ] && BUILD=$((10#$RC))
+          CODE=$(( (10#$MAJOR * 10000 + 10#$MINOR * 100 + 10#$PATCH) * 100 + BUILD ))
           PRERELEASE=false; [[ "$TAG" == *-* ]] && PRERELEASE=true
           echo "KC_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
           echo "KC_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
