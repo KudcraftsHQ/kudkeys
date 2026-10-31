@@ -134,6 +134,13 @@ public interface PopupKeysPanel {
      */
     int translateY(int y);
 
+    /**
+     * Kud Keys: called when the panel opens under a finger that is still down (a long-press), with that
+     * finger's translated coordinates. A panel may shift its y mapping so the finger's starting height
+     * counts as its bottom row: sliding sideways then selects within that row, sliding up the rows above.
+     */
+    default void anchorSlideStart(int x, int y) {}
+
     default View getContainerView() {
         return (View) ((View) this).getParent();
     }

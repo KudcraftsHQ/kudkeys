@@ -43,6 +43,8 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
     protected Function1<Key, Unit> mOnReleaseKey;
     private int mOriginX;
     private int mOriginY;
+    // Kud Keys: how far below the bottom row's centre the long-pressing finger started (see anchorSlideStart)
+    private int mSlideOffsetY;
     private Key mCurrentKey;
 
     private int mActivePointerId;
@@ -177,6 +179,7 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
 
         mOriginX = panelFinalX;
         mOriginY = y + container.getPaddingTop() + (int) getY();
+        mSlideOffsetY = 0;
         controller.onShowPopupKeysPanel(this);
         final PopupKeysKeyboardAccessibilityDelegate accessibilityDelegate = mAccessibilityDelegate;
         if (accessibilityDelegate != null
@@ -190,6 +193,27 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
      */
     protected int getDefaultCoordX() {
         return ((PopupKeysKeyboard)getKeyboard()).getDefaultCoordX();
+    }
+
+    /**
+     * Kud Keys (SwiftKey behaviour): the panel opens above the key preview, so the finger that long-pressed
+     * is still well below it. Treat that starting height as just inside the bottom edge of the bottom row
+     * (a quarter key up), so a sideways slide selects by x straight away, sliding up reaches the rows above,
+     * and sliding down about one key height still cancels.
+     */
+    @Override
+    public void anchorSlideStart(final int x, final int y) {
+        final Keyboard keyboard = getKeyboard();
+        if (keyboard == null) return;
+        int bottomRowAnchorY = Integer.MIN_VALUE;
+        for (final Key key : keyboard.getSortedKeys()) {
+            if (key.isSpacer()) continue;
+            bottomRowAnchorY = Math.max(bottomRowAnchorY, key.getY() + key.getHeight() - key.getHeight() / 4);
+        }
+        if (bottomRowAnchorY == Integer.MIN_VALUE) return;
+        // y is already translated with the current offset, so add it back to get the raw distance
+        final int touchY = mKeyDetector.getTouchY(y + mSlideOffsetY);
+        mSlideOffsetY = Math.max(0, touchY - bottomRowAnchorY);
     }
 
     @Override
@@ -295,7 +319,7 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
 
     @Override
     public int translateY(final int y) {
-        return y - mOriginY;
+        return y - mOriginY - mSlideOffsetY;
     }
 
     @SuppressLint("ClickableViewAccessibility")

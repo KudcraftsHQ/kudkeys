@@ -6,6 +6,7 @@
 
 package helium314.keyboard.latin.inputlogic;
 
+import helium314.keyboard.kudkeys.KudHoldDelete;
 import helium314.keyboard.kudkeys.KudSettings;
 import static helium314.keyboard.latin.common.SuggestionSpanUtilsKt.getTextWithSuggestionSpan;
 
@@ -761,6 +762,10 @@ public final class InputLogic {
                 // Backspace is a functional key, but it affects the contents of the editor.
                 inputTransaction.setDidAffectContents();
                 break;
+            case KeyCode.DELETE_WORD: // Kud Keys: a held backspace past KudHoldDelete.CHAR_REPEATS
+                handleDeleteWordEvent(event, inputTransaction, currentKeyboardScript);
+                inputTransaction.setDidAffectContents();
+                break;
             case KeyCode.SHIFT: {
                 var keyboard = KeyboardSwitcher.getInstance().getKeyboard();
                 if (keyboard != null) {
@@ -1480,6 +1485,42 @@ public final class InputLogic {
                     && inputTransaction.getSettingsValues().mSpacingAndPunctuations.mCurrentLanguageHasSpaces) {
                 restartSuggestionsOnWordTouchedByCursor(inputTransaction.getSettingsValues(), currentKeyboardScript);
             }
+        }
+    }
+
+    /**
+     * Kud Keys: delete the word before the cursor, like ctrl+backspace (KudHoldDelete.charCountToDelete).
+     * With a selection, or in a field whose text can't be read, it is a normal backspace instead.
+     */
+    private void handleDeleteWordEvent(final Event event, final InputTransaction inputTransaction,
+            final String currentKeyboardScript) {
+        final SettingsValues sv = inputTransaction.getSettingsValues();
+        final Event backspace = Event.createSoftwareKeypressEvent(KeyCode.DELETE, 0,
+                event.getX(), event.getY(), event.isKeyRepeat());
+        if (mConnection.hasSelection() || sv.mInputAttributes.isTypeNull()
+                || Constants.NOT_A_CURSOR_POSITION == mConnection.getExpectedSelectionEnd()) {
+            handleBackspaceEvent(backspace, inputTransaction, currentKeyboardScript);
+            return;
+        }
+        if (mWordComposer.isComposingWord()) {
+            // keep what is left of the word as typed, then delete it as text
+            resetEntireInputState(mConnection.getExpectedSelectionStart(), mConnection.getExpectedSelectionEnd(), false);
+        }
+        final CharSequence before = mConnection.getTextBeforeCursor(KudHoldDelete.LOOK_BEHIND, 0);
+        final int length = before == null ? 0 : KudHoldDelete.charCountToDelete(before);
+        if (length <= 0) {
+            handleBackspaceEvent(backspace, inputTransaction, currentKeyboardScript);
+            return;
+        }
+        mSpaceState = SpaceState.NONE;
+        inputTransaction.requireShiftUpdate(mConnection.getExpectedSelectionStart() > length
+                ? InputTransaction.SHIFT_UPDATE_LATER : InputTransaction.SHIFT_UPDATE_NOW);
+        mConnection.deleteTextBeforeCursor(length);
+        StatsUtils.onBackspacePressed(length);
+        if (mConnection.hasSlowInputConnection()) {
+            mSuggestionStripViewAccessor.setNeutralSuggestionStrip();
+        } else if (sv.needsToLookupSuggestions() && sv.mSpacingAndPunctuations.mCurrentLanguageHasSpaces) {
+            restartSuggestionsOnWordTouchedByCursor(sv, currentKeyboardScript);
         }
     }
 

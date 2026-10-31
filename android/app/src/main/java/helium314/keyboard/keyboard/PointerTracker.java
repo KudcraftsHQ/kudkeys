@@ -34,6 +34,7 @@ import helium314.keyboard.latin.common.Constants;
 import helium314.keyboard.latin.common.CoordinateUtils;
 import helium314.keyboard.latin.common.InputPointers;
 import helium314.keyboard.latin.define.DebugFlags;
+import helium314.keyboard.kudkeys.KudHoldDelete;
 import helium314.keyboard.latin.settings.Settings;
 import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.utils.KtxKt;
@@ -1190,6 +1191,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (popupKeysPanel == null) {
             return;
         }
+        // Kud Keys: the finger's starting height counts as the bottom row, so sliding sideways selects at once
+        popupKeysPanel.anchorSlideStart(popupKeysPanel.translateX(mLastX), popupKeysPanel.translateY(mLastY));
         final int translatedX = popupKeysPanel.translateX(mLastX);
         final int translatedY = popupKeysPanel.translateY(mLastY);
         popupKeysPanel.onDownEvent(translatedX, translatedY, mPointerId, SystemClock.uptimeMillis());
@@ -1347,11 +1350,16 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         final int nextRepeatCount = repeatCount + 1;
         startKeyRepeatTimer(nextRepeatCount);
         callListenerOnPressAndCheckKeyboardLayoutChange(key, repeatCount);
-        callListenerOnCodeInput(key, code, mKeyX, mKeyY, SystemClock.uptimeMillis(), true);
+        // Kud Keys: a held backspace deletes words once the hold is long enough (KudHoldDelete)
+        final int repeatCode = KudHoldDelete.codeForRepeat(Settings.getValues().mKudDeleteWordsWhenHeld, code, repeatCount);
+        callListenerOnCodeInput(key, repeatCode, mKeyX, mKeyY, SystemClock.uptimeMillis(), true);
     }
 
     private void startKeyRepeatTimer(final int repeatCount) {
-        final int delay = (repeatCount == 1) ? sParams.mKeyRepeatStartTimeout : sParams.mKeyRepeatInterval;
+        final Key key = getKey();
+        final int delay = KudHoldDelete.delayBeforeRepeat(Settings.getValues().mKudDeleteWordsWhenHeld,
+                key == null ? KeyCode.NOT_SPECIFIED : key.getCode(), repeatCount,
+                sParams.mKeyRepeatStartTimeout, sParams.mKeyRepeatInterval);
         sTimerProxy.startKeyRepeatTimerOf(this, repeatCount, delay);
     }
 
