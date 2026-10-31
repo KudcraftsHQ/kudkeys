@@ -6,6 +6,8 @@ import { Login } from '@/pages/Login'
 import { Profile } from '@/pages/Profile'
 import { UsagePage } from '@/pages/Usage'
 import { Devices } from '@/pages/Devices'
+import { WordsPage } from '@/pages/Words'
+import { BackupsPage } from '@/pages/Backups'
 
 export function App() {
   const { data, isPending } = useSession()
@@ -36,6 +38,8 @@ export function App() {
         <Route element={<Shell email={data.user.email} />}>
           <Route path="/" element={<Profile />} />
           <Route path="/usage" element={<UsagePage />} />
+          <Route path="/words" element={<WordsPage />} />
+          <Route path="/backups" element={<BackupsPage />} />
           <Route path="/devices" element={<Devices currentToken={data.session.token} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

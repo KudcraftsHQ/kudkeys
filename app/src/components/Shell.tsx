@@ -17,6 +17,8 @@ export function Wordmark({ className }: { className?: string }) {
 const NAV = [
   { to: '/', label: 'Profile' },
   { to: '/usage', label: 'Usage' },
+  { to: '/words', label: 'Words' },
+  { to: '/backups', label: 'Backups' },
   { to: '/devices', label: 'Devices' },
 ]
 
@@ -30,7 +32,7 @@ export function Shell({ email }: { email: string }) {
       <header className="border-b border-line bg-paper/80 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto max-w-2xl px-5 h-14 flex items-center gap-6">
           <Wordmark />
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1 overflow-x-auto">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
