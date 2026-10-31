@@ -6,7 +6,7 @@ import { parseResult } from "../voice/providers/groq";
 import { createServer } from "../server";
 import { connect, TOKEN } from "./client";
 
-type Mode = "ok" | "silence" | "refuse" | "429-once";
+type Mode = "ok" | "silence" | "refuse" | "429-once" | "detect-malay";
 type Call = { fields: Record<string, string>; rate: number; seconds: number; auth: string | null };
 
 let fake: ReturnType<typeof Bun.serve>;
@@ -33,6 +33,11 @@ beforeAll(() => {
       if (mode === "refuse") return Response.json({ error: { message: "Invalid API Key" } }, { status: 401 });
       if (mode === "429-once" && calls.length === 1) {
         return Response.json({ error: { message: "slow down" } }, { status: 429, headers: { "retry-after": "0" } });
+      }
+      if (mode === "detect-malay") {
+        const forced = fields.language;
+        const text = forced ? `forced ${forced}` : "detected malay";
+        return Response.json({ text, language: forced ? "indonesian" : "malay", segments: [{ text, avg_logprob: -0.1, no_speech_prob: 0.01 }] });
       }
       if (mode === "silence") {
         return Response.json({
@@ -120,6 +125,19 @@ describe("/v1/stream with Groq", () => {
     });
     // id + en → no language, so Whisper detects it per phrase
     expect(calls[0]!.fields.language).toBeUndefined();
+  });
+
+  test("a language outside the active ones is transcribed again in an active one", async () => {
+    mode = "detect-malay";
+    const { messages } = await session([tone(1000)], {}, { languages: ["en", "id"] });
+    mode = "ok";
+    expect(calls.map((c) => c.fields.language)).toEqual([undefined, "id"]);
+    expect(messages.find((m) => m.type === "final").text).toBe("forced id");
+  });
+
+  test("active languages arrive as locale tags and are reduced to codes", async () => {
+    await session([tone(1000)], {}, { languages: ["id-ID"] });
+    expect(calls[0]!.fields.language).toBe("id");
   });
 
   test("a single language is passed through", async () => {

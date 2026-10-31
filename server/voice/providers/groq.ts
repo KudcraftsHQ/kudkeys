@@ -31,6 +31,8 @@ const MAX_PROMPT_CHARS = 600; // Whisper's prompt is capped at 224 tokens
 
 type VerboseJson = {
   text?: string;
+  /** Whisper's detected language: usually a lowercase English name ("indonesian"), sometimes a code. */
+  language?: string;
   segments?: Array<{ text: string; avg_logprob?: number; no_speech_prob?: number }>;
 };
 
@@ -42,6 +44,8 @@ export class GroqTranscriber implements StreamingTranscriber {
 
   private readonly segmenter: Segmenter;
   private readonly language: string | undefined;
+  /** The keyboard's active languages (base codes). Nothing outside them may come back. */
+  private readonly allowed: string[];
   private readonly prompt: string | undefined;
   private nextSegment = 0;
   private current: { n: number | null } = { n: null }; // the phrase in progress
@@ -61,7 +65,8 @@ export class GroqTranscriber implements StreamingTranscriber {
   ) {
     this.model = cfg.model;
     // Whisper takes one language. With several (id + en), let it detect per phrase.
-    this.language = opts.languages.length === 1 ? opts.languages[0] : undefined;
+    this.allowed = [...new Set(opts.languages.map(baseCode).filter(Boolean))];
+    this.language = this.allowed.length === 1 ? this.allowed[0] : undefined;
     this.prompt = buildPrompt(opts);
     this.segmenter = new Segmenter({ ...DEFAULT_SEGMENTER, sampleRate: SAMPLE_RATE, pauseMs: cfg.pauseMs }, (samples) =>
       this.onPhrase(samples),
@@ -146,8 +151,26 @@ export class GroqTranscriber implements StreamingTranscriber {
     return this.requestTimes.length;
   }
 
-  /** One Whisper call. Finals retry once on 429/5xx; partials never retry. */
+  /**
+   * One phrase. With several active languages Whisper detects the language itself; when it lands on one that
+   * isn't active (Indonesian heard as Malay or Javanese, say), the phrase is transcribed again in an active one.
+   */
   private async transcribe(samples: Int16Array, isFinal: boolean): Promise<{ text: string; confidence?: number } | null> {
+    const first = await this.whisper(samples, isFinal, this.language);
+    if (!first || this.language || this.allowed.length < 2 || !first.text) return first && first.result;
+    const detected = first.detected ? baseCode(first.detected) : undefined;
+    if (!detected || this.allowed.includes(detected)) return first.result;
+    const forced = fallbackLanguage(detected, this.allowed);
+    const again = isFinal ? await this.whisper(samples, isFinal, forced) : null;
+    return again ? again.result : first.result;
+  }
+
+  /** One Whisper call. Finals retry once on 429/5xx; partials never retry. */
+  private async whisper(
+    samples: Int16Array,
+    isFinal: boolean,
+    language: string | undefined,
+  ): Promise<{ result: { text: string; confidence?: number }; text: string; detected?: string } | null> {
     for (let attempt = 0; ; attempt++) {
       this.requestTimes.push(Date.now());
       const form = new FormData();
@@ -155,7 +178,7 @@ export class GroqTranscriber implements StreamingTranscriber {
       form.append("model", this.cfg.model);
       form.append("response_format", "verbose_json");
       form.append("temperature", "0");
-      if (this.language) form.append("language", this.language);
+      if (language) form.append("language", language);
       if (this.prompt) form.append("prompt", this.prompt);
 
       let res: Response;
@@ -171,7 +194,11 @@ export class GroqTranscriber implements StreamingTranscriber {
         throw new Error(`could not reach Groq: ${(e as Error).message}`);
       }
 
-      if (res.ok) return parseResult((await res.json()) as VerboseJson);
+      if (res.ok) {
+        const body = (await res.json()) as VerboseJson;
+        const result = parseResult(body);
+        return { result, text: result.text, detected: body.language };
+      }
 
       const detail = await errorMessage(res);
       if (res.status === 401 || res.status === 403) throw new FatalError(`Groq refused the key (${res.status}): ${detail}`);
@@ -203,6 +230,26 @@ export function parseResult(body: VerboseJson): { text: string; confidence?: num
   const logprobs = kept.map((s) => s.avg_logprob).filter((x): x is number => typeof x === "number");
   const confidence = logprobs.length ? Math.round(Math.exp(Math.min(...logprobs)) * 100) / 100 : undefined;
   return { text, confidence };
+}
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  english: "en", indonesian: "id", malay: "ms", javanese: "jw", sundanese: "su", tagalog: "tl", arabic: "ar",
+  dutch: "nl", spanish: "es", french: "fr", german: "de", portuguese: "pt", chinese: "zh", japanese: "ja",
+  korean: "ko", hindi: "hi", thai: "th", vietnamese: "vi",
+};
+
+/** "en-US" / "en_US" / "English" → "en"; Whisper's Javanese code is "jw", so "jv" maps there too. */
+export function baseCode(lang: string): string {
+  const l = lang.trim().toLowerCase();
+  if (LANGUAGE_NAMES[l]) return LANGUAGE_NAMES[l]!;
+  const code = l.split(/[-_]/)[0] ?? "";
+  return code === "jv" ? "jw" : code;
+}
+
+/** Close relatives of Indonesian go back to Indonesian when it's active; otherwise the first active language. */
+export function fallbackLanguage(detected: string, allowed: string[]): string {
+  if (["ms", "jw", "su", "tl"].includes(detected) && allowed.includes("id")) return "id";
+  return allowed[0]!;
 }
 
 function buildPrompt(opts: ProviderOptions): string | undefined {
