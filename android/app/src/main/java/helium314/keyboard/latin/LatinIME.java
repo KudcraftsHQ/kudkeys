@@ -864,7 +864,7 @@ public class LatinIME extends InputMethodService implements
         super.onStartInput(editorInfo, restarting);
         // kudkeys: a new (or restarted) field drops a voice session started elsewhere, and privacy is re-checked
         // every time, also for restartInput on the same view (a web page moving to its search box).
-        if (mQuickVoice != null) mQuickVoice.onField(editorInfo);
+        if (mQuickVoice != null) mQuickVoice.onField(editorInfo, true);
         if (kudPrivacyDiffers(editorInfo)) {
             mKudPrivacyChanged = true;
             loadSettings();

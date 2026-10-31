@@ -67,10 +67,10 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
         scope,
     )
 
-    /** A locked recording must not keep the mic open with the screen off. */
+    /** No recording keeps the mic open with the screen off: quick voice, the editor's dictation, a held Instruct. */
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_SCREEN_OFF) controller.onHidden()
+            if (intent.action == Intent.ACTION_SCREEN_OFF) onHidden()
         }
     }
 
@@ -91,11 +91,17 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
         view?.render(editor.ui)
     }
 
-    /** Input started (or restarted) in a field; a different field drops the session and a pending Fix. */
-    fun onField(editorInfo: EditorInfo?) {
+    /**
+     * Input started (or restarted) in a field; a different field drops the session and a pending Fix. [newInput]: from
+     * onStartInput (also a restart in the same field), which drops a Fix/Instruct in flight even when the field looks
+     * the same.
+     */
+    @JvmOverloads
+    fun onField(editorInfo: EditorInfo?, newInput: Boolean = false) {
         val f = VoiceField.of(editorInfo)
         controller.onField(f)
         textActions.onField(f)
+        if (newInput) textActions.onInputStarted()
         // the editor's look follows the field (normal / incognito); its draft is not tied to a field
         editorView?.render(editor.ui)
     }

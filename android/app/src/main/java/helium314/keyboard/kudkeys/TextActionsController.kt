@@ -53,6 +53,8 @@ class TextActionsController(
     private var cancelHold: (() -> Unit)? = null
     private var listening = false
     private var fieldKey: Any? = null
+    /** Bumped on every start of input, restarts in the same field included: a result for an older one is dropped. */
+    private var generation = 0
     private val collector: Job = scope.launch { engine.state.collect { onEngineState(it) } }
 
     val isBusy get() = state is TextBarState.Busy || state is TextBarState.Listening
@@ -107,6 +109,8 @@ class TextActionsController(
         if (instruction.isEmpty()) return message(DIDNT_CATCH)
         // An empty field is fine: the instruction is "write this".
         val snap = field.snapshot(MAX_CHARS) ?: return message(TextAction.Instruct.errorMessage(TextResult.Rejected))
+        // A cut-off selection would come back as the whole text: refuse rather than drop its tail.
+        if (snap.truncated) return message(SELECTION_TOO_LONG)
         run(TextAction.Instruct, snap) {
             service.instruct(instruction, snap.text, host.isPrivateField()).map { it.takeIf { t -> t != snap.text } }
         }
@@ -120,9 +124,10 @@ class TextActionsController(
             is VoiceState.Finishing -> render(TextBarState.Busy(TextAction.Instruct))
             is VoiceState.Done -> { listening = false; engine.reset(); onInstruction(s.text) }
             is VoiceState.Error -> {
+                // A cut-off instruction ("hapus semua" of "hapus semua kecuali…") is never applied.
                 listening = false
                 engine.reset()
-                if (s.text.isNotBlank()) onInstruction(s.text) else message(s.kind.userMessage)
+                message(s.kind.userMessage)
             }
             VoiceState.Idle -> { listening = false; if (state is TextBarState.Listening) render(TextBarState.Idle) }
         }
@@ -136,15 +141,18 @@ class TextActionsController(
         lastEdit = null
         render(TextBarState.Busy(action))
         val key = fieldKey
+        val gen = generation
         job = scope.launch {
             val r = call()
             job = null
-            if (key != fieldKey) return@launch
+            if (key != fieldKey || gen != generation) return@launch
             if (r !is TextResult.Ok) return@launch message(action.errorMessage(r))
             val out = r.value
             when {
                 out == null -> message(if (action == TextAction.Fix) LOOKS_GOOD else NO_CHANGE)
                 field.read(snap.start, snap.end) != snap.text -> message(TEXT_CHANGED)
+                // An empty range always "matches": the field must also still be empty with the cursor where it was.
+                snap.text.isEmpty() && field.snapshot(MAX_CHARS) != snap -> message(TEXT_CHANGED)
                 else -> apply(action, snap, out)
             }
         }
@@ -157,9 +165,10 @@ class TextActionsController(
             val c = (newEnd - (snap.end - snap.selStart)).coerceIn(snap.start, newEnd)
             c to c
         }
-        if (!field.replace(snap.start, snap.end, out, selStart, selEnd)) return message(TEXT_CHANGED)
+        if (!field.replace(snap.start, snap.end, snap.text, out, selStart, selEnd))
+            return message(if (action == TextAction.Fix) CANT_FIX_FIELD else CANT_EDIT_FIELD)
         lastEdit = Edit(snap.start, snap.text, out, snap.selStart, snap.selEnd)
-        message(if (action == TextAction.Fix) FIXED else DONE, undo = true)
+        message(if (action == TextAction.Instruct) DONE else if (snap.truncated) FIXED_PART else FIXED, undo = true)
     }
 
     /** The message was tapped: undo when it offers it. */
@@ -174,8 +183,10 @@ class TextActionsController(
         lastEdit = null
         clearMessage()
         val end = e.start + e.newText.length
-        if (field.read(e.start, end) != e.newText) { message(CANT_UNDO); return false }
-        field.replace(e.start, end, e.oldText, e.selStart, e.selEnd)
+        if (field.read(e.start, end) != e.newText || !field.replace(e.start, end, e.newText, e.oldText, e.selStart, e.selEnd)) {
+            message(CANT_UNDO)
+            return false
+        }
         render(TextBarState.Idle)
         return true
     }
@@ -185,6 +196,19 @@ class TextActionsController(
         if (key == fieldKey) return
         fieldKey = key
         cancelAll()
+    }
+
+    /**
+     * Input started again, maybe in the same field (an app reusing one EditText across chats restarts input): a call
+     * in flight is dropped, so its answer never lands in what is now another conversation. The undo stays: it checks
+     * the text before it touches anything.
+     */
+    fun onInputStarted() {
+        generation++
+        if (job == null) return
+        job?.cancel()
+        job = null
+        render(TextBarState.Idle)
     }
 
     fun onHidden() = cancelAll()
@@ -229,6 +253,8 @@ class TextActionsController(
     private inline fun <T, R> TextResult<T>.map(f: (T) -> R): TextResult<R> = when (this) {
         is TextResult.Ok -> TextResult.Ok(f(value))
         is TextResult.RateLimited -> this
+        TextResult.TooLong -> TextResult.TooLong
+        TextResult.ChangedTooMuch -> TextResult.ChangedTooMuch
         TextResult.NotSignedIn -> TextResult.NotSignedIn
         TextResult.SignedOut -> TextResult.SignedOut
         TextResult.Unavailable -> TextResult.Unavailable
@@ -242,6 +268,10 @@ class TextActionsController(
         const val UNDO_MS = 10_000L
         const val MESSAGE_MS = 2_500L
         const val FIXED = "Fixed · Undo"
+        const val FIXED_PART = "Fixed the first 4,000 characters · Undo"
+        const val SELECTION_TOO_LONG = "Selection too long — 4,000 characters at most"
+        const val CANT_FIX_FIELD = "Couldn't fix this field"
+        const val CANT_EDIT_FIELD = "Couldn't edit this field"
         const val DONE = "Done · Undo"
         const val LOOKS_GOOD = "Looks good"
         const val NO_CHANGE = "Nothing to change"
