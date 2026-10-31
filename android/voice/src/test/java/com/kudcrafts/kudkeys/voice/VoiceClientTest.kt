@@ -79,7 +79,7 @@ class VoiceClientTest {
         upgrade(fake)
         val (source, pcm) = wavSource(1.0) // drained long before `ready`
         val c = client(source)
-        assertTrue(c.start(VoiceStart(private = true, keywords = listOf("Fenno"))))
+        assertTrue(c.start(VoiceStart(private = true, keywords = listOf("Fenno"), languages = listOf("id", "en"))))
         await { c.state.first { it is VoiceState.Listening } }
         until { fake.audioBytes.size == pcm.size }
 
@@ -203,6 +203,59 @@ class VoiceClientTest {
         assertEquals(VoiceErrorKind.NoConnection, end.kind)
         assertEquals("Voice: no connection", end.kind.userMessage)
         assertTrue(source.closed)
+    }
+
+    @Test fun sessionToken401_marksSignedOut() {
+        server.enqueue(MockResponse().setResponseCode(401).setBody("unauthorized\n"))
+        val settings = VoiceSettings(FakePrefs()).apply {
+            serverUrl = url()
+            token = "legacy-token-0123456789abcdef"
+            signedIn("sess.sig", "Hammas", "h@example.com")
+        }
+        val (source, _) = wavSource(30.0, frameDelayMs = 20)
+        val c = VoiceClient(settings::endpoint, { source }, onSessionRejected = settings::markSignedOut)
+        c.start()
+        val end = await { c.state.first { !it.isActive } } as VoiceState.Error
+        assertEquals(VoiceErrorKind.SignedOut, end.kind)
+        assertEquals("Signed out — sign in again", end.kind.userMessage)
+        assertFalse(settings.isSignedIn)
+        assertTrue(settings.wasSignedOut)
+        assertEquals("h@example.com", settings.accountEmail) // kept to prefill sign-in
+        // the legacy token is next
+        assertEquals("legacy-token-0123456789abcdef", settings.endpoint().token)
+    }
+
+    @Test fun sessionToken_isSentOverLegacyToken_withoutLanguagesOrKeywords() {
+        val fake = Fake { t -> if (type(t) == "stop") { ws.send("""{"type":"done"}"""); ws.close(1000, null) } }
+        upgrade(fake)
+        val settings = VoiceSettings(FakePrefs()).apply {
+            serverUrl = url()
+            token = "legacy-token-0123456789abcdef"
+            signedIn("sess.sig", "Hammas", "h@example.com")
+        }
+        val (source, _) = wavSource(0.3)
+        val c = VoiceClient(settings::endpoint, { source })
+        assertTrue(c.start())
+        await { c.state.first { it is VoiceState.Listening } }
+        val end = await { c.stopAndWait() }
+        assertTrue(end is VoiceState.Done)
+        assertEquals("Bearer sess.sig", server.takeRequest().getHeader("Authorization"))
+        val start = Json.parseToJsonElement(fake.texts.first()).jsonObject
+        assertEquals("start", start["type"]!!.jsonPrimitive.content)
+        assertFalse("server merges the profile's languages", "languages" in start)
+        assertFalse("server merges the profile's keywords", "keywords" in start)
+    }
+
+    @Test fun legacyToken_whenSignedOut() {
+        val settings = VoiceSettings(FakePrefs()).apply { token = "legacy-token-0123456789abcdef" }
+        assertEquals(VoiceEndpoint(VoiceSettings.DEFAULT_URL, "legacy-token-0123456789abcdef"), settings.endpoint())
+        assertFalse(settings.endpoint().isSession)
+        settings.signedIn("sess.sig", "H", "h@example.com")
+        assertTrue(settings.endpoint().isSession)
+        settings.signOut()
+        assertFalse(settings.endpoint().isSession)
+        assertEquals("https://keys.kudcrafts.com", settings.apiBase)
+        assertEquals("http://10.0.2.2:8080", VoiceSettings.apiBaseOf("ws://10.0.2.2:8080/v1/stream"))
     }
 
     @Test fun noToken_failsBeforeOpeningMic() {

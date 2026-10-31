@@ -44,12 +44,14 @@ sealed interface VoiceState {
 }
 
 enum class VoiceErrorKind(val userMessage: String) {
-    /** No token in Settings → Voice. The mic was never opened. */
-    NoToken("Set your voice token in settings"),
+    /** Not signed in and no legacy token in Settings → Voice. The mic was never opened. */
+    NoToken("Voice: sign in from settings"),
     /** The server URL in settings isn't a ws:// or wss:// URL. */
     BadConfig("Voice: check the server URL in settings"),
     /** HTTP 401 on the WebSocket upgrade. */
     TokenRejected("Voice: token rejected"),
+    /** HTTP 401 with an account's session token: it was signed out or expired. */
+    SignedOut("Signed out — sign in again"),
     /** DNS, connect, TLS or a dropped connection. */
     NoConnection("Voice: no connection"),
     /** AudioRecord could not start (permission revoked, mic busy). */
