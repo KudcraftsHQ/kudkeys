@@ -11,7 +11,15 @@ enum class TextAction(val label: String) {
         is TextResult.Ok -> ""
         TextResult.NotSignedIn -> NOT_SIGNED_IN
         TextResult.SignedOut -> if (this == Tidy) "Sign in to tidy — kept as said" else "Sign in to use $label"
-        is TextResult.RateLimited -> SLOW_DOWN
+        is TextResult.RateLimited -> r.retryAfterS?.takeIf { it > 0 }?.let {
+            if (this == Tidy) "Tidy busy — try again in $it s" else "Busy — try again in $it s"
+        } ?: SLOW_DOWN
+        TextResult.TooLong -> when (this) {
+            Fix -> "Too long to fix"
+            Instruct -> TOO_LONG_TO_EDIT
+            Tidy -> TOO_LONG_TO_TIDY
+        }
+        TextResult.ChangedTooMuch -> if (this == Fix) FIX_CHANGED_TOO_MUCH else "Couldn't do that"
         TextResult.Unavailable, TextResult.NoNetwork ->
             if (this == Tidy) "Tidy unavailable — kept as said" else "$label unavailable"
         TextResult.Rejected -> when (this) {
@@ -24,5 +32,8 @@ enum class TextAction(val label: String) {
     companion object {
         const val NOT_SIGNED_IN = "Sign in from settings"
         const val SLOW_DOWN = "Slow down a moment"
+        const val TOO_LONG_TO_TIDY = "Too long to tidy — kept as is"
+        const val TOO_LONG_TO_EDIT = "Too long to edit"
+        const val FIX_CHANGED_TOO_MUCH = "Fix changed too much — kept yours"
     }
 }

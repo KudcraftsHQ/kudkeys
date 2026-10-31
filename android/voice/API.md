@@ -103,9 +103,11 @@ Note: `Done` can also arrive without `stop()`, when the server ends a session on
 
 | | |
 |---|---|
-| `TextApi(settings)` | `TextService` with the stored session token: `tidy(text, private)`, `fix(text, private)`, `instruct(instruction, text, private)`, all suspend on IO. No session → `NotSignedIn` without a request; a 401 marks the account signed out. |
-| `TextClient` | The stateless HTTP part (`POST /api/text/{tidy,fix,instruct}`, docs/v0.3-spec.md). Caps: tidy/instruct text 20,000, fix 4,000, instruction 2,000. Read timeout 45 s. |
-| `TextResult` | `Ok`, `NotSignedIn`, `SignedOut` (401), `RateLimited(retryAfterS)` (429), `Unavailable` (5xx, timeout, refused), `NoNetwork` (DNS), `Rejected` (400, bad JSON). Never carries text. |
-| `Tidied(text, questions)` | `TidyQuestion(id, original, start, end, options)`: offsets into `text`; questions out of range, without options or overlapping an earlier one are dropped; `original` is the word as it is in `text`. |
+| `TextApi(settings)` | `TextService` with the stored session token: `tidy(text, private, segments)`, `fix(text, private)`, `instruct(instruction, text, private)`, all suspend; cancelling the coroutine cancels the HTTP call. No session → `NotSignedIn` without a request; a 401 marks the account signed out. |
+| `TextClient` | The stateless HTTP part (`POST /api/text/{tidy,fix,instruct}`, docs/v0.3-spec.md). Caps: tidy/instruct text 20,000 (over it: `TooLong`, nothing sent or truncated), fix 4,000, instruction 2,000; cuts never split a surrogate pair (`safeTake`/`safeTakeLast`). `segments` (with `confidence`) are sent when any has one. Read timeout 45 s. |
+| `TextResult` | `Ok`, `NotSignedIn`, `SignedOut` (401), `RateLimited(retryAfterS)` (429), `TooLong` (413 or over the cap), `ChangedTooMuch` (422, fix rewrote the text), `Unavailable` (5xx, timeout, refused), `NoNetwork` (DNS), `Rejected` (400, bad JSON). Never carries text. |
+| `Tidied(text, questions)` | `TidyQuestion(id, original, start, end, options)`: offsets into `text`; questions out of range, without options or overlapping an earlier one are dropped, and so are options equal to the word apart from case/punctuation; `original` is the word as it is in `text`. |
+
+`VoiceState.Done` carries `segments`: the finals with the server's `confidence` (0–1) when sent.
 
 `VoiceState.Listening` / `Finishing` also carry `partial`: the end of `text` that is still a partial (shown dimmed).

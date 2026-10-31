@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.kudkeys
 
+import com.kudcrafts.kudkeys.voice.Segment
+import com.kudcrafts.kudkeys.voice.TextClient
 import com.kudcrafts.kudkeys.voice.TextResult
 import com.kudcrafts.kudkeys.voice.TextService
 import com.kudcrafts.kudkeys.voice.TidyQuestion
@@ -32,18 +34,22 @@ data class EditorUi(
     val instruction: String = "",
     val message: String? = null,
     val hasDraft: Boolean = false,
+    /** Part of the draft is still as dictated (tidy off, failed or too busy): the editor offers "Tidy". */
+    val canTidy: Boolean = false,
 ) {
     val isRecording get() = mode == EditorMode.Recording
     val isBusy get() = mode != EditorMode.Idle
     val canInsert get() = mode == EditorMode.Idle && text.isNotBlank()
 }
 
-enum class EditorMode { Idle, Recording, Finishing, Tidying, InstructListening, InstructFinishing, Instructing }
+enum class EditorMode { Idle, Recording, Finishing, Tidying, Fixing, InstructListening, InstructFinishing, Instructing }
 
 /**
  * Full voice mode (spec item 1): the dictation editor that replaces the key area. Pure Kotlin, driven by the view
  * and the IME; [Host] does the Android parts. The draft is saved to [store] after every change and loaded at
- * construction, so it survives the keyboard closing and the process dying.
+ * construction, so it survives the keyboard closing and the process dying: the words of a recording are saved every
+ * [PERSIST_MS] while it runs, and a stopped dictation is saved as said the moment it ends, before tidy is asked; the
+ * tidied text replaces it when it arrives.
  */
 class VoiceEditorController(
     private val engine: VoiceEngine,
@@ -74,6 +80,9 @@ class VoiceEditorController(
     private var message: String? = null
     private var cancelMessage: (() -> Unit)? = null
     private var cancelHold: (() -> Unit)? = null
+    private var cancelPersist: (() -> Unit)? = null
+    /** Whether the field was private when the current dictation started (its tidy call says so). */
+    private var dictationPrivate = false
     private var job: Job? = null
     private val collector: Job = scope.launch { engine.state.collect { onEngineState(it) } }
 
@@ -157,8 +166,11 @@ class VoiceEditorController(
 
     private fun startDictation() {
         if (!canRecord()) return render()
-        if (engine.start(VoiceStart(private = host.isPrivateField()))) {
+        dictationPrivate = host.isPrivateField()
+        if (engine.start(VoiceStart(private = dictationPrivate))) {
             mode = EditorMode.Recording
+            // new words go after the draft as it is; the tidied text is shown again
+            showingRaw = false
             clearMessage()
             host.haptic()
         }
@@ -171,39 +183,113 @@ class VoiceEditorController(
         return true
     }
 
-    private fun onDictationDone(said: String) {
+    private fun onDictationDone(said: String, segments: List<Segment>) {
+        cancelPersistLive()
         val chunk = said.trim()
         if (chunk.isEmpty()) {
             mode = EditorMode.Idle
+            store.save(draft) // drop the words saved while recording, if any
             return render()
         }
-        if (!tidyOn) {
+        // Saved as said at once: if the keyboard dies while tidy runs, the words are in the draft.
+        appendChunk(chunk, chunk, emptyList(), untidied = true)
+        val span = draft.untidied.lastOrNull()
+        if (!tidyOn || span == null) {
             mode = EditorMode.Idle
-            appendChunk(chunk, chunk, emptyList())
             return render()
         }
+        tidy(listOf(span), dictationPrivate, segments, pushUndo = false)
+    }
+
+    /**
+     * Tidies [spans] of the draft (untidied parts), the last first so earlier offsets stay put, each replaced only if
+     * it still holds what was sent. [pushUndo]: the untidied draft is one Undo away (the Tidy button); after a
+     * dictation it isn't (Undo steps back over the whole dictation, as before).
+     */
+    private fun tidy(spans: List<TextSpan>, private: Boolean, segments: List<Segment>, pushUndo: Boolean) {
         mode = EditorMode.Tidying
+        clearMessage()
         render()
-        val private = host.isPrivateField()
+        val before = draft
         job = scope.launch {
-            val r = text.tidy(chunk, private)
+            var failure: TextResult<*>? = null
+            for (span in spans.sortedByDescending { it.start }) {
+                val sent = draft.textOf(span) ?: continue
+                val r = text.tidy(sent, private, if (spans.size == 1) segments else emptyList())
+                if (r !is TextResult.Ok) { failure = r; break }
+                draft.tidySpan(span, sent, r.value.text, shift(r.value.questions, -leadingSpace(r.value.text)))
+                    ?.let { setDraft(it, pushUndo = false) }
+            }
             job = null
             mode = EditorMode.Idle
-            if (r is TextResult.Ok) appendChunk(r.value.text.trim(), chunk, r.value.questions)
-            else { appendChunk(chunk, chunk, emptyList()); showMessage(TextAction.Tidy.errorMessage(r)) }
-            render()
+            if (pushUndo && draft != before) pushUndoOf(before)
+            if (failure != null) showMessage(TextAction.Tidy.errorMessage(failure)) else render()
         }
     }
 
-    private fun appendChunk(tidied: String, raw: String, questions: List<TidyQuestion>) {
-        val base = if (showingRaw) VoiceDraft(draft.raw, draft.raw) else draft
-        val trimmed = tidied.length - tidied.trimStart().length
-        setDraft(base.append(tidied.trim(), raw, shift(questions, -trimmed)), pushUndo = true)
+    /** Tidy (the editor's button): tidies whatever is still as dictated. */
+    fun tidyNow() {
+        if (mode != EditorMode.Idle || showingRaw || draft.untidied.isEmpty()) return
+        tidy(draft.untidied, host.isPrivateField(), emptyList(), pushUndo = true)
+    }
+
+    private fun leadingSpace(s: String) = s.length - s.trimStart().length
+
+    private fun appendChunk(tidied: String, raw: String, questions: List<TidyQuestion>, untidied: Boolean = false) {
+        // Always onto the draft as it is (also while Raw is shown: its tidied text and answers stay).
+        val trimmed = leadingSpace(tidied)
+        setDraft(draft.append(tidied.trim(), raw, shift(questions, -trimmed), untidied), pushUndo = true)
         showingRaw = false
     }
 
     private fun shift(qs: List<TidyQuestion>, by: Int) =
         if (by == 0) qs else qs.mapNotNull { q -> q.copy(start = q.start + by, end = q.end + by).takeIf { it.start >= 0 } }
+
+    /** While recording: save the draft with the words so far every [PERSIST_MS], so a killed keyboard keeps them. */
+    private fun schedulePersistLive() {
+        if (cancelPersist != null) return
+        cancelPersist = host.schedule(PERSIST_MS) {
+            cancelPersist = null
+            if (mode != EditorMode.Recording && mode != EditorMode.Finishing) return@schedule
+            val words = live.liveText.trim()
+            if (words.isNotEmpty()) store.save(draft.append(words, words, emptyList(), untidiedChunk = true))
+            schedulePersistLive()
+        }
+    }
+
+    private fun cancelPersistLive() {
+        cancelPersist?.invoke()
+        cancelPersist = null
+    }
+
+    // ---- ✦ Fix on the draft (the top bar's Fix while the editor is open) --------------------------------------
+
+    /** Fixes typos in the editor's text, like ✦ Fix does in a field. Undo puts the text back. */
+    fun fixDraft() {
+        if (mode != EditorMode.Idle) return
+        val current = shownText()
+        if (current.isBlank()) return showMessage(TextActionsController.NOTHING_TO_FIX)
+        if (current.length > TextClient.MAX_FIX) return showMessage(TextAction.Fix.errorMessage(TextResult.TooLong))
+        mode = EditorMode.Fixing
+        clearMessage()
+        render()
+        val private = host.isPrivateField()
+        job = scope.launch {
+            val r = text.fix(current, private)
+            job = null
+            mode = EditorMode.Idle
+            when {
+                r !is TextResult.Ok -> showMessage(TextAction.Fix.errorMessage(r))
+                !r.value.changed || r.value.text == current -> showMessage(TextActionsController.LOOKS_GOOD)
+                shownText() != current -> showMessage(TextActionsController.TEXT_CHANGED)
+                else -> {
+                    setDraft(VoiceDraft(r.value.text, draft.raw), pushUndo = true)
+                    showingRaw = false
+                    showMessage(FIXED)
+                }
+            }
+        }
+    }
 
     // ---- editing ----------------------------------------------------------------------------------------------
 
@@ -282,9 +368,13 @@ class VoiceEditorController(
             mode = EditorMode.Idle
             return showMessage(DIDNT_CATCH)
         }
+        val current = shownText()
+        if (current.length > TextClient.MAX_TIDY) {
+            mode = EditorMode.Idle
+            return showMessage(TextAction.TOO_LONG_TO_EDIT)
+        }
         mode = EditorMode.Instructing
         render()
-        val current = shownText()
         val private = host.isPrivateField()
         job = scope.launch {
             val r = text.instruct(instruction, current, private)
@@ -303,12 +393,15 @@ class VoiceEditorController(
     private fun onEngineState(s: VoiceState) {
         live = s
         when (s) {
-            is VoiceState.Connecting, is VoiceState.Listening, is VoiceState.Finishing -> if (isListening()) render()
+            is VoiceState.Connecting, is VoiceState.Listening, is VoiceState.Finishing -> if (isListening()) {
+                if (isDictating()) schedulePersistLive()
+                render()
+            }
             is VoiceState.Done -> {
                 engine.reset()
                 live = VoiceState.Idle
                 when (mode) {
-                    EditorMode.Recording, EditorMode.Finishing -> onDictationDone(s.text)
+                    EditorMode.Recording, EditorMode.Finishing -> onDictationDone(s.text, s.segments)
                     EditorMode.InstructListening, EditorMode.InstructFinishing -> onInstructionDone(s.text)
                     else -> Unit
                 }
@@ -316,11 +409,14 @@ class VoiceEditorController(
             is VoiceState.Error -> {
                 engine.reset()
                 live = VoiceState.Idle
-                val wasDictating = mode == EditorMode.Recording || mode == EditorMode.Finishing
+                val wasDictating = isDictating()
                 val wasInstructing = mode == EditorMode.InstructListening || mode == EditorMode.InstructFinishing
                 if (wasDictating || wasInstructing) mode = EditorMode.Idle
-                // keep the words that arrived before the failure
-                if (wasDictating && s.text.isNotBlank()) appendChunk(s.text.trim(), s.text.trim(), emptyList())
+                if (wasDictating) cancelPersistLive()
+                // keep the words that arrived before the failure (as said: Tidy can tidy them); a cut-off spoken
+                // edit is never applied
+                if (wasDictating && s.text.isNotBlank()) appendChunk(s.text.trim(), s.text.trim(), emptyList(), untidied = true)
+                else if (wasDictating) store.save(draft)
                 if (wasDictating || wasInstructing || open) showMessage(s.kind.userMessage) else render()
             }
             VoiceState.Idle -> if (isListening()) { mode = EditorMode.Idle; render() }
@@ -330,8 +426,20 @@ class VoiceEditorController(
     private fun isListening() = mode == EditorMode.Recording || mode == EditorMode.Finishing ||
         mode == EditorMode.InstructListening || mode == EditorMode.InstructFinishing
 
+    private fun isDictating() = mode == EditorMode.Recording || mode == EditorMode.Finishing
+
+    /**
+     * The IME is going away. A recording's words so far join the draft as said (the session can't finish any more);
+     * a tidy in flight is dropped, but its words were saved when it started.
+     */
     fun destroy() {
         cancelInstructHold()
+        cancelPersistLive()
+        if (isDictating()) {
+            val words = live.liveText.trim()
+            if (words.isNotEmpty()) appendChunk(words, words, emptyList(), untidied = true)
+            mode = EditorMode.Idle
+        }
         job?.cancel()
         if (engine.state.value.isActive) engine.cancel()
         clearMessage()
@@ -342,12 +450,14 @@ class VoiceEditorController(
     // ---- state ------------------------------------------------------------------------------------------------
 
     private fun setDraft(d: VoiceDraft, pushUndo: Boolean) {
-        if (pushUndo && d != draft) {
-            undo.addLast(draft)
-            while (undo.size > MAX_UNDO) undo.removeFirst()
-        }
+        if (pushUndo && d != draft) pushUndoOf(draft)
         draft = d
         store.save(d)
+    }
+
+    private fun pushUndoOf(d: VoiceDraft) {
+        undo.addLast(d)
+        while (undo.size > MAX_UNDO) undo.removeFirst()
     }
 
     private fun shownText() = if (showingRaw) draft.raw else draft.text
@@ -376,6 +486,7 @@ class VoiceEditorController(
             canUndo = undo.isNotEmpty(), question = question,
             questionsLeft = if (question == null) 0 else draft.questions.size,
             instruction = instruction, message = message, hasDraft = !draft.isEmpty,
+            canTidy = mode == EditorMode.Idle && !showingRaw && draft.untidied.isNotEmpty(),
         )
     }
 
@@ -400,6 +511,9 @@ class VoiceEditorController(
 
     companion object {
         const val MESSAGE_MS = 3_000L
+        /** How often a recording's words are saved while it runs. */
+        const val PERSIST_MS = 2_000L
+        const val FIXED = "Fixed"
         const val MAX_UNDO = 50
         const val HINT_INSTRUCT = "Hold and say an edit"
         const val DIDNT_CATCH = "Didn't catch that"

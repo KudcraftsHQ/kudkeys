@@ -211,26 +211,46 @@ cd android
 - **Editor view:** `KudVoiceEditorView` (built in code) is the last child of `keyboard_view_wrapper` in
   `main_keyboard_frame.xml`, GONE until open. It measures itself to the tallest sibling (the keys, or emoji), so it follows
   the keyboard height and the user's resize; it is opaque and clickable over the keys. Colours come from
-  `Settings.getValues().mColors` + `mKudIncognitoLook` (faint watermark in private fields). While open the bar hides
-  Fix/Instruct and the suggestions (Private pill stays) and Mic becomes "back to keys" (`kud_ic_keyboard`); the big
-  round button in the editor is stop / continue dictating. Mic shows an amber dot (`micDot`, a ViewOverlay) while a draft exists.
-- **Editor rules:** opening with no draft records at once; with a draft it just shows it. Stop → `tidy` when the toggle is
-  on (`PrefsDraftStore.tidyOn`, default on) → the chunk is appended (`VoiceDraft.append`: space, or a blank line when
-  either side has lines) with its questions offset. Tidy failure keeps the raw words and says so. Questions: first one on
+  `Settings.getValues().mColors` + `mKudIncognitoLook` (faint watermark in private fields). While open the bar keeps
+  ✦ Fix · Instruct · Mic and hides the suggestions (Private pill stays): Fix runs `/fix` on the draft
+  (`VoiceEditorController.fixDraft`), Instruct is the editor's spoken edit (hold), Mic is stop / continue like the big
+  round button; the editor's × goes back to the keys. Mic shows an amber dot (`micDot`, a ViewOverlay) while a draft exists.
+- **Editor text area:** a `LinesScrollView` sized to whole lines of the body (`includeFontPadding=false`, spacing as
+  bottom padding, so every line is `lineHeight` tall), a half-line fading edge and the scrollbar where there is more. It
+  scrolls in its `onLayout`: to the question's line (one line of context above) when a card appears, to the end while
+  dictation or tidy grows the text; always by whole lines.
+- **Editor rules:** opening with no draft records at once; with a draft it just shows it. While recording the words so far
+  are saved every 2 s (`PERSIST_MS`), and `destroy()` adds them to the draft. Stop → the chunk is appended **as said** and
+  saved at once (`VoiceDraft.append`: space, or a blank line when either side has lines), marked in `draft.untidied`;
+  then `tidy` (when the toggle is on, `PrefsDraftStore.tidyOn`, default on, with the finals' confidence as `segments` and
+  the privateness from when recording started) swaps that range for the tidied text and its questions
+  (`VoiceDraft.tidySpan`, only if the range is unchanged). Tidy off, failed, busy (429: "Tidy busy — try again in N s")
+  or too long (413) leaves the range untidied and the editor shows a **Tidy** pill (`tidyNow`, one Undo). Questions: first one on
   the card, `VoiceDraft.answer` replaces by offsets and shifts the rest (overlaps dropped); "keep as is" / × just drop it.
   Raw shows `draft.raw` (no cards); Insert inserts what is shown. Instruct (hold, 250 ms like Mic) sends the shown text.
   Every change pushes the old draft on an undo stack (50, not persisted). Close/hide/onFinishInput stops a recording (its
   words still join the draft) and closes; Discard clears. Private field → `VoiceStart(private)` and `private: true` on tidy/instruct.
-- **Draft storage:** `PrefsDraftStore` = SharedPreferences `kudkeys_draft` (text, raw, open questions, tidy toggle),
-  excluded from backup/transfer in both storage domains like `kudkeys_voice` (`KudBackupRulesTest`). Never logged. Drafts
-  from private fields are stored too (the spec asks the draft to survive; it is the user's own text, not learning).
+- **Draft storage:** `PrefsDraftStore`: the draft (text, raw, open questions, untidied ranges) is the file
+  `files/kudkeys_draft.json` (AtomicFile) in the **credential-encrypted** data dir, not the device-protected storage the
+  app defaults to (readable before the first unlock). No public API gives a CE context, so the dir is the DE one's
+  `/user_de/` → `/user/` twin (`credentialDataDir`); while the user is locked the draft is kept in memory and written at
+  unlock. A draft an older build left in the DE prefs moves to the file. The tidy toggle stays in SharedPreferences
+  `kudkeys_draft`. Both are excluded from backup/transfer in all domains (`KudBackupRulesTest`). Never logged. Drafts from
+  private fields are stored too (the spec asks the draft to survive; it is the user's own text, not learning).
 - **Fix / Instruct:** `InputConnectionFieldEditor` reads the selection, else ≤4,000 chars around the cursor (absolute
   offsets from `getExtractedText`, fallback `LatinIME.kudExpectedSelection`), and replaces in one batch edit after
-  `LatinIME.kudPrepareExternalEdit` (commits the composing word). Before applying, the original range is re-read: changed →
-  "Text changed — try again". Undo (tap "Fixed · Undo" / "Done · Undo", 10 s) re-checks the new text is still there and
-  puts back the old text and selection. A selection stays selected after the edit; otherwise the cursor keeps its
-  distance from the end. Messages: `TextAction.errorMessage` (401 "Sign in to use Fix", 429 "Slow down a moment",
-  5xx/network "Fix unavailable", no session "Sign in from settings"). Field change / keyboard hidden cancels the call.
+  `LatinIME.kudPrepareExternalEdit` (commits the composing word). A window inside a longer field starts and ends at a
+  sentence/paragraph boundary (else a space), and no cut splits an emoji. Before applying, the original range is re-read:
+  changed → "Text changed — try again"; an empty field must still be empty with the cursor where it was. The replace
+  itself selects the range and checks it holds the text read (`getSelectedText`) before writing; a mismatch (wrong
+  absolute offsets in an app without extracted text) writes nothing: "Couldn't fix this field". Undo (tap
+  "Fixed · Undo" / "Done · Undo", 10 s) does the same checks and puts back the old text and selection. A selection over
+  4,000 chars: Fix fixes the first 4,000 ("Fixed the first 4,000 characters"), Instruct refuses. A selection stays
+  selected after the edit; otherwise the cursor keeps its distance from the end. Messages: `TextAction.errorMessage`
+  (401 "Sign in to use Fix", 429 "Busy — try again in N s", 413 "Too long to …", 422 "Fix changed too much — kept
+  yours", 5xx/network "Fix unavailable", no session "Sign in from settings"). Field change, keyboard hidden or screen off
+  cancels the call; so does any `onStartInput` (also a restart in the same field: `onInputStarted`). A voice error while
+  Instruct is held shows the error and applies nothing. Cancelling a call cancels its HTTP request (`TextClient` enqueues).
   Bar spinner = `KudSpinnerDrawable` in the icon slot (the bar's children are pinned by `KudKeysToolbarScreenshotTest`).
 - **Tests:** `VoiceEditorControllerTest` (record → stop → tidy → answer → instruct → undo → insert, tidy off, append,
   restart restores the draft, errors), `TextActionsControllerTest` (a Robolectric `EditText`'s InputConnection: replace,

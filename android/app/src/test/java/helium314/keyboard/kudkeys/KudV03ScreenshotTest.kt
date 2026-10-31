@@ -71,6 +71,9 @@ class KudV03ScreenshotTest {
 
     private fun shot(name: String) {
         layout()
+        // the editor scrolls its text in a posted block, once laid out
+        ShadowLooper.idleMainLooper()
+        layout()
         preDrawText(inputView)
         val bitmap = Bitmap.createBitmap(inputView.measuredWidth, inputView.measuredHeight, Bitmap.Config.ARGB_8888)
         inputView.draw(Canvas(bitmap))
@@ -97,7 +100,7 @@ class KudV03ScreenshotTest {
     private val raw = "oke besok kita meeting jam sepuluh sama feno yang perlu dibahas pertama invoice bulan ini " +
         "kedua jadwal shooting iklan baru terus yang ketiga budget meta ads minggu depan"
     private val feno = tidied.indexOf("Feno")
-    private val question = TidyQuestion("q1", "Feno", feno, feno + 4, listOf("Fenno", "Feno"))
+    private val question = TidyQuestion("q1", "Feno", feno, feno + 4, listOf("Fenno"))
 
     @Test fun editorRecording() {
         keyboard()
@@ -108,7 +111,42 @@ class KudV03ScreenshotTest {
         val keys = inputView.findViewById<View>(R.id.keyboard_view)
         assertEquals(keys.height, editor.height)
         assertEquals(View.VISIBLE, editor.visibility)
-        assertEquals(View.INVISIBLE, strip.findViewById<View>(R.id.kud_fix_key).visibility)
+        // the top bar stays: ✦ Fix · … · Instruct · Mic (Mic stops, like the big button)
+        assertEquals(View.VISIBLE, strip.findViewById<View>(R.id.kud_fix_key).visibility)
+        assertEquals(View.VISIBLE, strip.findViewById<View>(R.id.kud_instruct_key).visibility)
+        assertEquals(latinIME.getString(R.string.kud_stop), strip.findViewById<View>(R.id.kud_mic_key).contentDescription)
+    }
+
+    private val longTidied = tidied + "\n\nTerus soal shooting, kita butuh lokasi yang terang, jadi mungkin di studio " +
+        "yang biasa aja. Kalo studio penuh, kita pindah ke rumah aja, nggak apa-apa.\n\nBudget Meta Ads naik dikit " +
+        "minggu depan, soalnya iklan yang kemaren performanya bagus banget. Nanti aku kabarin angkanya.\n\n" +
+        "Satu lagi, tolong cek kontrak sama Rendi sebelum Jumat ya."
+    private val rendi = longTidied.indexOf("Rendi")
+
+    /** V1: a long tidied text, scrolled so the question's word is in view; whole lines only. */
+    @Test fun editorLongTextScrolledToQuestion() {
+        keyboard()
+        showEditor(EditorUi(open = true, text = longTidied, canShowRaw = true, canUndo = true,
+            question = TidyQuestion("q1", "Rendi", rendi, rendi + 5, listOf("Randy", "Hendi")), questionsLeft = 1, hasDraft = true))
+        shot("11-editor-long-question")
+        val scroll = editor.textScroll
+        val body = editor.textBody
+        val line = body.lineHeight
+        assertEquals(0, scroll.height % line, "the text area shows whole lines")
+        assertTrue(scroll.height / line >= 3, "at least three lines with the card showing")
+        assertEquals(0, scroll.scrollY % line, "scrolled by whole lines")
+        val l = body.layout.getLineForOffset(rendi)
+        assertTrue(body.layout.getLineTop(l) >= scroll.scrollY && body.layout.getLineBottom(l) <= scroll.scrollY + scroll.height,
+            "the question's word is in view")
+        assertTrue(scroll.scrollY > 0)
+    }
+
+    /** H4: tidy failed (busy): the message says when, and Tidy is offered. */
+    @Test fun editorTidyRetry() {
+        keyboard()
+        showEditor(EditorUi(open = true, text = raw, canTidy = true, canUndo = true, hasDraft = true,
+            message = "Tidy busy — try again in 20 s"))
+        shot("12-editor-tidy-retry")
     }
 
     @Test fun editorTidiedWithQuestion() {

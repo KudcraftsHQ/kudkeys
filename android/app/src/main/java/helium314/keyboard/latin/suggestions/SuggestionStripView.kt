@@ -48,6 +48,7 @@ import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ToolbarKey
 import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.kudkeys.EditorMode
 import helium314.keyboard.kudkeys.EditorUi
 import helium314.keyboard.kudkeys.KudSpinnerDrawable
 import helium314.keyboard.kudkeys.QuickVoiceController
@@ -156,7 +157,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         voiceHint.setTextColor(muted)
         fixKey.setOnClickListener {
             AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
-            textActions?.onFix()
+            // in the editor ✦ Fix works on the draft, like Instruct (spec item 1: the top bar stays)
+            val editor = voiceEditor
+            if (editor != null && editorUi.open) editor.fixDraft() else textActions?.onFix()
         }
         instructKey.setOnTouchListener { v, event -> onInstructTouch(v, event) }
         micKey.setOnTouchListener { v, event -> onMicTouch(v, event) }
@@ -467,9 +470,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     /** ✦ Fix / Instruct: a spinner on the icon, the spoken instruction, or a short message ("Fixed · Undo"). */
     fun renderTextAction(state: TextBarState) {
         textBarState = state
-        val busy = (state as? TextBarState.Busy)?.action
-        setBusyIcon(fixKey, busy == TextAction.Fix, R.drawable.kud_ic_fix)
-        setBusyIcon(instructKey, busy == TextAction.Instruct, R.drawable.kud_ic_instruct)
+        updateBusyIcons()
         when (state) {
             is TextBarState.Listening -> {
                 voiceDot.alpha = 1f
@@ -509,16 +510,32 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         Settings.getValues().mColors.setColor(key, ColorType.TOOL_BAR_KEY)
     }
 
+    /** A spinner on ✦ Fix / Instruct while their call runs: the field's, or the editor's while it is open. */
+    private fun updateBusyIcons() {
+        val busy = (textBarState as? TextBarState.Busy)?.action
+        val editorFixing = editorUi.open && editorUi.mode == EditorMode.Fixing
+        val editorInstructing = editorUi.open && (editorUi.mode == EditorMode.Instructing || editorUi.mode == EditorMode.InstructFinishing)
+        setBusyIcon(fixKey, busy == TextAction.Fix || editorFixing, R.drawable.kud_ic_fix)
+        setBusyIcon(instructKey, busy == TextAction.Instruct || editorInstructing, R.drawable.kud_ic_instruct)
+    }
+
     /**
-     * Full voice mode: while the editor is open the bar keeps only Mic (stop while recording, else back to keys).
+     * Full voice mode: the bar stays as it is (spec item 1). ✦ Fix and Instruct act on the editor's text while it is
+     * open, Mic stops or continues dictation like the editor's big button; the editor's × goes back to the keys.
      * Closed with a draft: a dot on Mic.
      */
     fun renderEditor(ui: EditorUi) {
         editorUi = ui
         val open = ui.open
-        fixKey.visibility = if (open) INVISIBLE else VISIBLE
-        instructKey.visibility = if (open) INVISIBLE else VISIBLE
         micDot.alpha = if (!open && ui.hasDraft) 255 else 0
+        val idle = ui.mode == EditorMode.Idle
+        fixKey.isEnabled = !open || idle
+        fixKey.alpha = if (fixKey.isEnabled || ui.mode == EditorMode.Fixing) 1f else 0.4f
+        instructKey.isEnabled = !open || idle || ui.mode == EditorMode.InstructListening
+        instructKey.alpha = if (instructKey.isEnabled || ui.mode == EditorMode.Instructing || ui.mode == EditorMode.InstructFinishing) 1f else 0.4f
+        micKey.isEnabled = !open || idle || ui.mode == EditorMode.Recording
+        micKey.alpha = if (micKey.isEnabled) 1f else 0.4f
+        updateBusyIcons()
         updateMicIcon()
         updateMiddle()
     }
@@ -538,8 +555,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun updateMicIcon() {
         val locked = voiceBarState is VoiceBarState.Recording && (voiceBarState as VoiceBarState.Recording).locked
         val (icon, desc) = when {
-            // the editor has its own big stop button; here Mic only goes back to the keys (a recording stops and stays)
-            editorUi.open -> R.drawable.kud_ic_keyboard to R.string.kud_back_to_keys
+            // in the editor Mic is the same as the big button: stop while recording, else continue dictating
+            editorUi.open && editorUi.mode == EditorMode.Recording -> R.drawable.kud_ic_stop to R.string.kud_stop
             locked -> R.drawable.kud_ic_stop to R.string.kud_stop
             else -> R.drawable.sym_keyboard_voice_lxx to R.string.kud_mic
         }
@@ -617,6 +634,21 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     @SuppressLint("ClickableViewAccessibility")
     private fun onInstructTouch(view: View, event: MotionEvent): Boolean {
+        val editor = voiceEditor
+        if (editor != null && editorUi.open) {
+            // a spoken edit of the editor's text
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
+                    view.isPressed = true
+                    AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
+                    editor.onInstructDown()
+                }
+                MotionEvent.ACTION_UP -> { view.isPressed = false; editor.onInstructUp() }
+                MotionEvent.ACTION_CANCEL -> { view.isPressed = false; editor.onInstructCancelled() }
+            }
+            return true
+        }
         val controller = textActions ?: return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -633,14 +665,14 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     @SuppressLint("ClickableViewAccessibility")
     private fun onMicTouch(view: View, event: MotionEvent): Boolean {
-        // Full voice mode: Mic is a plain button there (stop, or back to the keys); no quick voice on top of it.
+        // Full voice mode: Mic is a plain button there (stop, or continue dictating); no quick voice on top of it.
         val editor = voiceEditor
         if (editor != null && editorUi.open) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> view.isPressed = true
                 MotionEvent.ACTION_UP -> {
                     view.isPressed = false
-                    editor.close()
+                    editor.onMicButton()
                 }
                 MotionEvent.ACTION_CANCEL -> view.isPressed = false
             }
