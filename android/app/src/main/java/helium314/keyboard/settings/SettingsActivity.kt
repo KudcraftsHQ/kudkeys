@@ -166,6 +166,8 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
 
     override fun onStop() {
         prefs.unregisterOnSharedPreferenceChangeListener(this)
+        // kudkeys: settings closed after a change → sync them (v0.4)
+        if (!isChangingConfigurations) helium314.keyboard.kudkeys.sync.KudSyncWork.onSettingsClosed(this)
         super.onStop()
     }
 

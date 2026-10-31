@@ -27,6 +27,8 @@ class App : Application() {
         FoldableUtils.init(this)
         Settings.init(this)
         SubtypeSettings.init(this)
+        // kudkeys: periodic sync and backup while signed in (v0.4); no-op when signed out
+        helium314.keyboard.kudkeys.sync.KudSyncWork.ensureScheduled(this)
 
         val scope = CoroutineScope(Dispatchers.Default)
         scope.launch { // do some uncritical work in background for faster startup

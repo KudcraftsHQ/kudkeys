@@ -611,6 +611,31 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
     }
 
     /**
+     * Kud Keys sync: every word with its properties, waiting up to [timeoutMs] (the 100 ms of
+     * {@link #getWordPropertiesForSyncing()} is too short for a big history). Null when it timed out.
+     */
+    @Nullable
+    public WordProperty[] readAllWordProperties(final long timeoutMs) {
+        reloadDictionaryIfRequired();
+        final AsyncResultHolder<WordProperty[]> result = new AsyncResultHolder<>("KudSyncWords");
+        asyncExecuteTaskWithLock(mLock.readLock(), () -> {
+            final ArrayList<WordProperty> list = new ArrayList<>();
+            final BinaryDictionary binaryDictionary = getBinaryDictionary();
+            if (binaryDictionary != null) {
+                int token = 0;
+                do {
+                    final BinaryDictionary.GetNextWordPropertyResult next = binaryDictionary.getNextWordProperty(token);
+                    if (next.mWordProperty == null) break;
+                    list.add(next.mWordProperty);
+                    token = next.mNextToken;
+                } while (token != 0);
+            }
+            result.set(list.toArray(new WordProperty[0]));
+        });
+        return result.get(null, timeoutMs);
+    }
+
+    /**
      * Returns dictionary content required for syncing.
      */
     public WordProperty[] getWordPropertiesForSyncing() {

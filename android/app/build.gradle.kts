@@ -112,6 +112,9 @@ dependencies {
     // kotlin
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
+    // Kud Keys sync and backup (v0.4); 2.10 is the last WorkManager on minSdk 21
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
+
     // compose
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(platform("androidx.compose:compose-bom:2025.11.01")) // newer requires minSdk 23
@@ -131,4 +134,27 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("androidx.test:runner:1.7.0")
     testImplementation("androidx.test:core:1.7.0")
+    testImplementation("androidx.work:work-testing:2.10.5")
+}
+
+// Kud Keys: the native dictionary code built for the host, so JVM tests can load real dictionaries
+// (KudSyncedDictionaryTest). Needs g++ and a JDK with JNI headers; without g++ those tests are skipped.
+val hostJniDir = layout.buildDirectory.dir("hostjni")
+val hostJni = tasks.register<Exec>("hostJni") {
+    val jni = file("src/main/jni")
+    val javaHome = File(System.getProperty("java.home"))
+    val out = hostJniDir.get().file("libjni_latinime.so").asFile
+    inputs.dir(jni)
+    outputs.file(out)
+    onlyIf { System.getProperty("os.name").lowercase().contains("linux") && File("/usr/bin/g++").canExecute() }
+    doFirst { out.parentFile.mkdirs() }
+    workingDir = jni
+    val sources = jni.walkTopDown().filter { it.isFile && it.extension == "cpp" && "/tests/" !in it.path }
+        .map { it.relativeTo(jni).path }.sorted().toList()
+    commandLine(listOf("g++", "-shared", "-fPIC", "-O1", "-std=c++17", "-w", "-Isrc",
+        "-I${javaHome}/include", "-I${javaHome}/include/linux", "-o", out.absolutePath) + sources)
+}
+tasks.withType<Test>().configureEach {
+    dependsOn(hostJni)
+    systemProperty("kudkeys.hostJni", hostJniDir.get().file("libjni_latinime.so").asFile.absolutePath)
 }
