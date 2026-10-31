@@ -341,9 +341,17 @@ cd android
   popup-key width sideways moves the highlight one key, wherever the panel had to be shifted to fit on screen;
   past either end it stays on the end key (`detectKey` clamps x, never cancels sideways). One row up reaches the row
   above; about one key height down cancels, and then lifting types nothing (`PointerTracker.onMoveEvent` disables
-  the pointer). The `.` popup is one row, `.` itself the default: `"punctuation"` in `LocaleKeyboardInfos`
-  (`. , ? ! ' " : ; -`, auto order, so on a phone it reads `- ; : " ' ! ? . ,` with `,` right and `?` `!` left of `.`).
-  Test: `KudPopupSlideTest` (real touch events, screenshot → `$TMPDIR/kudkeys-popup/`).
+  the pointer).
+- **The `.` panel** (v0.4.7, SwiftKey): `J/kudkeys/KudPeriodPanel.kt`, a small `PopupKeysPanel` drawn over the key.
+  `PointerTracker.onDownEventInternal` opens it on touch-down (no long-press wait) when `isInstantKey` (alphabet
+  bottom-row `.` whose popups are exactly `! , . ?`, the `"punctuation"` default in `LocaleKeyboardInfos`; tablets,
+  other locales' punctuation and URL/TLD popups keep HeliBoard's long-press popup). Cells ~0.91 key wide, panel 1.85
+  rows tall with its bottom at the key's, `.` cell centred on the key; selection by absolute x (clamped to the ends),
+  cancel below the panel + 0.4 key or one row above it. Shown on every tap, as SwiftKey does: a tap is down+up on `.`
+  so it commits `.`. A second finger going down commits the panel first (`MainKeyboardView.processMotionEvent` →
+  `PointerTracker.commitInstantPopupKeysPanels`), so fast two-thumb typing never loses a key.
+  Test: `KudPeriodPanelTest` (touch events; `compare.png` beside SwiftKey → `$TMPDIR/kudkeys-period/`).
+  Long-press popup test: `KudPopupSlideTest` (on `e`; real touch events, screenshot → `$TMPDIR/kudkeys-popup/`).
 - **Hold delete** (Typing → Delete words when held, `KudHoldDelete`, default on): 8 character repeats (400 ms start
   + 7 × 50 ms ≈ 750 ms), then `KeyCode.DELETE_WORD` every 175 ms. The rule (`charCountToDelete`) is ctrl+backspace:
   trailing spaces + the word; ' ’ - inside a word stay with it; punctuation/emoji runs are a word; marks, ZWJ,

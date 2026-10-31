@@ -62,9 +62,9 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
         if (labelQuestion !in popupKeys)
             popupKeys[labelQuestion] = if (labelQuestion == "?") mutableListOf("¿") else mutableListOf("?", "¿")
         if ("punctuation" !in popupKeys)
-            // Kud Keys (SwiftKey): one row, "." itself as the default under the finger, the most used next to it
-            // (auto order puts them right, left, right… of the default as the screen allows)
-            popupKeys["punctuation"] = mutableListOf("${Key.POPUP_KEYS_AUTO_COLUMN_ORDER}9", ".", "\\,", "?", "!", "'", "\"", ":", ";", "-")
+            // Kud Keys (SwiftKey): exactly ! , . ? in this order, "." (the key itself) the default. On the phone's
+            // alphabet "." key this opens instantly as KudPeriodPanel, not as a long-press popup.
+            popupKeys["punctuation"] = mutableListOf("${Key.POPUP_KEYS_FIXED_COLUMN_ORDER}4", "!", "\\,", ".", "?")
     }
 
     private fun readStream(stream: InputStream?, onlyPopupKeys: Boolean, priority: Boolean) {

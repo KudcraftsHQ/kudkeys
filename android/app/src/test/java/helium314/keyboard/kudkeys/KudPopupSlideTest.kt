@@ -41,6 +41,9 @@ import kotlin.test.assertTrue
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(shadows = [ShadowInputMethodManager2::class], qualifiers = "w411dp-h891dp-port-xxhdpi")
 class KudPopupSlideTest {
+    /** A key with a long-press popup ("." opens SwiftKey's instant panel instead, see KudPeriodPanelTest). */
+    private val LONG_PRESS_KEY = 'e'
+
     private val latinIME = Robolectric.setupService(LatinIME::class.java)
     private val switcher = KeyboardSwitcher.getInstance()
     private val view get() = switcher.mainKeyboardView
@@ -83,6 +86,15 @@ class KudPopupSlideTest {
         return x to y
     }
 
+    private fun highlightedLabelAtStart(): String? {
+        val (x, y) = longPress(LONG_PRESS_KEY.code)
+        val label = highlighted!!.label
+        touch(MotionEvent.ACTION_MOVE, x, y + view.height)
+        touch(MotionEvent.ACTION_UP, x, y + view.height)
+        committed.clear()
+        return label
+    }
+
     /** Where the finger has to be (in keyboard-view x) to select popup key [k]: relative to where it started. */
     private fun screenXOf(k: Key): Int {
         val p = panel!!
@@ -100,11 +112,11 @@ class KudPopupSlideTest {
     @Test fun slideSidewaysFromLowOnTheKey() = slideSideways(0.95f)
 
     private fun slideSideways(heightFraction: Float) {
-        val (x, y) = longPress('.'.code, heightFraction)
+        val (x, y) = longPress(LONG_PRESS_KEY.code, heightFraction)
         val start = highlighted
         assertNotNull(start, "the default popup key is highlighted when the popup opens")
         val row = popupRows().last()
-        assertTrue(row.size >= 2, "period popup: ${row.map { it.label }}")
+        assertTrue(row.size >= 2, "popup: ${row.map { it.label }}")
         // slide to every other key in the bottom row, keeping the finger at the same height
         for (k in row) {
             touch(MotionEvent.ACTION_MOVE, screenXOf(k), y)
@@ -120,7 +132,7 @@ class KudPopupSlideTest {
     }
 
     @Test fun releasingWithoutMovingCommitsTheDefault() {
-        val (x, y) = longPress('.'.code)
+        val (x, y) = longPress(LONG_PRESS_KEY.code)
         val default = highlighted!!
         touch(MotionEvent.ACTION_UP, x, y)
         assertEquals(listOf(default.code), committed.filter { it > 0 })
@@ -128,7 +140,7 @@ class KudPopupSlideTest {
 
     /** HeliBoard's cancel, unchanged: sliding well away closes the popup and nothing from it is typed. */
     @Test fun slidingFarDownCancels() {
-        val (x, y) = longPress('.'.code)
+        val (x, y) = longPress(LONG_PRESS_KEY.code)
         val popupCodes = panel!!.keyboard!!.sortedKeys.map { it.code }.toSet()
         touch(MotionEvent.ACTION_MOVE, x, y + view.height)
         assertNull(panel)
@@ -138,36 +150,21 @@ class KudPopupSlideTest {
 
     /** From the bottom keyboard row there's little room below the finger: about one key height down must cancel. */
     @Test fun slidingDownOneKeyHeightCancels() {
-        val (x, y) = longPress('.'.code)
+        val (x, y) = longPress(LONG_PRESS_KEY.code)
         val popupCodes = panel!!.keyboard!!.sortedKeys.map { it.code }.toSet()
-        val keyHeight = switcher.keyboard!!.getKey('.'.code)!!.height
+        val keyHeight = switcher.keyboard!!.getKey(LONG_PRESS_KEY.code)!!.height
         touch(MotionEvent.ACTION_MOVE, x, y + keyHeight)
         assertNull(panel)
         touch(MotionEvent.ACTION_UP, x, y + keyHeight)
         assertTrue(committed.none { it in popupCodes }, "committed $committed")
     }
 
-    // ---- v0.4.5: the "." popup is one row, and sliding is relative to where the finger started ----
+    // ---- v0.4.5: sliding is relative to where the finger started ----
 
-    private val periodRow = listOf(".", ",", "?", "!", "'", "\"", ":", ";", "-")
-
-    @Test fun periodPopupIsOneRowWithPeriodAsTheDefault() {
-        longPress('.'.code)
-        val rows = popupRows()
-        assertEquals(1, rows.size, "period popup rows: ${rows.map { r -> r.map { it.label } }}")
-        assertEquals(periodRow.toSet(), rows[0].map { it.label }.toSet())
-        assertEquals(".", highlighted?.label, "the key under the finger is the default")
-        // the most used sit right next to "."
-        val labels = rows[0].map { it.label }
-        val i = labels.indexOf(".")
-        val neighbours = listOfNotNull(labels.getOrNull(i - 1), labels.getOrNull(i + 1))
-        assertTrue(neighbours.containsAll(listOf(",", "?")) || neighbours.contains(","), "next to \".\": $neighbours in $labels")
-    }
-
-    /** Long-press ".", slide [steps] popup-key widths sideways (negative = left), release: what is typed. */
+    /** Long-press the test key, slide [steps] popup-key widths sideways (negative = left), release: what is typed. */
     private fun slideAndRelease(steps: Int): String {
         committed.clear()
-        val (x, y) = longPress('.'.code)
+        val (x, y) = longPress(LONG_PRESS_KEY.code)
         val row = popupRows().last()
         val column = row[1].x - row[0].x
         // move in small steps like a real finger, so no step skips the panel
@@ -181,10 +178,10 @@ class KudPopupSlideTest {
     }
 
     @Test fun slidingSidewaysMovesOneKeyPerKeyWidthFromTheStart() {
-        longPress('.'.code)
+        longPress(LONG_PRESS_KEY.code)
         val labels = popupRows().last().map { it.label }
         touch(MotionEvent.ACTION_UP, 0, 0)
-        val start = labels.indexOf(".")
+        val start = labels.indexOf(highlightedLabelAtStart())
         for (steps in listOf(1, 2, 3, -1, -2, -3)) {
             val expected = labels[(start + steps).coerceIn(0, labels.lastIndex)]
             assertEquals(expected, slideAndRelease(steps), "slide $steps key widths in $labels")
@@ -192,7 +189,7 @@ class KudPopupSlideTest {
     }
 
     @Test fun slidingPastEitherEndKeepsTheEndKey() {
-        longPress('.'.code)
+        longPress(LONG_PRESS_KEY.code)
         val labels = popupRows().last().map { it.label }
         touch(MotionEvent.ACTION_UP, 0, 0)
         assertEquals(labels.first(), slideAndRelease(-15)) // past the screen's left edge
@@ -200,7 +197,7 @@ class KudPopupSlideTest {
     }
 
     @Test fun screenshotOfTheOpenPopup() {
-        val (x, y) = longPress('.'.code)
+        val (x, y) = longPress(LONG_PRESS_KEY.code)
         val row = popupRows().last()
         val column = row[1].x - row[0].x
         touch(MotionEvent.ACTION_MOVE, x - column, y) // one key left: the highlight moves one key
@@ -222,7 +219,7 @@ class KudPopupSlideTest {
         paint.color = Color.YELLOW
         canvas.drawCircle(x.toFloat(), y.toFloat(), 14f, paint) // where the long-press started
         val dir = File(System.getenv("TMPDIR") ?: System.getProperty("java.io.tmpdir"), "kudkeys-popup").apply { mkdirs() }
-        File(dir, "period-popup-slid-one-left.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File(dir, "e-popup-slid-one-left.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         touch(MotionEvent.ACTION_UP, x - column, y)
     }
 
