@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Legacy (pre-Android 8) launcher icon as a vector; mipmap-anydpi-v26 has the adaptive one. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FF16161A" android:pathData="M12,12h84v84h-84z"/>
+    <!-- key cap -->
+    <path android:fillColor="#FFE6E6E6"
+        android:pathData="M40,32h28a8,8 0 0 1 8,8v28a8,8 0 0 1 -8,8h-28a8,8 0 0 1 -8,-8v-28a8,8 0 0 1 8,-8z"/>
+    <!-- K -->
+    <path android:fillColor="#FF141414"
+        android:pathData="M43.5,42h5.5v24h-5.5z M48.5,53.5L58.5,42h6.8L52.3,57z M51.6,52.4L65.5,66h-7L48.6,56.2z"/>
+</vector>

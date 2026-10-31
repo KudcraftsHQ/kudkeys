@@ -1,5 +1,10 @@
 import com.android.build.api.variant.ApplicationVariant
 
+// Kud Keys: release signing and version come from the environment (CI sets them from the tag and the
+// KC_* secrets): KC_KEYSTORE_FILE / KC_KEYSTORE_PASSWORD / KC_KEY_ALIAS / KC_KEY_PASSWORD,
+// KC_VERSION_NAME / KC_VERSION_CODE. Without KC_KEYSTORE_FILE the release build stays unsigned.
+val keystoreFile: String? = System.getenv("KC_KEYSTORE_FILE")
+
 plugins {
     id("com.android.application")
     kotlin("plugin.serialization") version "2.4.0"
@@ -10,16 +15,28 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "helium314.keyboard"
+        applicationId = "com.kudcrafts.kudkeys"
         minSdk = 21
         targetSdk = 37
-        versionCode = 4201
-        versionName = "4.2"
+        versionCode = (System.getenv("KC_VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("KC_VERSION_NAME") ?: "0.0.0-dev"
         ndk {
             abiFilters.clear()
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
         }
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    }
+
+    signingConfigs {
+        create("kudcrafts") {
+            if (keystoreFile != null) {
+                storeFile = file(keystoreFile)
+                storeType = "pkcs12"
+                storePassword = System.getenv("KC_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KC_KEY_ALIAS")
+                keyPassword = System.getenv("KC_KEY_PASSWORD") ?: System.getenv("KC_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -28,47 +45,14 @@ android {
             isShrinkResources = false
             isDebuggable = false
             isJniDebuggable = false
-        }
-        create("nouserlib") { // same as release, but does not allow the user to provide a library
-            isMinifyEnabled = true
-            isShrinkResources = false
-            isDebuggable = false
-            isJniDebuggable = false
+            if (keystoreFile != null) signingConfig = signingConfigs.getByName("kudcrafts")
         }
         debug {
-            // "normal" debug has minify for smaller APK to fit the GitHub 25 MB limit when zipped
-            // and for better performance in case users want to install a debug APK
-            isMinifyEnabled = true
-            isJniDebuggable = false
-            applicationIdSuffix = ".debug"
-        }
-        create("runTests") { // build variant for running tests on CI that skips tests known to fail
+            // no minify: faster builds, and unit tests run against this variant
             isMinifyEnabled = false
             isJniDebuggable = false
-        }
-        create("debugNoMinify") { // for faster builds in IDE
-            isDebuggable = true
-            isMinifyEnabled = false
-            isJniDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
-            isDefault = true
-        }
-
-        androidComponents.onVariants { variant: ApplicationVariant ->
-            if (variant.buildType == "debug") {
-                // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
-                variant.androidResources.ignoreAssetsPatterns = listOf("main_ro.dict")
-                variant.proguardFiles = emptyList()
-                //noinspection ProguardAndroidTxtUsage we intentionally use the "normal" file here
-                variant.proguardFiles.add(project.layout.buildDirectory.file(project.buildFile.parent + "/dontoptimize.pro"))
-                variant.proguardFiles.add(project.layout.buildDirectory.file(project.buildFile.parent + "/proguard-rules.pro"))
-            }
-            variant.outputs.forEach { output ->
-                if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
-                    output.outputFileName = "HeliBoard_${defaultConfig.versionName}-${variant.buildType}.apk"
-                }
-            }
+            versionNameSuffix = "-debug"
         }
     }
 
@@ -131,7 +115,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
-    "debugNoMinifyImplementation"("androidx.compose.ui:ui-tooling")
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("sh.calvin.reorderable:reorderable:3.1.0") // for easier re-ordering
     implementation("com.github.skydoves:colorpicker-compose:1.1.3") // for user-defined colors, newer requires minSdk 23

@@ -70,8 +70,10 @@
     <!-- Description for Hebrew 2 subtype. -->
     <string name="subtype_hebrew_1452_2" translatable="false">%s (1452-2)</string>
 
-    <string name="english_ime_name" translatable="false">HeliBoard</string>
+    <string name="english_ime_name" translatable="false">Kud Keys</string>
     <!-- App slogan-->
-    <string name="app_slogan" translatable="false">100% FOSS keyboard, based on AOSP.</string>
+    <string name="app_slogan" translatable="false">Personal keyboard by Kudcrafts. A fork of HeliBoard (GPL-3.0) by Helium314 and contributors, based on AOSP.</string>
 
+    <string name="about_heliboard" translatable="false">Based on HeliBoard</string>
+    <string name="about_heliboard_description" translatable="false">Kud Keys is a fork of HeliBoard by Helium314 and contributors, licensed under GPL-3.0. View HeliBoard on GitHub.</string>
 </resources>

@@ -59,6 +59,7 @@ fun AboutScreen(
         SettingsWithoutKey.GITHUB_WIKI,
         SettingsWithoutKey.COMMUNITY_LINKS,
         SettingsWithoutKey.GITHUB,
+        SettingsWithoutKey.HELIBOARD,
         SettingsWithoutKey.SAVE_LOG,
     )
     SearchSettingsScreen(
@@ -169,6 +170,20 @@ fun createAboutSettings(context: Context) = listOf(
             onClick = {
                 val intent = Intent()
                 intent.data = Links.GITHUB.toUri()
+                intent.action = Intent.ACTION_VIEW
+                ctx.startActivity(intent)
+            },
+            icon = R.drawable.ic_settings_about_github
+        )
+    },
+    Setting(context, SettingsWithoutKey.HELIBOARD, R.string.about_heliboard, R.string.about_heliboard_description) {
+        val ctx = LocalContext.current
+        Preference(
+            name = it.title,
+            description = it.description,
+            onClick = {
+                val intent = Intent()
+                intent.data = Links.HELIBOARD.toUri()
                 intent.action = Intent.ACTION_VIEW
                 ctx.startActivity(intent)
             },

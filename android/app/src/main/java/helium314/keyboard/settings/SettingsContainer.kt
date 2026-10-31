@@ -74,6 +74,7 @@ object SettingsWithoutKey {
     const val LICENSE = "license"
     const val HIDDEN_FEATURES = "hidden_features"
     const val GITHUB = "github"
+    const val HELIBOARD = "heliboard"
     const val GITHUB_WIKI = "github_wiki"
     const val COMMUNITY_LINKS = "community_links"
     const val SAVE_LOG = "save_log"
