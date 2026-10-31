@@ -115,6 +115,19 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
             </intent-filter>
         </receiver>
 
+        <!-- Kud Keys: the app is direct-boot aware (the keyboard runs on the lock screen), but WorkManager's database
+             is credential-encrypted. Don't let androidx.startup initialise WorkManager at process start; App provides
+             an on-demand Configuration, and KudSyncWork only touches WorkManager once the user is unlocked. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
     <queries>

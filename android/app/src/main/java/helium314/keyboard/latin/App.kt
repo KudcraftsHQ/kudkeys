@@ -2,6 +2,7 @@
 package helium314.keyboard.latin
 
 import android.app.Application
+import androidx.work.Configuration
 import android.os.Build
 import helium314.keyboard.keyboard.emoji.SupportedEmojis
 import helium314.keyboard.latin.define.DebugFlags
@@ -17,7 +18,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class App : Application() {
+class App : Application(), Configuration.Provider {
+    // WorkManager initialises on demand (first getInstance), never at process start: see AndroidManifest.xml.
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
+
     override fun onCreate() {
         super.onCreate()
         DebugFlags.init(this)
