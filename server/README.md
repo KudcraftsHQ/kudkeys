@@ -89,10 +89,10 @@ Better Auth, mounted at `/api/auth/*`; its errors are `{"code","message"}`. The 
 
 | Call | Body | Answer |
 |---|---|---|
-| `POST /api/auth/sign-in/email` | `{"email","password"}` | 200 `{user, token, redirect}`, and the session token in the **`set-auth-token`** response header. 401 `INVALID_EMAIL_OR_PASSWORD` |
-| `POST /api/auth/sign-up/email` | `{"email","password","name"}` | Same as sign-in (signed in straight away). 403 `EMAIL_NOT_ALLOWED` outside `KUDKEYS_ALLOWED_EMAILS`; 422 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; 400 `PASSWORD_TOO_SHORT` (< 10) |
+| `POST /api/auth/sign-in/email` | `{"email","password"}` | 200 `{user, token, redirect}`, and the session token in the **`set-auth-token`** response header. 401 `INVALID_EMAIL_OR_PASSWORD`; 429 after 5 tries a minute from one IP |
+| `POST /api/auth/sign-up/email` | `{"email","password","name"}` | Same as sign-in (signed in straight away). 403 `EMAIL_NOT_ALLOWED` outside `KUDKEYS_ALLOWED_EMAILS`; 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED` when `KUDKEYS_SIGNUP_OPEN=false`; 422 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; 400 `PASSWORD_TOO_SHORT` (< 10) |
 | `GET /api/auth/get-session` | — | `{session, user}`, or `null` when the token is no longer valid |
-| `POST /api/auth/sign-out` | `{}` | 200; this token stops working, `/v1/stream` included (other devices stay signed in) |
+| `POST /api/auth/sign-out` | `{}` | 200; this token stops working, `/v1/stream` included (other devices stay signed in). The app sends `Origin: <server base>` here so Better Auth's origin check passes |
 | `GET /api/auth/list-sessions` | — | Every signed-in device (`token`, `userAgent`, `ipAddress`, `createdAt`, `updatedAt`) |
 | `POST /api/auth/revoke-session` | `{"token"}` | 200; signs that device out |
 
@@ -103,7 +103,12 @@ Better Auth, mounted at `/api/auth/*`; its errors are `{"code","message"}`. The 
 - Send a recognisable `User-Agent`, e.g. `KudKeys/0.2 (Android 15; Pixel 8)`: the web app's
   Devices page names sessions from it ("Kud Keys keyboard on Android").
 - A 401 from any `/api/*` call or the stream upgrade means: sign in again. A 403
-  `not_allowed` means the email was removed from the allowlist.
+  `not_allowed` means the email was removed from the allowlist. A **503**
+  `{"error":"unavailable","reason":"session_lookup_failed"}` means the session could not be
+  checked (Postgres or pgbouncer down): keep the token and try again later.
+- Rate limits (Better Auth, in memory) key on the client IP from `cf-connecting-ip`, or the
+  socket address when that header is missing; `X-Forwarded-For` is ignored, since behind
+  Cloudflare its first entry is whatever the client sent. Sign-in: 5 a minute per IP.
 
 ### Profile
 
@@ -161,7 +166,8 @@ newest first. `outcome` is `stopped`, `idle`, `limit`, `cancelled`, `client clos
   - a usage row is written when the session ends (below).
 - a legacy static **`KUDKEYS_TOKENS`** entry, as before. No profile, no usage row.
 
-Anything else → 401 before the upgrade. The log line says which kind was used
+Anything else → 401 before the upgrade; 503 (JSON, as above) when the session lookup itself
+failed. The log line says which kind was used
 (`auth=user` / `auth=token`), never the token or the account.
 
 ## Stream protocol
@@ -217,6 +223,7 @@ Close codes: 1000 normal, 1008 the keyboard broke the protocol, 1011 provider or
 | `BETTER_AUTH_URL` | `http://localhost:8080` | The origin browsers use (`https://keys.kudcrafts.com`) |
 | `KUDKEYS_ORIGIN` | — | Extra trusted origins, comma-separated (dev) |
 | `KUDKEYS_ALLOWED_EMAILS` | empty = nobody | Who may sign up and use an account; re-checked on every request |
+| `KUDKEYS_SIGNUP_OPEN` | `true` | `false` refuses every sign-up, allowlisted or not; existing accounts still sign in |
 | `KUDKEYS_TOKENS` | optional | Legacy static stream tokens, comma-separated, ≥ 24 chars each |
 | `KUDKEYS_PROVIDER` | `groq` | `groq` or `openai` |
 | `GROQ_API_KEY` | — | Without it the server starts, and `/health` reports no transcription |
@@ -239,10 +246,14 @@ OpenAI realtime server: phrase splitting, silence never sent, Whisper's made-up 
 `test/accounts.test.ts` runs real Better Auth (memory adapter) through the whole server:
 allowlisted sign-up, bearer sign-in, `/api/me` validation, stream auth (session token, legacy
 token, none, revoked, removed from the allowlist), keyword merge into the prompt, and usage
-rows with no text. `test/migration.test.ts` applies the migrations to PGlite.
+rows with no text. `test/auth-hardening.test.ts` covers 503 (not 401) when the database fails
+during a session lookup, the sign-in rate limit by `cf-connecting-ip` / socket address with a
+spoofed `X-Forwarded-For`, and `KUDKEYS_SIGNUP_OPEN=false`. `test/migration.test.ts` applies
+the migrations to PGlite.
 
 CI: `.github/workflows/server.yaml` (typecheck, tests, SPA build; then the Docker image is
-built, run against Postgres with migrations, and smoke-tested).
+built, run against Postgres with migrations, and smoke-tested with its runtime queries going
+through pgbouncer in transaction mode with `?pgbouncer=true`, as in production).
 
 ## Deploy
 
@@ -271,6 +282,17 @@ start (`prisma migrate deploy`), so the first deploy creates the tables.
 coolify deploy uuid ktmqsbqbalqnilyka83vx4rf
 curl https://keys.kudcrafts.com/api/health
 ```
+
+### Closing sign-up after the first deploy
+
+Sign-up has no email verification: until an allowlisted email has an account, anyone who
+knows it could register it first. Right after the first deploy:
+
+1. Hammas creates his account (web app or the keyboard's Account screen).
+2. Check it is his: sign in on the web app and see his name on the profile page.
+3. Set `KUDKEYS_SIGNUP_OPEN=false` in Coolify and redeploy. Sign-up is then refused for
+   everyone; existing accounts keep signing in. Set it back to `true` only while adding
+   another allowlisted person, and close it again once they have signed up.
 
 The keyboard's legacy token is `KUDKEYS_TOKENS` in Coolify; a copy lives in
 `~/.config/kudkeys/token` on hammas-dev (mode 600). It keeps working alongside accounts.

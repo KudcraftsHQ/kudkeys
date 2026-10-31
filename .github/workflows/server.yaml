@@ -1,7 +1,8 @@
 # Kud Keys server + web app CI: typecheck and tests on every change outside
 # android/, then the Docker image is built and smoke-tested against a real
 # Postgres (migrations, sign-up, /api/me, a /v1/stream session with the bearer
-# token against a fake Groq, and its usage row).
+# token against a fake Groq, and its usage row). Runtime queries go through
+# pgbouncer in transaction mode with ?pgbouncer=true, as in production.
 name: server
 
 on:
@@ -47,6 +48,14 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+      pgbouncer:
+        image: edoburu/pgbouncer:latest
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/kudkeys
+          POOL_MODE: transaction
+          AUTH_TYPE: scram-sha-256
+          LISTEN_PORT: '6432'
+        ports: ['6432:6432']
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -59,6 +68,7 @@ jobs:
           bun server/scripts/fake-groq.ts 18099 &
           docker run -d --name kudkeys --network host \
             -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/kudkeys \
+            -e "DATABASE_URL_POOLING=postgresql://postgres:postgres@localhost:6432/kudkeys?pgbouncer=true" \
             -e BETTER_AUTH_SECRET=ci-secret-ci-secret-ci-secret-1234 \
             -e BETTER_AUTH_URL=http://localhost:8080 \
             -e KUDKEYS_ALLOWED_EMAILS=smoke@example.com \
