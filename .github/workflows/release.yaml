@@ -1,0 +1,95 @@
+# Kud Keys release, adapted from kud-widgets' release.yaml (signing, naming, SHA256SUMS) so Obtainium
+# tracks it the same way.
+# - Tags v<major>.<minor>.<patch> (e.g. v0.1.0): signed release APK published to GitHub Releases as
+#   kudkeys-<tag>.apk + SHA256SUMS. versionCode = major*10000 + minor*100 + patch.
+# - Tags with a '-' (v0.2.0-rc.1) are published as pre-releases, which Obtainium skips by default.
+# - Pull requests and pushes are covered by android.yaml (unit tests + debug APK).
+# Secrets (repo settings): KC_KEYSTORE_BASE64, KC_KEYSTORE_PASSWORD, KC_KEY_ALIAS, KC_KEY_PASSWORD.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version from tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
+            echo "Tag $TAG must look like v<major>.<minor>.<patch>[-pre]" >&2; exit 1
+          fi
+          MAJOR=${BASH_REMATCH[1]}; MINOR=${BASH_REMATCH[2]}; PATCH=${BASH_REMATCH[3]}
+          if [ "$MINOR" -gt 99 ] || [ "$PATCH" -gt 99 ]; then
+            echo "minor and patch must be 0..99 (versionCode = major*10000 + minor*100 + patch)" >&2; exit 1
+          fi
+          CODE=$((10#$MAJOR * 10000 + 10#$MINOR * 100 + 10#$PATCH))
+          PRERELEASE=false; [[ "$TAG" == *-* ]] && PRERELEASE=true
+          echo "KC_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
+          echo "KC_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
+          echo "KC_PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
+          echo "Building ${TAG#v} (versionCode $CODE, prerelease $PRERELEASE)"
+
+      - name: Android NDK
+        run: |
+          NDK=$(sed -n 's/.*ndkVersion = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK" > /dev/null
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Signed release APK
+        env:
+          KC_KEYSTORE_BASE64: ${{ secrets.KC_KEYSTORE_BASE64 }}
+          KC_KEYSTORE_PASSWORD: ${{ secrets.KC_KEYSTORE_PASSWORD }}
+          KC_KEY_ALIAS: ${{ secrets.KC_KEY_ALIAS }}
+          KC_KEY_PASSWORD: ${{ secrets.KC_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KC_KEYSTORE_BASE64" ] || [ -z "$KC_KEYSTORE_PASSWORD" ] || [ -z "$KC_KEY_ALIAS" ]; then
+            echo "Signing secrets are missing; refusing to publish an unsigned APK" >&2; exit 1
+          fi
+          export KC_KEYSTORE_FILE="$RUNNER_TEMP/kc-release.p12"
+          echo "$KC_KEYSTORE_BASE64" | base64 -d > "$KC_KEYSTORE_FILE"
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$KC_KEYSTORE_FILE"
+          APK=app/build/outputs/apk/release/app-release.apk
+          [ -f "$APK" ] || { echo "No signed APK at $APK (unsigned builds are named app-release-unsigned.apk)" >&2; exit 1; }
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify --print-certs "$APK"
+          mkdir -p dist
+          cp "$APK" "dist/kudkeys-${GITHUB_REF_NAME}.apk"
+          (cd dist && sha256sum *.apk > SHA256SUMS)
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Kud Keys ${KC_VERSION_NAME} (versionCode ${KC_VERSION_CODE}). Install or update with Obtainium: add https://github.com/KudcraftsHQ/kudkeys."
+          PRE=""; [ "$KC_PRERELEASE" = "true" ] && PRE="--prerelease"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "Kud Keys ${KC_VERSION_NAME}" --notes "$NOTES" $PRE --verify-tag
+          fi
