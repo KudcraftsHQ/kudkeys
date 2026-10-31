@@ -28,6 +28,14 @@ internal class Transcript {
         partialText = ""
     }
 
+    /** The phrase in progress when it is the last one (the end of [text]), else "". Shown dimmed. */
+    val partialTail: String
+        get() {
+            if (partialSegment < 0) return ""
+            val lastFinal = if (finals.isEmpty()) -1 else finals.lastKey()
+            return if (partialSegment > lastFinal) partialText.trim() else ""
+        }
+
     val text: String
         get() {
             val parts = TreeMap(finals)

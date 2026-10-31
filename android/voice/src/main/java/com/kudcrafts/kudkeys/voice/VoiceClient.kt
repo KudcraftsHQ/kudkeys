@@ -168,8 +168,8 @@ class VoiceClient(
     private fun publish(s: Session) {
         _state.value = when (s.phase) {
             Phase.Connecting -> VoiceState.Connecting(s.elapsedMs, s.level)
-            Phase.Listening -> VoiceState.Listening(s.elapsedMs, s.transcript.text, s.level)
-            Phase.Finishing -> VoiceState.Finishing(s.transcript.text)
+            Phase.Listening -> VoiceState.Listening(s.elapsedMs, s.transcript.text, s.level, s.transcript.partialTail)
+            Phase.Finishing -> VoiceState.Finishing(s.transcript.text, s.transcript.partialTail)
             Phase.Ended -> return
         }
     }

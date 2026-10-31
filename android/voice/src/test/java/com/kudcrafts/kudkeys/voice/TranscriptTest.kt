@@ -20,3 +20,18 @@ class TranscriptTest {
         assertEquals(1f, pcmLevel(loud, 3200), 0.01f)
     }
 }
+
+class TranscriptPartialTest {
+    @Test fun partialTail_onlyTheLastPhraseInProgress() {
+        val t = Transcript()
+        assertEquals("", t.partialTail)
+        t.final(0, "Halo.")
+        t.partial(1, "apa kab")
+        assertEquals("apa kab", t.partialTail)
+        assertEquals("Halo. apa kab", t.text)
+        t.final(1, "Apa kabar?")
+        assertEquals("", t.partialTail)
+        t.partial(1, "late")
+        assertEquals("", t.partialTail)
+    }
+}
