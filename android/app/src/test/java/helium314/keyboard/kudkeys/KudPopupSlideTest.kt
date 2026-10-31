@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.kudkeys
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
@@ -18,6 +22,8 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
 import org.robolectric.shadows.ShadowLooper
 import java.util.concurrent.TimeUnit
 import kotlin.test.BeforeTest
@@ -32,6 +38,7 @@ import kotlin.test.assertTrue
  * without first moving up into the panel. Driven by touch events on the real keyboard view.
  */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(shadows = [ShadowInputMethodManager2::class], qualifiers = "w411dp-h891dp-port-xxhdpi")
 class KudPopupSlideTest {
     private val latinIME = Robolectric.setupService(LatinIME::class.java)
@@ -76,11 +83,12 @@ class KudPopupSlideTest {
         return x to y
     }
 
-    /** Where the finger has to be (in keyboard-view x) to sit over the middle of popup key [k]. */
+    /** Where the finger has to be (in keyboard-view x) to select popup key [k]: relative to where it started. */
     private fun screenXOf(k: Key): Int {
         val p = panel!!
         val originX = field(p, PopupKeysKeyboardView::class.java, "mOriginX") as Int
-        return originX + p.paddingLeft + k.x + k.width / 2
+        val slideOffsetX = field(p, PopupKeysKeyboardView::class.java, "mSlideOffsetX") as Int
+        return originX + slideOffsetX + p.paddingLeft + k.x + k.width / 2
     }
 
     private fun popupRows() = panel!!.keyboard!!.sortedKeys.filterNot { it.isSpacer }
@@ -111,21 +119,6 @@ class KudPopupSlideTest {
         assertTrue(x > 0)
     }
 
-    /** The period popup has two rows; one popup row up from the start picks the top row, no dead zone. */
-    @Test fun periodPopupOneRowUpReachesTheTopRow() {
-        val (_, y) = longPress('.'.code, 0.8f)
-        val rows = popupRows()
-        assertTrue(rows.size >= 2, "period popup rows: ${rows.map { r -> r.map { it.label } }}")
-        val top = rows[rows.size - 2]
-        val rowHeight = rows.last().first().y - top.first().y
-        for (k in top) {
-            touch(MotionEvent.ACTION_MOVE, screenXOf(k), y - rowHeight)
-            assertEquals(k.label, highlighted?.label)
-        }
-        touch(MotionEvent.ACTION_UP, screenXOf(top.first()), y - rowHeight)
-        assertEquals(listOf(top.first().code), committed.filter { it > 0 })
-    }
-
     @Test fun releasingWithoutMovingCommitsTheDefault() {
         val (x, y) = longPress('.'.code)
         val default = highlighted!!
@@ -152,6 +145,85 @@ class KudPopupSlideTest {
         assertNull(panel)
         touch(MotionEvent.ACTION_UP, x, y + keyHeight)
         assertTrue(committed.none { it in popupCodes }, "committed $committed")
+    }
+
+    // ---- v0.4.5: the "." popup is one row, and sliding is relative to where the finger started ----
+
+    private val periodRow = listOf(".", ",", "?", "!", "'", "\"", ":", ";", "-")
+
+    @Test fun periodPopupIsOneRowWithPeriodAsTheDefault() {
+        longPress('.'.code)
+        val rows = popupRows()
+        assertEquals(1, rows.size, "period popup rows: ${rows.map { r -> r.map { it.label } }}")
+        assertEquals(periodRow.toSet(), rows[0].map { it.label }.toSet())
+        assertEquals(".", highlighted?.label, "the key under the finger is the default")
+        // the most used sit right next to "."
+        val labels = rows[0].map { it.label }
+        val i = labels.indexOf(".")
+        val neighbours = listOfNotNull(labels.getOrNull(i - 1), labels.getOrNull(i + 1))
+        assertTrue(neighbours.containsAll(listOf(",", "?")) || neighbours.contains(","), "next to \".\": $neighbours in $labels")
+    }
+
+    /** Long-press ".", slide [steps] popup-key widths sideways (negative = left), release: what is typed. */
+    private fun slideAndRelease(steps: Int): String {
+        committed.clear()
+        val (x, y) = longPress('.'.code)
+        val row = popupRows().last()
+        val column = row[1].x - row[0].x
+        // move in small steps like a real finger, so no step skips the panel
+        val targetX = x + steps * column
+        val moves = 6
+        for (m in 1..moves) touch(MotionEvent.ACTION_MOVE, x + (targetX - x) * m / moves, y)
+        assertNotNull(panel, "sliding sideways never cancels")
+        touch(MotionEvent.ACTION_UP, targetX, y)
+        assertNull(panel)
+        return committed.filter { it > 0 }.joinToString("") { String(Character.toChars(it)) }
+    }
+
+    @Test fun slidingSidewaysMovesOneKeyPerKeyWidthFromTheStart() {
+        longPress('.'.code)
+        val labels = popupRows().last().map { it.label }
+        touch(MotionEvent.ACTION_UP, 0, 0)
+        val start = labels.indexOf(".")
+        for (steps in listOf(1, 2, 3, -1, -2, -3)) {
+            val expected = labels[(start + steps).coerceIn(0, labels.lastIndex)]
+            assertEquals(expected, slideAndRelease(steps), "slide $steps key widths in $labels")
+        }
+    }
+
+    @Test fun slidingPastEitherEndKeepsTheEndKey() {
+        longPress('.'.code)
+        val labels = popupRows().last().map { it.label }
+        touch(MotionEvent.ACTION_UP, 0, 0)
+        assertEquals(labels.first(), slideAndRelease(-15)) // past the screen's left edge
+        assertEquals(labels.last(), slideAndRelease(15)) // past the screen's right edge
+    }
+
+    @Test fun screenshotOfTheOpenPopup() {
+        val (x, y) = longPress('.'.code)
+        val row = popupRows().last()
+        val column = row[1].x - row[0].x
+        touch(MotionEvent.ACTION_MOVE, x - column, y) // one key left: the highlight moves one key
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        view.draw(canvas)
+        val p = panel!!
+        val container = p.containerView
+        if (container.width == 0) {
+            container.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+            container.layout(0, 0, container.measuredWidth, container.measuredHeight)
+        }
+        canvas.save()
+        canvas.translate(container.x, container.y)
+        container.draw(canvas)
+        canvas.restore()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.RED; style = Paint.Style.STROKE; strokeWidth = 6f }
+        canvas.drawCircle((x - column).toFloat(), y.toFloat(), 28f, paint)
+        paint.color = Color.YELLOW
+        canvas.drawCircle(x.toFloat(), y.toFloat(), 14f, paint) // where the long-press started
+        val dir = File(System.getenv("TMPDIR") ?: System.getProperty("java.io.tmpdir"), "kudkeys-popup").apply { mkdirs() }
+        File(dir, "period-popup-slid-one-left.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        touch(MotionEvent.ACTION_UP, x - column, y)
     }
 
     @Test fun multiRowPopupSlidesUpThroughRows() {

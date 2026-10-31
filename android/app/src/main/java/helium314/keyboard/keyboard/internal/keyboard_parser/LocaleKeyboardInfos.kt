@@ -62,7 +62,9 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
         if (labelQuestion !in popupKeys)
             popupKeys[labelQuestion] = if (labelQuestion == "?") mutableListOf("¿") else mutableListOf("?", "¿")
         if ("punctuation" !in popupKeys)
-            popupKeys["punctuation"] = mutableListOf("${Key.POPUP_KEYS_AUTO_COLUMN_ORDER}8", "\\,", "?", "!", "#", ")", "(", "/", ";", "'", "@", ":", "-", "\"", "+", "\\%", "&")
+            // Kud Keys (SwiftKey): one row, "." itself as the default under the finger, the most used next to it
+            // (auto order puts them right, left, right… of the default as the screen allows)
+            popupKeys["punctuation"] = mutableListOf("${Key.POPUP_KEYS_AUTO_COLUMN_ORDER}9", ".", "\\,", "?", "!", "'", "\"", ":", ";", "-")
     }
 
     private fun readStream(stream: InputStream?, onlyPopupKeys: Boolean, priority: Boolean) {

@@ -830,6 +830,12 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             final int translatedX = mPopupKeysPanel.translateX(x);
             final int translatedY = mPopupKeysPanel.translateY(y);
             mPopupKeysPanel.onMoveEvent(translatedX, translatedY, mPointerId, eventTime);
+            if (!isShowingPopupKeysPanel()) {
+                // Kud Keys: the finger slid off and cancelled the popup; lifting it must type nothing
+                setReleasedKeyGraphics(mCurrentKey, true);
+                cancelTrackingForAction();
+                return;
+            }
             onMoveKey(x, y);
             if (mIsInSlidingKeyInput) {
                 sDrawingProxy.showSlidingKeyInputPreview(this);
