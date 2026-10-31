@@ -135,8 +135,8 @@ class TextClient(
         }
 
         /**
-         * Keeps the questions whose offsets fit [text], with their options trimmed, de-duplicated and not equal to
-         * the word itself; sorted by position, overlapping ones dropped.
+         * Keeps the questions whose offsets fit [text] and that have an option (trimmed, de-duplicated, at most 3);
+         * sorted by position, overlapping ones dropped. [TidyQuestion.original] is the word as it is in [text].
          */
         fun parseQuestions(e: JsonElement?, text: String): List<TidyQuestion> {
             val out = mutableListOf<TidyQuestion>()
@@ -147,7 +147,7 @@ class TextClient(
                 if (start < 0 || end <= start || end > text.length) continue
                 val original = text.substring(start, end)
                 val options = (o["options"] as? JsonArray).orEmpty().mapNotNull { it.str()?.trim() }
-                    .filter { it.isNotEmpty() && it != original }.distinct().take(3)
+                    .filter { it.isNotEmpty() }.distinct().take(3)
                 if (options.isEmpty()) continue
                 out += TidyQuestion(o["id"].str() ?: "q${out.size}", original, start, end, options)
             }

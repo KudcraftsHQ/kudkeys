@@ -12,7 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** M3: Android backup keeps HeliBoard's settings but never the voice prefs, where the token lives. */
+/** M3: Android backup keeps HeliBoard's settings but never the voice prefs (the token) or the voice draft. */
 @RunWith(RobolectricTestRunner::class)
 class KudBackupRulesTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -33,21 +33,22 @@ class KudBackupRulesTest {
     }
 
     private val voicePrefs = "${VoiceSettings.PREFS}.xml"
+    private val draftPrefs = "${PrefsDraftStore.PREFS}.xml"
 
     @Test fun backupStaysOnForTheKeyboardSettings() {
         assertTrue(context.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP != 0)
     }
 
-    @Test fun legacyBackupExcludesVoicePrefsOnly() {
+    @Test fun legacyBackupExcludesVoicePrefsAndDraftOnly() {
         assertEquals(
-            setOf(Triple("", "sharedpref", voicePrefs), Triple("", "device_sharedpref", voicePrefs)),
+            listOf(voicePrefs, draftPrefs).flatMap { listOf(Triple("", "sharedpref", it), Triple("", "device_sharedpref", it)) }.toSet(),
             excludes(R.xml.kud_backup_rules).toSet(),
         )
     }
 
     @Test fun cloudBackupAndTransferExcludeVoicePrefsOnly() {
         val expected = listOf("cloud-backup", "device-transfer").flatMap { section ->
-            listOf(Triple(section, "sharedpref", voicePrefs), Triple(section, "device_sharedpref", voicePrefs))
+            listOf(voicePrefs, draftPrefs).flatMap { listOf(Triple(section, "sharedpref", it), Triple(section, "device_sharedpref", it)) }
         }.toSet()
         assertEquals(expected, excludes(R.xml.kud_data_extraction_rules).toSet())
     }

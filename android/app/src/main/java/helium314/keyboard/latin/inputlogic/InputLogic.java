@@ -276,6 +276,20 @@ public final class InputLogic {
      * kudkeys: insert dictated text. The composing word is kept as typed (no autocorrect), and a space goes in
      * front when the text before the cursor ends in a non-space character.
      */
+    /** kudkeys: before Fix/Instruct replace text in the field, commit the word being typed and forget it. */
+    public void kudFinishComposing(SettingsValues settingsValues) {
+        if (mWordComposer.isComposingWord()) {
+            if (mWordComposer.isCursorFrontOrMiddleOfComposingWord()) {
+                mConnection.finishComposingText();
+                resetComposingState(false);
+            } else {
+                commitTyped(settingsValues, "");
+            }
+        }
+        resetComposingState(true);
+        mWordBeingCorrectedByCursor = null;
+    }
+
     public InputTransaction onVoiceTextInput(SettingsValues settingsValues, String text, CapsMode keyboardCapsMode, LatinIME.UIHandler handler) {
         final Event event = Event.createSoftwareTextEvent(text, KeyCode.MULTIPLE_CODE_POINTS, null);
         final InputTransaction inputTransaction = new InputTransaction(settingsValues, event,

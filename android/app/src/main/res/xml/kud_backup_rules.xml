@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <!-- kudkeys: Android Auto Backup (Android 11 and older) keeps the keyboard's settings and dictionaries but never
-     the voice prefs (server URL, token, mic flag). The app runs in device-protected storage, so both domains. -->
+     the voice prefs (server URL, token, mic flag) and the voice draft. The app runs in device-protected storage, so both domains. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="kudkeys_voice.xml" />
     <exclude domain="device_sharedpref" path="kudkeys_voice.xml" />
+    <exclude domain="sharedpref" path="kudkeys_draft.xml" />
+    <exclude domain="device_sharedpref" path="kudkeys_draft.xml" />
 </full-backup-content>

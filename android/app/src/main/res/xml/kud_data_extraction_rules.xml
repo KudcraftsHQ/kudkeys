@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <!-- kudkeys: Android 12+ cloud backup and device transfer. Same rule as kud_backup_rules.xml: everything except
-     the voice prefs (server URL, token, mic flag), in both credential- and device-protected storage. -->
+     the voice prefs (server URL, token, mic flag) and the voice draft, in both credential- and device-protected storage. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="kudkeys_voice.xml" />
         <exclude domain="device_sharedpref" path="kudkeys_voice.xml" />
+        <exclude domain="sharedpref" path="kudkeys_draft.xml" />
+        <exclude domain="device_sharedpref" path="kudkeys_draft.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="kudkeys_voice.xml" />
         <exclude domain="device_sharedpref" path="kudkeys_voice.xml" />
+        <exclude domain="sharedpref" path="kudkeys_draft.xml" />
+        <exclude domain="device_sharedpref" path="kudkeys_draft.xml" />
     </device-transfer>
 </data-extraction-rules>

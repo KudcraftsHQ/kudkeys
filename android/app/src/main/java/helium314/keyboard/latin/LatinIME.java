@@ -791,7 +791,10 @@ public class LatinIME extends InputMethodService implements
             mSuggestionStripView.setRtl(mRichImm.getCurrentSubtype().isRtlSubtype());
             mSuggestionStripView.setListener(this, view);
         }
-        if (mQuickVoice != null) mQuickVoice.attach(mSuggestionStripView);
+        if (mQuickVoice != null) {
+            mQuickVoice.attach(mSuggestionStripView);
+            mQuickVoice.attachEditor(view.findViewById(R.id.kud_voice_editor));
+        }
     }
 
     @Override
@@ -1483,6 +1486,25 @@ public class LatinIME extends InputMethodService implements
         updateStateAfterInputTransaction(completeInputTransaction);
         mInputLogic.restartSuggestionsOnWordTouchedByCursor(mSettings.getCurrent(), mKeyboardSwitcher.getCurrentKeyboardScript());
         mKeyboardSwitcher.onEvent(event, getCurrentAutoCapsState(), getCurrentRecapitalizeState());
+    }
+
+    /** kudkeys: the selection as the IME tracks it, for Fix/Instruct when the app gives no extracted text. */
+    @Nullable
+    public kotlin.Pair<Integer, Integer> kudExpectedSelection() {
+        final int start = mInputLogic.mConnection.getExpectedSelectionStart();
+        final int end = mInputLogic.mConnection.getExpectedSelectionEnd();
+        return start < 0 || end < 0 ? null : new kotlin.Pair<>(start, end);
+    }
+
+    /** kudkeys: Fix/Instruct are about to replace text: finish the word being typed first. */
+    public void kudPrepareExternalEdit() {
+        mInputLogic.kudFinishComposing(mSettings.getCurrent());
+    }
+
+    /** kudkeys: the voice tools, for tests. */
+    @Nullable
+    public KudQuickVoice getKudVoice() {
+        return mQuickVoice;
     }
 
     /** kudkeys: insert text from quick voice */

@@ -44,8 +44,8 @@ class TextClientTest {
         val r = api.tidy("pertama cek feno satu dua", private = false)
         r as TextResult.Ok
         assertEquals(tidied, r.value.text)
-        // the out-of-range question is dropped; the option equal to the word too
-        assertEquals(listOf(TidyQuestion("q1", "Feno", 13, 17, listOf("Fenno"))), r.value.questions)
+        // the out-of-range question is dropped
+        assertEquals(listOf(TidyQuestion("q1", "Feno", 13, 17, listOf("Fenno", "Feno"))), r.value.questions)
         val (path, b) = body()
         assertEquals("/api/text/tidy", path)
         assertEquals(Json.parseToJsonElement("""{"text":"pertama cek feno satu dua"}"""), b)

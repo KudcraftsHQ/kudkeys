@@ -9,6 +9,9 @@
     <string name="kud_private" translatable="false">Private</string>
     <string name="kud_slide_to_cancel" translatable="false">‹ Slide to cancel</string>
     <string name="kud_coming_soon" translatable="false">Coming soon</string>
+    <string name="kud_stop_dictation" translatable="false">Stop dictating</string>
+    <string name="kud_back_to_keys" translatable="false">Back to keys, keep draft</string>
+    <string name="kud_instruct_listening" translatable="false">Say what to do…</string>
     <string name="kud_settings_voice" translatable="false">Voice</string>
     <string name="kud_settings_voice_summary" translatable="false">Server and token for hold-to-talk</string>
     <string name="kud_voice_server_url" translatable="false">Server URL</string>

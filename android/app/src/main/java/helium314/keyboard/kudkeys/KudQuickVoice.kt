@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.HapticFeedbackConstants
 import android.view.inputmethod.EditorInfo
+import com.kudcrafts.kudkeys.voice.TextApi
 import com.kudcrafts.kudkeys.voice.VoiceClient
 import com.kudcrafts.kudkeys.voice.VoiceSettings
 import com.kudcrafts.kudkeys.voice.hasMicPermission
@@ -19,13 +20,52 @@ import helium314.keyboard.latin.utils.dpToPx
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 
-/** Connects quick voice to the IME: one per [LatinIME], drawing into whichever strip view is current. */
+/**
+ * Connects the voice tools to the IME, one of each per [LatinIME], drawing into whichever views are current: quick
+ * voice (hold Mic), the full voice editor (tap Mic) and ✦ Fix / Instruct. Each has its own voice client, so their
+ * sessions never see each other's state.
+ */
 class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
     private val settings = VoiceSettings(ime)
     private val handler = Handler(Looper.getMainLooper())
     private val scope = MainScope()
     private var strip: SuggestionStripView? = null
+    private var editorView: KudVoiceEditorView? = null
+    private val textApi = TextApi(settings)
     val controller = QuickVoiceController(VoiceClientEngine(VoiceClient.create(ime)), this, scope)
+
+    val editor = VoiceEditorController(
+        VoiceClientEngine(VoiceClient.create(ime)), textApi, PrefsDraftStore(ime),
+        object : VoiceEditorController.Host {
+            override fun hasVoiceToken() = settings.hasToken
+            override fun hasMicPermission() = this@KudQuickVoice.hasMicPermission()
+            override fun requestMicPermission() = MicPermissionActivity.start(ime)
+            override fun isPrivateField() = this@KudQuickVoice.isPrivateField()
+            override fun insert(text: String) = ime.onVoiceTextInput(text)
+            override fun render(ui: EditorUi) {
+                editorView?.render(ui)
+                strip?.renderEditor(ui)
+            }
+            override fun haptic() = this@KudQuickVoice.haptic()
+            override fun schedule(delayMs: Long, block: () -> Unit) = this@KudQuickVoice.schedule(delayMs, block)
+        },
+        scope,
+    )
+
+    val textActions = TextActionsController(
+        VoiceClientEngine(VoiceClient.create(ime)), textApi,
+        InputConnectionFieldEditor({ ime.currentInputConnection }, ime::kudExpectedSelection, ime::kudPrepareExternalEdit),
+        object : TextActionsController.Host {
+            override fun isSignedIn() = settings.isSignedIn
+            override fun isPrivateField() = this@KudQuickVoice.isPrivateField()
+            override fun hasMicPermission() = this@KudQuickVoice.hasMicPermission()
+            override fun requestMicPermission() = MicPermissionActivity.start(ime)
+            override fun haptic() = this@KudQuickVoice.haptic()
+            override fun render(state: TextBarState) { strip?.renderTextAction(state) }
+            override fun schedule(delayMs: Long, block: () -> Unit) = this@KudQuickVoice.schedule(delayMs, block)
+        },
+        scope,
+    )
 
     /** A locked recording must not keep the mic open with the screen off. */
     private val screenOff = object : BroadcastReceiver() {
@@ -41,16 +81,38 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
     fun attach(view: SuggestionStripView?) {
         strip = view
         view?.setQuickVoice(controller)
+        view?.setTextTools(textActions, editor)
     }
 
-    /** Input started (or restarted) in a field; a different field drops the session. */
-    fun onField(editorInfo: EditorInfo?) = controller.onField(VoiceField.of(editorInfo))
+    /** The editor view of the current input view (it is recreated with the keyboard, e.g. on a theme change). */
+    fun attachEditor(view: KudVoiceEditorView?) {
+        editorView = view
+        view?.controller = editor
+        view?.render(editor.ui)
+    }
+
+    /** Input started (or restarted) in a field; a different field drops the session and a pending Fix. */
+    fun onField(editorInfo: EditorInfo?) {
+        val f = VoiceField.of(editorInfo)
+        controller.onField(f)
+        textActions.onField(f)
+        // the editor's look follows the field (normal / incognito); its draft is not tied to a field
+        editorView?.render(editor.ui)
+    }
 
     /** The field is gone (onFinishInput, or onFinishInputView with finishingInput). */
-    fun onFieldFinished() = controller.onField(null)
+    fun onFieldFinished() {
+        controller.onField(null)
+        textActions.onField(null)
+        editor.onHidden()
+    }
 
-    /** The keyboard was hidden but the field may still be bound. */
-    fun onHidden() = controller.onHidden()
+    /** The keyboard was hidden but the field may still be bound. The editor closes and keeps its draft. */
+    fun onHidden() {
+        controller.onHidden()
+        textActions.onHidden()
+        editor.onHidden()
+    }
 
     /** Comma long-press: hands-free recording. */
     fun startLocked() = controller.startLocked()
@@ -58,6 +120,8 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
     fun destroy() {
         runCatching { ime.unregisterReceiver(screenOff) }
         controller.close()
+        editor.destroy()
+        textActions.destroy()
         scope.cancel()
         handler.removeCallbacksAndMessages(null)
     }
@@ -80,6 +144,10 @@ class KudQuickVoice(private val ime: LatinIME) : QuickVoiceController.Host {
     override fun render(state: VoiceBarState) { strip?.renderVoice(state) }
     override fun barWidth() = strip?.width?.takeIf { it > 0 } ?: ime.resources.displayMetrics.widthPixels
     override fun lockDistance() = 40.dpToPx(ime.resources)
+    override fun onTap() {
+        if (!Settings.getValues().mKudVoiceTyping) return
+        editor.open()
+    }
     override fun schedule(delayMs: Long, block: () -> Unit): () -> Unit {
         val r = Runnable(block)
         handler.postDelayed(r, delayMs)

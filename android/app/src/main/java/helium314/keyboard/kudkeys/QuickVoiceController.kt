@@ -48,7 +48,7 @@ sealed interface VoiceBarState {
 /**
  * Hold-to-talk on the Mic icon (spec item 6). Hold → record; release → insert; slide left past
  * [CANCEL_FRACTION] of the bar → cancel; slide up past the lock distance → lock (tap the stop button to insert).
- * A short tap shows "Hold to talk". Touch coordinates are raw screen pixels.
+ * A short tap calls [Host.onTap] (the full voice editor). Touch coordinates are raw screen pixels.
  *
  * Text only goes into the field the session started in: the IME reports every field with [onField], and a
  * different field cancels the session (an app can switch fields with restartInput, without onFinishInputView).
@@ -76,6 +76,8 @@ class QuickVoiceController(
         fun lockDistance(): Int
         /** Run [block] after [delayMs] on the main thread; the returned function cancels it. */
         fun schedule(delayMs: Long, block: () -> Unit): () -> Unit
+        /** A short tap on Mic (v0.3: opens the full voice editor). */
+        fun onTap()
     }
 
     enum class Phase { Idle, Pressed, Recording, Locked, Finishing }
@@ -128,7 +130,8 @@ class QuickVoiceController(
             Phase.Pressed -> {
                 clearHold()
                 phase = Phase.Idle
-                message(HINT_HOLD)
+                clearMessage()
+                host.onTap()
             }
             Phase.Recording -> finish()
             Phase.Locked -> if (lockingTouchDown) lockingTouchDown = false else finish()
