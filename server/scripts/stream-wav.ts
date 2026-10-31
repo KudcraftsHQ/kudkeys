@@ -26,9 +26,10 @@ const frame = rate / 10; // 100 ms
 
 const ws = new WebSocket(`${base}/v1/stream`, { headers: { Authorization: `Bearer ${token}` } } as unknown as string[]);
 const t0 = performance.now();
-let firstDelta = 0;
+let firstWords = 0;
 let stopAt = 0;
 const segments: string[] = [];
+const show = () => process.stdout.write(`\r\x1b[K${segments.filter(Boolean).join(" ").slice(-110)}`);
 
 ws.addEventListener("message", async (e) => {
   const m = JSON.parse(String(e.data));
@@ -40,16 +41,15 @@ ws.addEventListener("message", async (e) => {
     }
     stopAt = performance.now();
     ws.send(JSON.stringify({ type: "stop" }));
-  } else if (m.type === "delta") {
-    if (!firstDelta) firstDelta = performance.now();
-    process.stdout.write(m.text);
-  } else if (m.type === "final") {
-    segments[m.segment] = m.text;
+  } else if (m.type === "partial" || m.type === "final") {
+    if (!firstWords) firstWords = performance.now();
+    segments[m.segment] = m.type === "final" && m.confidence !== undefined ? `${m.text} [${m.confidence}]` : m.text;
+    show();
   } else if (m.type === "error") {
     console.error(`\nerror ${m.code}: ${m.message}`);
   } else if (m.type === "done") {
-    console.log(`\n\n--- final ---\n${segments.join("\n")}`);
-    console.error(`first words after ${firstDelta ? ms(t0, firstDelta) : "—"}, last words ${ms(stopAt)} after stop`);
+    console.log(`\n\n--- final (phrase [confidence]) ---\n${segments.filter(Boolean).join("\n")}`);
+    console.error(`first words after ${firstWords ? ms(t0, firstWords) : "—"}, last words ${ms(stopAt)} after stop`);
   }
 });
 ws.addEventListener("open", () => ws.send(JSON.stringify({ type: "start", sampleRate: rate, keywords })));

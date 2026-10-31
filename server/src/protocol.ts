@@ -4,14 +4,16 @@
 // Keyboard → server
 //   text   {"type":"start", sampleRate, languages?, keywords?, prompt?, private?}
 //   binary PCM16 little-endian mono audio at `sampleRate`, any chunk size (~100 ms is ideal)
-//   text   {"type":"commit"}   end the current segment (e.g. on a pause); optional
+//   text   {"type":"commit"}   end the current phrase now; optional (the server also cuts at pauses)
 //   text   {"type":"stop"}     finish: commit what is left, send the last finals, then "done"
 //   text   {"type":"cancel"}   drop everything and close
 //
 // Server → keyboard
 //   {"type":"ready", session, model}
-//   {"type":"delta", segment, text}   text to append to that segment
-//   {"type":"final", segment, text}   the whole segment, settled
+//   {"type":"partial", segment, text}       the phrase so far; replaces the previous partial
+//   {"type":"final", segment, text, confidence?}  the phrase, settled; confidence is 0–1 when known
+//   Segments (phrases) are numbered in speaking order; a number may be skipped when a phrase
+//   turned out to be silence.
 //   {"type":"done"}                   every final has been sent; the socket closes next
 //   {"type":"error", code, message}
 
@@ -36,8 +38,8 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: "ready"; session: string; model: string }
-  | { type: "delta"; segment: number; text: string }
-  | { type: "final"; segment: number; text: string }
+  | { type: "partial"; segment: number; text: string }
+  | { type: "final"; segment: number; text: string; confidence?: number }
   | { type: "done" }
   | { type: "error"; code: ErrorCode; message: string };
 

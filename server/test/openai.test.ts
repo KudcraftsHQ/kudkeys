@@ -1,10 +1,10 @@
-// End to end: a keyboard client → our server → a fake OpenAI realtime server.
+// End to end with KUDKEYS_PROVIDER=openai: a keyboard client → our server → a fake OpenAI realtime server.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { loadConfig } from "../src/config";
 import { createServer } from "../src/server";
+import { connect, TOKEN } from "./client";
 
-const TOKEN = "t".repeat(32);
 
 type Received = { session?: any; appendedBytes: number; commits: number; headers?: Headers };
 let fake: ReturnType<typeof Bun.serve>;
@@ -62,6 +62,7 @@ function startServer(extra: Record<string, string> = {}) {
   const cfg = loadConfig({
     PORT: "0",
     KUDKEYS_TOKENS: TOKEN,
+    KUDKEYS_PROVIDER: "openai",
     OPENAI_API_KEY: "sk-test",
     OPENAI_REALTIME_URL: `ws://localhost:${fake.port}/v1/realtime?intent=transcription`,
     KUDKEYS_IDLE_SECONDS: "5",
@@ -70,26 +71,7 @@ function startServer(extra: Record<string, string> = {}) {
   return createServer(cfg);
 }
 
-/** Connects as the keyboard would and collects every server message until the socket closes. */
-function connect(port: number, token = TOKEN) {
-  const ws = new WebSocket(`ws://localhost:${port}/v1/stream`, {
-    headers: { Authorization: `Bearer ${token}` },
-  } as unknown as string[]);
-  const messages: any[] = [];
-  const closed = new Promise<number>((resolve) => ws.addEventListener("close", (e) => resolve(e.code)));
-  ws.addEventListener("message", (e) => messages.push(JSON.parse(String(e.data))));
-  const opened = new Promise<void>((resolve) => ws.addEventListener("open", () => resolve()));
-  const waitFor = async (type: string) => {
-    for (let i = 0; i < 200; i++) {
-      if (messages.some((m) => m.type === type)) return;
-      await Bun.sleep(10);
-    }
-    throw new Error(`no ${type}; got ${JSON.stringify(messages)}`);
-  };
-  return { ws, messages, closed, opened, waitFor };
-}
-
-describe("/v1/stream", () => {
+describe("/v1/stream with OpenAI", () => {
   test("rejects a missing or wrong token", async () => {
     const server = startServer();
     const res = await fetch(`http://localhost:${server.port}/v1/stream`, {
@@ -119,7 +101,9 @@ describe("/v1/stream", () => {
 
     const finals = c.messages.filter((m) => m.type === "final");
     expect(finals.map((f) => f.segment)).toEqual([0, 1]);
-    expect(c.messages.filter((m) => m.type === "delta").map((d) => d.segment)).toEqual([0, 1]);
+    const partials = c.messages.filter((m) => m.type === "partial");
+    expect(partials.map((d) => d.segment)).toEqual([0, 1]);
+    expect(partials[0].text).toBe("halo");
 
     // 1.5 s at 24 kHz × 2 bytes ≈ 72 000 bytes, split across the two commits.
     expect(Math.abs(received.appendedBytes - 72000)).toBeLessThanOrEqual(8);

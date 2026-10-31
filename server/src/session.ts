@@ -90,10 +90,10 @@ export class VoiceSession {
         prompt: msg.prompt,
       },
       {
-        onDelta: (segment, text) => this.send({ type: "delta", segment, text }),
-        onFinal: (segment, text) => {
+        onPartial: (segment, text) => this.send({ type: "partial", segment, text }),
+        onFinal: (segment, text, confidence) => {
           this.finals++;
-          this.send({ type: "final", segment, text });
+          this.send(confidence === undefined ? { type: "final", segment, text } : { type: "final", segment, text, confidence });
         },
         onError: (message) => this.fail("provider", message),
       },

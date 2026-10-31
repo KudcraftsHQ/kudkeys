@@ -1,4 +1,4 @@
-// OpenAI realtime transcription (GA API, transcription-only session).
+// OpenAI realtime transcription (GA API, transcription-only session). Alternative to Groq.
 // Docs: https://developers.openai.com/api/docs/guides/realtime-transcription
 //
 // - Connect to wss://api.openai.com/v1/realtime?intent=transcription (no model in the URL).
@@ -46,6 +46,7 @@ export class OpenAITranscriber implements StreamingTranscriber {
   private commitsAwaiting = 0;
   private segments = new Map<string, number>(); // item_id → segment number
   private completed = new Set<string>();
+  private texts = new Map<string, string>(); // item_id → text so far
   private settleWaiters: Array<() => void> = [];
 
   constructor(
@@ -174,7 +175,11 @@ export class OpenAITranscriber implements StreamingTranscriber {
         this.wake();
         break;
       case "conversation.item.input_audio_transcription.delta":
-        if (e.item_id && e.delta) this.events.onDelta(this.segmentOf(e.item_id), e.delta);
+        if (e.item_id && e.delta && !this.completed.has(e.item_id)) {
+          const text = (this.texts.get(e.item_id) ?? "") + e.delta;
+          this.texts.set(e.item_id, text);
+          this.events.onPartial(this.segmentOf(e.item_id), text.trim());
+        }
         break;
       case "conversation.item.input_audio_transcription.completed":
         if (e.item_id) {
