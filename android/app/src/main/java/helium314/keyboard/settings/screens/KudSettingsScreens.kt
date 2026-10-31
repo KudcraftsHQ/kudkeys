@@ -469,10 +469,11 @@ fun createKudSettings(context: Context) = listOf(
                 AudioAndHapticFeedbackManager.getInstance().vibrate(value.roundToInt().toLong())
             },
         ) {
+            // the switch is whether keys vibrate at all, Android default length or not; only the slider is
+            // disabled under the Android default
             Switch(
-                checked = !androidDefault && vibrateOn,
-                enabled = !androidDefault,
-                onCheckedChange = { prefs.edit { putBoolean(Settings.PREF_VIBRATE_ON, it) } },
+                checked = KudSettingsRules.isKeypressVibration(prefs),
+                onCheckedChange = { KudSettingsRules.setKeypressVibration(prefs, it) },
             )
         }
     },
@@ -499,9 +500,24 @@ object KudSettingsRules {
     fun isLargeKeyText(prefs: SharedPreferences) =
         prefs.getFloat(Settings.PREF_FONT_SCALE, Defaults.PREF_FONT_SCALE) >= KudSettings.LARGE_KEY_TEXT_SCALE - 0.01f
 
+    /** On remembers the font scale set in Appearance (e.g. 1.1), off puts it back instead of resetting to 1.0. */
     fun setLargeKeyText(prefs: SharedPreferences, on: Boolean) = prefs.edit {
-        if (on) putFloat(Settings.PREF_FONT_SCALE, KudSettings.LARGE_KEY_TEXT_SCALE) else remove(Settings.PREF_FONT_SCALE)
+        if (on) {
+            if (!isLargeKeyText(prefs) && prefs.contains(Settings.PREF_FONT_SCALE))
+                putFloat(KudSettings.PREF_FONT_SCALE_BEFORE_LARGE, prefs.getFloat(Settings.PREF_FONT_SCALE, Defaults.PREF_FONT_SCALE))
+            putFloat(Settings.PREF_FONT_SCALE, KudSettings.LARGE_KEY_TEXT_SCALE)
+        } else {
+            if (prefs.contains(KudSettings.PREF_FONT_SCALE_BEFORE_LARGE))
+                putFloat(Settings.PREF_FONT_SCALE, prefs.getFloat(KudSettings.PREF_FONT_SCALE_BEFORE_LARGE, Defaults.PREF_FONT_SCALE))
+            else remove(Settings.PREF_FONT_SCALE)
+            remove(KudSettings.PREF_FONT_SCALE_BEFORE_LARGE)
+        }
     }
+
+    /** Keypress vibration on/off, whether it uses the Android default length or the custom one. */
+    fun isKeypressVibration(prefs: SharedPreferences) = prefs.getBoolean(Settings.PREF_VIBRATE_ON, Defaults.PREF_VIBRATE_ON)
+
+    fun setKeypressVibration(prefs: SharedPreferences, on: Boolean) = prefs.edit { putBoolean(Settings.PREF_VIBRATE_ON, on) }
 
     /** "Use the Android default vibration" is HeliBoard's vibration length -1 (the system's key-press haptic). */
     fun isAndroidVibration(prefs: SharedPreferences) =

@@ -210,7 +210,6 @@ private sealed interface Loaded {
 @Composable
 fun KudProfileScreen(account: Account, onClickBack: () -> Unit, onSignedOut: () -> Unit, onLeft: () -> Unit) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     var loaded by remember { mutableStateOf<Loaded>(Loaded.Loading) }
     var attempt by remember { mutableStateOf(0) }
 
@@ -253,8 +252,12 @@ fun KudProfileScreen(account: Account, onClickBack: () -> Unit, onSignedOut: () 
             )
             Preference(
                 name = stringResource(R.string.kud_account_sign_out),
-                description = stringResource(R.string.kud_account_sign_out_summary),
-                onClick = { scope.launch { account.signOut(); onLeft() } },
+                // a legacy token under Voice → Advanced keeps voice working after sign-out: say so
+                description = stringResource(
+                    if (account.settings.token.isNotEmpty()) R.string.kud_account_sign_out_summary_legacy
+                    else R.string.kud_account_sign_out_summary
+                ),
+                onClick = { account.signOut(); onLeft() },
             )
         }
     }

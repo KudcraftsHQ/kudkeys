@@ -13,7 +13,13 @@ import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.settings.screens.KudSettingsRules
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.database.Cursor
+import android.net.Uri
+import android.provider.UserDictionary
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
@@ -103,6 +109,27 @@ class KudSettingsTest {
         assertFalse(prefs.contains(Settings.PREF_FONT_SCALE))
     }
 
+    @Test fun largeKeyTextOffRestoresACustomFontScale() {
+        prefs.edit { putFloat(Settings.PREF_FONT_SCALE, 1.1f) } // set in Appearance
+        assertFalse(KudSettingsRules.isLargeKeyText(prefs))
+        KudSettingsRules.setLargeKeyText(prefs, true)
+        assertEquals(KudSettings.LARGE_KEY_TEXT_SCALE, prefs.getFloat(Settings.PREF_FONT_SCALE, 0f))
+        KudSettingsRules.setLargeKeyText(prefs, true) // again: must not remember 1.2 as "before"
+        KudSettingsRules.setLargeKeyText(prefs, false)
+        assertEquals(1.1f, prefs.getFloat(Settings.PREF_FONT_SCALE, 0f))
+        assertFalse(prefs.contains(KudSettings.PREF_FONT_SCALE_BEFORE_LARGE))
+    }
+
+    @Test fun keypressVibrationSwitchShowsOnUnderTheAndroidDefault_andTurnsItOff() {
+        KudSettingsRules.setAndroidVibration(prefs, true)
+        assertTrue(KudSettingsRules.isKeypressVibration(prefs)) // keys vibrate, so the switch reads on
+        KudSettingsRules.setKeypressVibration(prefs, false)     // turned off without leaving the Android default
+        assertFalse(prefs.getBoolean(Settings.PREF_VIBRATE_ON, true))
+        assertTrue(KudSettingsRules.isAndroidVibration(prefs))
+        KudSettingsRules.setKeypressVibration(prefs, true)
+        assertTrue(KudSettingsRules.isKeypressVibration(prefs))
+    }
+
     @Test fun androidDefaultVibrationKeepsTheCustomLength() {
         KudSettingsRules.setVibrationMs(prefs, 40)
         assertFalse(KudSettingsRules.isAndroidVibration(prefs))
@@ -128,6 +155,48 @@ class KudSettingsTest {
         KudTypingData.clear(context)
         assertFalse(file.exists())
         assertTrue(other.exists())
+    }
+
+    @Test fun settingTextsSayWhatTheyDo() {
+        // cursor control is a slide on the spacebar (HeliBoard's horizontal space swipe), not tap-and-hold
+        assertTrue(context.getString(helium314.keyboard.latin.R.string.kud_cursor_control_summary).startsWith("Slide"))
+        val confirm = context.getString(helium314.keyboard.latin.R.string.kud_clear_typing_data_confirm)
+        assertTrue("learned from your typing" in confirm)
+        assertTrue("personal dictionary (Settings → Personal dictionary) is not touched" in confirm)
+    }
+
+    /** The Android personal dictionary is shared with Settings and other keyboards: Clear must leave it alone. */
+    @Test fun clearTypingDataLeavesTheAndroidPersonalDictionary() {
+        val provider = Robolectric.setupContentProvider(FakeUserDictionary::class.java, UserDictionary.AUTHORITY)
+        context.contentResolver.insert(UserDictionary.Words.CONTENT_URI, ContentValues().apply {
+            put(UserDictionary.Words.WORD, "Kudcrafts"); put(UserDictionary.Words.LOCALE, "en_US")
+        })
+        KudTypingData.clear(context)
+        assertEquals(listOf("Kudcrafts"), provider.words)
+        assertEquals(0, provider.deletes)
+    }
+
+    class FakeUserDictionary : ContentProvider() {
+        val words = mutableListOf<String>()
+        var deletes = 0
+        override fun onCreate() = true
+        override fun insert(uri: Uri, values: ContentValues?): Uri? {
+            words += values!!.getAsString(UserDictionary.Words.WORD); return uri
+        }
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
+            deletes++; val n = words.size; words.clear(); return n
+        }
+        override fun query(uri: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?): Cursor? = null
+        override fun getType(uri: Uri): String? = null
+        override fun update(uri: Uri, v: ContentValues?, s: String?, a: Array<out String>?) = 0
+    }
+
+    /** Side padding is saved as a fraction of the keyboard width, so a preview narrower than the IME saves the same scale. */
+    @Test fun resizeSideScaleDoesNotDependOnThePreviewWidth() {
+        val narrow = KudResize.Metrics(width = 800f, defaultHeight = 600f, sidePaddingFraction = 0.08f, bottomPaddingFraction = 0.05f)
+        val wide = KudResize.Metrics(width = 1200f, defaultHeight = 600f, sidePaddingFraction = 0.08f, bottomPaddingFraction = 0.05f)
+        // the same drag as a share of the width
+        assertEquals(KudResize.DEFAULT.dragSide(40f, narrow).sideScale, KudResize.DEFAULT.dragSide(60f, wide).sideScale, 1e-4f)
     }
 
     private val m = KudResize.Metrics(width = 1000f, defaultHeight = 600f, sidePaddingFraction = 0.08f, bottomPaddingFraction = 0.05f)

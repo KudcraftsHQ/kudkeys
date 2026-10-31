@@ -2,21 +2,18 @@
 package helium314.keyboard.kudkeys
 
 import android.content.Context
-import android.provider.UserDictionary
 import helium314.keyboard.latin.personalization.PersonalizationHelper
-import helium314.keyboard.latin.utils.Log
 
-/** Typing → Clear typing data: forget what was learned (user history) and the personal dictionary. */
+/**
+ * Typing → Clear typing data: forget what Kud Keys learned from typing (its user-history dictionaries, the
+ * next-word and frequency data behind its predictions).
+ *
+ * Never touches the Android personal dictionary (UserDictionary): it is shared with Settings and every other
+ * keyboard on the phone, and Kud Keys does not own it.
+ */
 object KudTypingData {
-    /** Returns how many personal-dictionary words were deleted (-1 if the dictionary could not be reached). */
-    fun clear(context: Context): Int {
+    fun clear(context: Context) {
         // closes and clears the open user-history dictionaries, then deletes their files
         PersonalizationHelper.removeAllUserHistoryDictionaries(context)
-        return try {
-            context.contentResolver.delete(UserDictionary.Words.CONTENT_URI, null, null)
-        } catch (e: Exception) {
-            Log.w("KudTypingData", "could not clear the personal dictionary", e)
-            -1
-        }
     }
 }

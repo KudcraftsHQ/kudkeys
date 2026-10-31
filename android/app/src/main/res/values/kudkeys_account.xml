@@ -37,6 +37,7 @@
     <string name="kud_account_web_summary" translatable="false">Devices, password and full usage at keys.kudcrafts.com</string>
     <string name="kud_account_sign_out" translatable="false">Sign out</string>
     <string name="kud_account_sign_out_summary" translatable="false">Voice stops working on this phone until you sign in again</string>
+    <string name="kud_account_sign_out_summary_legacy" translatable="false">Forgets your account on this phone. Voice keeps working with the token under Voice → Advanced until you remove it</string>
     <string name="kud_account_loading" translatable="false">Loading…</string>
     <string name="kud_account_retry" translatable="false">Try again</string>
     <string name="kud_voice_account_none" translatable="false">Not signed in</string>

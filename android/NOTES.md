@@ -192,3 +192,12 @@ cd android
 - Tests: `voice/src/test/.../AccountClientTest.kt` (MockWebServer), `VoiceClientTest` (session over legacy, 401 →
   signed out), `app/src/test/.../KudAccountScreenshotTest.kt` → `$TMPDIR/kudkeys-v02-shots/account-*.png`.
   `AccountLocalTest` is an opt-in run against a local server (`KUDKEYS_LOCAL_BASE`, `_EMAIL`, `_PASSWORD`, `_WAV`).
+
+## Deliberate, not bugs (v0.2 review M5, M6)
+
+- **M5:** the typing defaults in `Defaults.kt` (backspace doesn't revert autocorrect, auto-space after punctuation,
+  emoji suggestions/key, 450 ms long-press, …) changed on purpose in v0.2 to match Hammas's SwiftKey settings. **M6:**
+  the incognito look in search boxes, URL bars and the launcher (`KudPrivacy.isPrivate`) is intended; SwiftKey does
+  the same in Nova's search box. Don't "fix" either.
+- Clear typing data only clears Kud Keys' own user-history dictionaries (`KudTypingData`); it must never touch the
+  shared Android personal dictionary (`UserDictionary`).

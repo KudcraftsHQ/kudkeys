@@ -40,14 +40,14 @@
     <string name="kud_auto_space" translatable="false">Auto space</string>
     <string name="kud_auto_space_summary" translatable="false">Automatically insert spaces with punctuation</string>
     <string name="kud_cursor_control" translatable="false">Cursor control</string>
-    <string name="kud_cursor_control_summary" translatable="false">Tap and hold the spacebar to move the cursor</string>
+    <string name="kud_cursor_control_summary" translatable="false">Slide your finger along the spacebar to move the cursor</string>
     <string name="kud_quick_delete" translatable="false">Quick delete</string>
     <string name="kud_quick_delete_summary" translatable="false">Slide from the delete key to select and delete text</string>
     <string name="kud_physical_keyboard" translatable="false">Physical keyboard</string>
     <string name="kud_physical_keyboard_summary" translatable="false">Adjust the settings for your physical keyboard. These settings do not affect your on-screen keyboard.</string>
     <string name="kud_clear_typing_data" translatable="false">Clear typing data</string>
-    <string name="kud_clear_typing_data_summary" translatable="false">You will lose personal words and phrases you taught Kud Keys</string>
-    <string name="kud_clear_typing_data_confirm" translatable="false">Clear typing data? Everything Kud Keys learned from your typing and every word in your personal dictionary will be deleted. This cannot be undone.</string>
+    <string name="kud_clear_typing_data_summary" translatable="false">Forget the words and phrases Kud Keys learned from your typing</string>
+    <string name="kud_clear_typing_data_confirm" translatable="false">Clear typing data? The words, phrases and next-word predictions Kud Keys learned from your typing will be deleted. This cannot be undone. Your Android personal dictionary (Settings → Personal dictionary) is not touched.</string>
     <string name="kud_clear_typing_data_button" translatable="false">Clear</string>
     <string name="kud_clear_typing_data_done" translatable="false">Typing data cleared</string>
 

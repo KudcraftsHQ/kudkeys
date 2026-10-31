@@ -36,6 +36,8 @@ object KudSettings {
 
     /** Layout & keys → Large key text sets HeliBoard's font scale to this. */
     const val LARGE_KEY_TEXT_SCALE = 1.2f
+    /** The font scale before Large key text was turned on, restored when it is turned off. */
+    const val PREF_FONT_SCALE_BEFORE_LARGE = "kudkeys_font_scale_before_large"
 
     /**
      * The word that space should insert for Quick prediction insert, or null when space is just a space.
