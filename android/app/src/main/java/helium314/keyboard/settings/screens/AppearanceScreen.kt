@@ -327,7 +327,7 @@ fun createAppearanceSettings(context: Context) = listOf(
             description = { "${(100 * it).toInt()}%" }
         ) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
-    Setting(context, SettingsWithoutKey.CUSTOM_EMOJI_FONT, R.string.custom_emoji_font) {
+    Setting(context, SettingsWithoutKey.CUSTOM_EMOJI_FONT, R.string.kud_emoji_font) {
         CustomFontPreference(it, Settings.getCustomEmojiFontFile(LocalContext.current), R.string.custom_emoji_font)
     },
     Setting(context, Settings.PREF_EMOJI_FONT_SCALE, R.string.prefs_emoji_font_scale) { setting ->

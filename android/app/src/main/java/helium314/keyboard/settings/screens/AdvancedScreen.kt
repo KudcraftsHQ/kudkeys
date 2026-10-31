@@ -103,7 +103,7 @@ fun createAdvancedSettings(context: Context) = listOf(
     {
         SwitchPreference(it, Defaults.PREF_ALWAYS_INCOGNITO_MODE) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
-    Setting(context, Settings.PREF_KEY_LONGPRESS_TIMEOUT, R.string.prefs_key_longpress_timeout_settings) { setting ->
+    Setting(context, Settings.PREF_KEY_LONGPRESS_TIMEOUT, R.string.kud_long_press_duration) { setting ->
         SliderPreference(
             name = setting.title,
             key = setting.key,
@@ -155,7 +155,7 @@ fun createAdvancedSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_TOUCHPAD_EDGE_SCROLL, R.string.touchpad_edge_scroll, R.string.touchpad_edge_scroll_description) {
         SwitchPreference(it, Defaults.PREF_TOUCHPAD_EDGE_SCROLL)
     },
-    Setting(context, Settings.PREF_DELETE_SWIPE, R.string.delete_swipe, R.string.delete_swipe_summary) {
+    Setting(context, Settings.PREF_DELETE_SWIPE, R.string.kud_quick_delete, R.string.kud_quick_delete_summary) {
         SwitchPreference(it, Defaults.PREF_DELETE_SWIPE)
     },
     Setting(context, Settings.PREF_SPACE_TO_CHANGE_LANG,

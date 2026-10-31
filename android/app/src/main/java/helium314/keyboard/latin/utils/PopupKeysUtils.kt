@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.latin.utils
 
+import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.kudkeys.KudSettings
 import helium314.keyboard.keyboard.Key
 import helium314.keyboard.keyboard.internal.KeySpecParser
 import helium314.keyboard.keyboard.internal.KeyboardParams
@@ -37,6 +39,9 @@ fun createPopupKeysArray(popupSet: PopupSet<*>?, params: KeyboardParams, label: 
             POPUP_KEYS_LANGUAGE_PRIORITY -> params.mLocaleKeyboardInfos.getPriorityPopupKeys(label)?.let { popupKeys.addAll(it) }
         }
     }
+    // Kud Keys: Rich input → Voice typing off removes the voice key from long-press popups (comma)
+    if (popupKeysDelegate.isInitialized() && Settings.getValues()?.mKudVoiceTyping == false)
+        popupKeys.removeAll { KudSettings.isVoicePopup(it) }
     if (!popupKeysDelegate.isInitialized() || popupKeys.isEmpty())
         return null
     val fco = popupKeys.firstOrNull { it.startsWith(Key.POPUP_KEYS_FIXED_COLUMN_ORDER) }

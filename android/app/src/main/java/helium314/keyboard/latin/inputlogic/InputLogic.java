@@ -6,6 +6,7 @@
 
 package helium314.keyboard.latin.inputlogic;
 
+import helium314.keyboard.kudkeys.KudSettings;
 import static helium314.keyboard.latin.common.SuggestionSpanUtilsKt.getTextWithSuggestionSpan;
 
 import android.graphics.Color;
@@ -1574,6 +1575,17 @@ public final class InputLogic {
 
     public void startDoubleSpacePeriodCountdown(final InputTransaction inputTransaction) {
         mDoubleSpacePeriodCountdownStart = inputTransaction.getTimestamp();
+    }
+
+    /** kudkeys: the prediction a space should insert first (Typing → Quick prediction insert), or null. */
+    @Nullable
+    public SuggestedWordInfo kudQuickPredictionToInsert(final SettingsValues settingsValues) {
+        // a quick second space is a period (Quick period), not a prediction
+        final boolean doubleSpacePending = settingsValues.mUseDoubleSpacePeriod
+                && SystemClock.uptimeMillis() - mDoubleSpacePeriodCountdownStart
+                < settingsValues.mDoubleSpacePeriodTimeout;
+        return KudSettings.INSTANCE.quickPredictionToInsert(settingsValues.mKudQuickPredictionInsert,
+                mWordComposer.isComposingWord(), doubleSpacePending, mSuggestedWords);
     }
 
     public void cancelDoubleSpacePeriodCountdown() {

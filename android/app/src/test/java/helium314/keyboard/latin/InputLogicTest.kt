@@ -731,6 +731,11 @@ class InputLogicTest {
 
         // reset settings
         latinIME.prefs().edit { clear() }
+        // Kud Keys changed these defaults to SwiftKey's; the tests here pin HeliBoard's logic with its defaults
+        latinIME.prefs().edit {
+            putBoolean(Settings.PREF_AUTOSPACE_AFTER_PUNCTUATION, false)
+            putBoolean(Settings.PREF_BACKSPACE_REVERTS_AUTOCORRECT, true)
+        }
 
         setText("") // (re)sets selection and composing word
     }

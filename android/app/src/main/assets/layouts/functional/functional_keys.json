@@ -9,7 +9,7 @@
       "alphabet": { "code": -10001, "label": "123", "type": "function", "width": 0.1, "labelFlags": 144 },
       "default": { "label": "symbol_alpha", "width": 0.1 }
     },
-    { "$": "keyboard_state_selector", "alphabet": { "label": "emoji", "width": 0.1 } },
+    { "$": "keyboard_state_selector", "emojiKeyEnabled": { "$": "keyboard_state_selector", "alphabet": { "label": "emoji", "width": 0.1 } } },
     { "$": "variation_selector",
       "default":  { "label": "comma", "labelFlags": 1073741824, "popup": { "relevant": [{ "label": "!icon/shortcut_key|!code/key_voice_input" }] } },
       "email":    { "label": "@", "labelFlags": 1073741824, "groupId": 1, "type": "function" },

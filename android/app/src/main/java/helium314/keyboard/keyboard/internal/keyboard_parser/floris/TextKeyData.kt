@@ -5,6 +5,7 @@
  */
 package helium314.keyboard.keyboard.internal.keyboard_parser.floris
 
+import helium314.keyboard.kudkeys.KudSettings
 import android.view.inputmethod.EditorInfo
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -213,7 +214,9 @@ sealed interface KeyData : AbstractKeyData {
             }
             // remove emoji shortcut on enter in tablet mode (like original, because bottom row always has an emoji key)
             // (probably not necessary, but whatever) and in emoji mode
-            if ((Settings.getInstance().isTablet || params.mId.element == KeyboardElement.EMOJI_BOTTOM_ROW)
+            // Kud Keys: emoji on enter only while the emoji key is hidden and Emoji → Emoji access on enter key is on
+            val kudKeepEmoji = KudSettings.emojiOnEnter(params.mId.emojiKeyEnabled, Settings.getValues()?.mKudEmojiOnEnter == true)
+            if ((Settings.getInstance().isTablet || params.mId.element == KeyboardElement.EMOJI_BOTTOM_ROW || !kudKeepEmoji)
                 && popupKeys.remove("!icon/emoji_action_key|!code/key_emoji")) {
                 val i = popupKeys.indexOfFirst { it.startsWith(Key.POPUP_KEYS_FIXED_COLUMN_ORDER) }
                 if (i > -1) {

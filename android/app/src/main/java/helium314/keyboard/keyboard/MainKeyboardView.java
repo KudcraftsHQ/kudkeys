@@ -703,6 +703,31 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     }
 
     @Override
+    protected void onDraw(@NonNull final Canvas canvas) {
+        super.onDraw(canvas);
+        if (Settings.getValues().mKudIncognitoLook) drawKudIncognitoWatermark(canvas);
+    }
+
+    /** Kud Keys: SwiftKey's faint incognito hat and glasses, centred over the letter rows. */
+    private void drawKudIncognitoWatermark(@NonNull final Canvas canvas) {
+        if (mKudIncognitoWatermark == null) {
+            mKudIncognitoWatermark = androidx.core.content.ContextCompat.getDrawable(getContext(), R.drawable.kud_incognito_watermark);
+            if (mKudIncognitoWatermark == null) return;
+            mKudIncognitoWatermark = mKudIncognitoWatermark.mutate();
+            mKudIncognitoWatermark.setAlpha(KUD_WATERMARK_ALPHA);
+        }
+        final int width = (int) (getWidth() * 0.31f);
+        final int height = width * mKudIncognitoWatermark.getIntrinsicHeight() / Math.max(1, mKudIncognitoWatermark.getIntrinsicWidth());
+        final int left = (getWidth() - width) / 2;
+        final int top = (int) (getHeight() * 0.53f) - height / 2;
+        mKudIncognitoWatermark.setBounds(left, top, left + width, top + height);
+        mKudIncognitoWatermark.draw(canvas);
+    }
+
+    private static final int KUD_WATERMARK_ALPHA = 28;
+    @Nullable private android.graphics.drawable.Drawable mKudIncognitoWatermark;
+
+    @Override
     protected void onDrawKeyTopVisuals(@NonNull final Key key, @NonNull final Canvas canvas,
             @NonNull final Paint paint, @NonNull final KeyDrawParams params) {
         if (key.altCodeWhileTyping() && key.isEnabled()) {
@@ -742,6 +767,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final float centerX = key.getDrawWidth() / 2f;
         final float hintCenterY = key.getHeight() * 0.24f;
         if (key.getCode() == ',') {
+            if (!Settings.getValues().mKudVoiceTyping) return; // no voice, no mic hint
             final Keyboard keyboard = getKeyboard();
             final android.graphics.drawable.Drawable mic = keyboard.mIconsSet.getIconDrawable("shortcut_key");
             if (mic == null) return;

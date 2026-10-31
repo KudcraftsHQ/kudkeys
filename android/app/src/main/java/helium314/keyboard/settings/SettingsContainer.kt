@@ -12,6 +12,7 @@ import helium314.keyboard.settings.screens.createAppearanceSettings
 import helium314.keyboard.settings.screens.createCorrectionSettings
 import helium314.keyboard.settings.screens.createLayoutSettings
 import helium314.keyboard.settings.screens.createPreferencesSettings
+import helium314.keyboard.settings.screens.createKudSettings
 
 class SettingsContainer(context: Context) {
     private val list = createSettings(context)
@@ -62,7 +63,7 @@ class Setting(
 // intentionally not putting individual debug settings in here so user knows the context
 private fun createSettings(context: Context) = createAboutSettings(context) + createAppearanceSettings(context) +
         createCorrectionSettings(context) + createPreferencesSettings(context) +
-        createLayoutSettings(context) + createAdvancedSettings(context)
+        createLayoutSettings(context) + createAdvancedSettings(context) + createKudSettings(context)
 
 object SettingsWithoutKey {
     const val EDIT_PERSONAL_DICTIONARY = "edit_personal_dictionary"

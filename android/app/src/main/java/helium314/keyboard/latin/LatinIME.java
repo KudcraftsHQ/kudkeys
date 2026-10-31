@@ -1458,8 +1458,13 @@ public class LatinIME extends InputMethodService implements
     public void onEvent(@NonNull final Event event) {
         if (KeyCode.VOICE_INPUT == event.getKeyCode()) {
             // kudkeys: the voice key (comma long-press) starts our own quick voice, hands-free; it never switches
-            // to the system / Google voice IME.
-            if (mQuickVoice != null) mQuickVoice.startLocked();
+            // to the system / Google voice IME. Not when Rich input → Voice typing is off.
+            if (mQuickVoice != null && mSettings.getCurrent().mKudVoiceTyping) mQuickVoice.startLocked();
+        }
+        // kudkeys: Typing → Quick prediction insert: space puts in the middle prediction first
+        if (Constants.CODE_SPACE == event.getCodePoint()) {
+            final SuggestedWordInfo prediction = mInputLogic.kudQuickPredictionToInsert(mSettings.getCurrent());
+            if (prediction != null) pickSuggestionManually(prediction);
         }
         final InputTransaction completeInputTransaction =
                 mInputLogic.onCodeInput(mSettings.getCurrent(), event,

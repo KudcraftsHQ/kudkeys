@@ -118,6 +118,9 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
             val prefs = context.prefs()
             val style = prefs.getString(Settings.PREF_THEME_STYLE, Defaults.PREF_THEME_STYLE)
             val borders = prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)
+            // Kud Keys: private fields get SwiftKey's incognito look, which draws key shapes
+            if (Settings.getValues()?.mKudIncognitoLook == true)
+                return KEYBOARD_THEMES.first { it.themeId == THEME_ID_LXX_BASE_BORDER }
             val matchingId = when (style) {
                 STYLE_HOLO -> THEME_ID_HOLO_BASE
                 STYLE_ROUNDED -> if (borders) THEME_ID_ROUNDED_BASE_BORDER else THEME_ID_ROUNDED_BASE
@@ -143,6 +146,26 @@ private constructor(val themeId: Int, @JvmField val mStyleId: Int) {
 
             return getThemeColors(themeName!!, themeStyle!!, context, prefs, isNight)
         }
+
+        /**
+         * Kud Keys: SwiftKey's incognito look (sampled from a SwiftKey screenshot): blue-grey dark background,
+         * letter keys and the space bar on a slightly lighter rounded key, functional keys without a shape.
+         * The faint hat-and-glasses watermark is drawn by MainKeyboardView.
+         */
+        @JvmStatic
+        fun getKudIncognitoColors(context: Context): Colors = DefaultColors(
+            STYLE_MATERIAL,
+            true,
+            ContextCompat.getColor(context, R.color.gesture_trail_color_lxx_dark),
+            KUD_INCOGNITO_BACKGROUND,
+            "#2a2e37".toColorInt(), // letter keys
+            KUD_INCOGNITO_BACKGROUND, // functional keys: no shape, only a highlight while pressed
+            "#2a2e37".toColorInt(), // space bar
+            "#e2e4e9".toColorInt(), // key text
+            "#7d828d".toColorInt(), // hints, space bar text
+        )
+
+        val KUD_INCOGNITO_BACKGROUND = "#1c1f26".toColorInt()
 
         private fun getThemeColors(themeName: String, themeStyle: String, context: Context, prefs: SharedPreferences, isNight: Boolean): Colors {
             val hasBorders = prefs.getBoolean(Settings.PREF_THEME_KEY_BORDERS, Defaults.PREF_THEME_KEY_BORDERS)

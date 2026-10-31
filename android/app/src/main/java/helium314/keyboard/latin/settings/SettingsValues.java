@@ -24,6 +24,7 @@ import helium314.keyboard.keyboard.KeyboardActionListener;
 import helium314.keyboard.keyboard.KeyboardTheme;
 import helium314.keyboard.keyboard.internal.KeyboardState;
 import helium314.keyboard.keyboard.internal.keyboard_parser.LocaleKeyboardInfos;
+import helium314.keyboard.kudkeys.KudSettings;
 import helium314.keyboard.latin.InputAttributes;
 import helium314.keyboard.latin.PunctuationSuggestions;
 import helium314.keyboard.latin.R;
@@ -65,6 +66,13 @@ public class SettingsValues {
     public final boolean mShowEmojiDescriptions;
     public final boolean mKeyPreviewPopupOn;
     public final boolean mShowsVoiceInputKey;
+    // kudkeys: SwiftKey settings without a HeliBoard pref (see KudSettings)
+    public final boolean mKudQuickPredictionInsert;
+    public final boolean mKudEmojiOnEnter;
+    public final boolean mKudVoiceTyping;
+    public final boolean mKudClassicSound;
+    /** kudkeys: draw SwiftKey's incognito look (private field) */
+    public final boolean mKudIncognitoLook;
     public final boolean mLanguageSwitchKeyToOtherImes;
     public final boolean mLanguageSwitchKeyToOtherSubtypes;
     private final boolean mShowsLanguageSwitchKey;
@@ -198,6 +206,10 @@ public class SettingsValues {
         mSlidingKeyInputPreviewEnabled = prefs.getBoolean(
                 DebugSettings.PREF_SLIDING_KEY_INPUT_PREVIEW, Defaults.PREF_SLIDING_KEY_INPUT_PREVIEW);
         mShowsVoiceInputKey = mInputAttributes.mShouldShowVoiceInputKey;
+        mKudQuickPredictionInsert = prefs.getBoolean(KudSettings.PREF_QUICK_PREDICTION_INSERT, KudSettings.DEFAULT_QUICK_PREDICTION_INSERT);
+        mKudEmojiOnEnter = prefs.getBoolean(KudSettings.PREF_EMOJI_ON_ENTER, KudSettings.DEFAULT_EMOJI_ON_ENTER);
+        mKudVoiceTyping = prefs.getBoolean(KudSettings.PREF_VOICE_TYPING, KudSettings.DEFAULT_VOICE_TYPING);
+        mKudClassicSound = KudSettings.SOUND_PROFILE_CLASSIC.equals(prefs.getString(KudSettings.PREF_SOUND_PROFILE, KudSettings.DEFAULT_SOUND_PROFILE));
         String languagePref = prefs.getString(Settings.PREF_LANGUAGE_SWITCH_KEY, Defaults.PREF_LANGUAGE_SWITCH_KEY);
         mLanguageSwitchKeyToOtherImes = languagePref.equals("input_method") || languagePref.equals("both");
         mLanguageSwitchKeyToOtherSubtypes = mIsLocked || languagePref.equals("internal") || languagePref.equals("both");
@@ -299,7 +311,8 @@ public class SettingsValues {
         mSecondaryLocales = SubtypeUtilsKt.getSecondaryLocales(selectedSubtype.getExtraValue());
         mShowMorePopupKeys = SubtypeUtilsKt.getMoreKeys(selectedSubtype, prefs,
             selectedSubtype.isAsciiCapable() ? Defaults.PREF_MORE_POPUP_KEYS : LocaleKeyboardInfos.POPUP_KEYS_NORMAL);
-        mColors = KeyboardTheme.getColorsForCurrentTheme(context);
+        mKudIncognitoLook = mInputAttributes.mIsPrivate;
+        mColors = mKudIncognitoLook ? KeyboardTheme.getKudIncognitoColors(context) : KeyboardTheme.getColorsForCurrentTheme(context);
 
         mPopupKeyOrder = SubtypeUtilsKt.getPopupKeyOrder(selectedSubtype, prefs);
         mPopupKeyHintOrder = SubtypeUtilsKt.getPopupKeyHintOrder(selectedSubtype, prefs);
