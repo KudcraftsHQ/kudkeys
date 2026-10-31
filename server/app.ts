@@ -1,15 +1,19 @@
-// The Kud Keys Hono app: /api/* (Better Auth, the profile and usage API) and
+// The Kud Keys Hono app: /api/* (Better Auth, the profile, usage, text, sync
+// and backup API) and
 // the built SPA. Built from its dependencies so tests run it in-process.
 // /v1/stream is a WebSocket and lives beside it in server.ts.
 
 import { Hono } from 'hono'
 import type { Context, MiddlewareHandler } from 'hono'
 import { serveStatic } from 'hono/bun'
+import { HTTPException } from 'hono/http-exception'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isAllowed } from './lib/allowlist'
 import type { Store } from './lib/store'
+import type { Sql } from './lib/sql'
 import { meRouter } from './routes/me'
+import { syncRouter } from './routes/sync'
 import { textRouter } from './routes/text'
 import type { TextEngine } from './text/engine'
 
@@ -29,6 +33,8 @@ export interface AppDeps {
   authHandler?: (req: Request) => Promise<Response>
   /** /api/text/* (tidy, fix, instruct); null or omitted = those answer 503. */
   text?: { engine: TextEngine | null; perMinute?: number }
+  /** Sync and backups (/api/sync/*, /api/words, /api/backups); omitted = those answer 503. */
+  sync?: { sql: Sql }
   /** "groq:whisper-large-v3", or null when no provider key is set. */
   transcription: string | null
   /** Origins allowed to send cookie writes (BETTER_AUTH_URL + KUDKEYS_ORIGIN). */
@@ -37,6 +43,8 @@ export interface AppDeps {
   publicDir?: string
   now?: () => number
 }
+
+const PRIVATE_PATHS = /^\/api\/(sync|words|backups)(\/|$)/
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
@@ -77,6 +85,18 @@ const noFraming: MiddlewareHandler = async (c, next) => {
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>()
   app.use('*', noFraming)
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse()
+    if (PRIVATE_PATHS.test(c.req.path)) {
+      // Words, settings and backups never reach the log: a database error's
+      // message can quote the row, so only its name and code are logged.
+      const code = (err as { code?: unknown }).code
+      console.error(`[kudkeys] ${c.req.method} ${c.req.routePath} failed: ${err.name}${code ? ` ${String(code)}` : ''}`)
+      return c.json({ error: 'internal' }, 500)
+    }
+    console.error(err)
+    return c.text('Internal Server Error', 500)
+  })
 
   // No database call: Coolify's healthcheck must not fail because Postgres is slow.
   const health = (c: Context) => c.json({ ok: true, transcription: deps.transcription })
@@ -112,6 +132,9 @@ export function createApp(deps: AppDeps) {
     '/api/text',
     textRouter({ store: deps.store, engine: deps.text?.engine ?? null, perMinute: deps.text?.perMinute, now: deps.now }),
   )
+  for (const p of ['/api/sync/*', '/api/words', '/api/words/*', '/api/backups', '/api/backups/*']) app.use(p, requireUser)
+  if (deps.sync) app.route('/api', syncRouter({ sql: deps.sync.sql, now: deps.now }))
+  else app.all('/api/:area{sync|words|backups}/*', (c) => c.json({ error: 'unavailable', reason: 'sync_not_configured' }, 503))
   app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404))
 
   if (deps.publicDir) mountSpa(app, deps.publicDir)

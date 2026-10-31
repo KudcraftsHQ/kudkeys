@@ -7,6 +7,7 @@ import { createApp } from './app'
 import { createAuth, lookupSession, signUpOpen, trustedOrigins } from './auth'
 import { parseAllowlist } from './lib/allowlist'
 import { db } from './lib/db'
+import { prismaSql } from './lib/sql'
 import { prismaStore } from './lib/store'
 import { createServer, streamAuthenticator } from './server'
 import { createTextEngine } from './text/engine'
@@ -34,6 +35,7 @@ const app = createApp({
   authHandler: (req) => auth.handler(req),
   transcription: model,
   text: { engine: textEngine, perMinute: cfg.text.perMinute },
+  sync: { sql: prismaSql(db) },
   trustedOrigins: trustedOrigins(),
   publicDir: process.env.KUDKEYS_PUBLIC_DIR ?? resolve(import.meta.dir, 'public'),
 })
