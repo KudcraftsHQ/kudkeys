@@ -197,23 +197,23 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
 
     /**
      * Kud Keys (SwiftKey behaviour): the panel opens above the key preview, so the finger that long-pressed
-     * is still well below it. Treat that starting height as the middle of the bottom row, so a sideways
-     * slide selects by x straight away and sliding up reaches the rows above. Sliding down still runs out
-     * of the detector's slide allowance and cancels, as before.
+     * is still well below it. Treat that starting height as just inside the bottom edge of the bottom row
+     * (a quarter key up), so a sideways slide selects by x straight away, sliding up reaches the rows above,
+     * and sliding down about one key height still cancels.
      */
     @Override
     public void anchorSlideStart(final int x, final int y) {
         final Keyboard keyboard = getKeyboard();
         if (keyboard == null) return;
-        int bottomRowCenterY = Integer.MIN_VALUE;
+        int bottomRowAnchorY = Integer.MIN_VALUE;
         for (final Key key : keyboard.getSortedKeys()) {
             if (key.isSpacer()) continue;
-            bottomRowCenterY = Math.max(bottomRowCenterY, key.getY() + key.getHeight() / 2);
+            bottomRowAnchorY = Math.max(bottomRowAnchorY, key.getY() + key.getHeight() - key.getHeight() / 4);
         }
-        if (bottomRowCenterY == Integer.MIN_VALUE) return;
+        if (bottomRowAnchorY == Integer.MIN_VALUE) return;
         // y is already translated with the current offset, so add it back to get the raw distance
         final int touchY = mKeyDetector.getTouchY(y + mSlideOffsetY);
-        mSlideOffsetY = Math.max(0, touchY - bottomRowCenterY);
+        mSlideOffsetY = Math.max(0, touchY - bottomRowAnchorY);
     }
 
     @Override

@@ -143,6 +143,17 @@ class KudPopupSlideTest {
         assertTrue(committed.none { it in popupCodes }, "committed $committed")
     }
 
+    /** From the bottom keyboard row there's little room below the finger: about one key height down must cancel. */
+    @Test fun slidingDownOneKeyHeightCancels() {
+        val (x, y) = longPress('.'.code)
+        val popupCodes = panel!!.keyboard!!.sortedKeys.map { it.code }.toSet()
+        val keyHeight = switcher.keyboard!!.getKey('.'.code)!!.height
+        touch(MotionEvent.ACTION_MOVE, x, y + keyHeight)
+        assertNull(panel)
+        touch(MotionEvent.ACTION_UP, x, y + keyHeight)
+        assertTrue(committed.none { it in popupCodes }, "committed $committed")
+    }
+
     @Test fun multiRowPopupSlidesUpThroughRows() {
         // "e" with all accented letters has more than one row
         latinIME.prefs().edit { putString(Settings.PREF_MORE_POPUP_KEYS, "all") }
