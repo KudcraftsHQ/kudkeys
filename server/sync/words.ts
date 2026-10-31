@@ -16,6 +16,16 @@ export type Source = (typeof SOURCES)[number]
 
 export type WordRow = { word: string; locale: string; count: number; source: Source; deleted: boolean; updatedAt: number }
 
+// Locales are stored in one canonical form: the lowercase ISO 639 language,
+// without region or script, because that is how the keyboard keys its words
+// (one synced dictionary per language). `en_US`, `en-GB` and `EN` are all `en`;
+// Java's legacy `in` is `id` (and `iw` → `he`, `ji` → `yi`).
+const LEGACY_LANG: Record<string, string> = { in: 'id', iw: 'he', ji: 'yi' }
+export function canonicalLocale(tag: string): string {
+  const lang = tag.split(/[-_]/)[0]!.toLowerCase()
+  return LEGACY_LANG[lang] ?? lang
+}
+
 const key = (w: { word: string; locale: string }) => `${w.locale}\u0000${w.word}`
 
 /** The same merge as the SQL, for duplicates inside one batch. */
@@ -44,13 +54,18 @@ export function collapse(rows: WordRow[]): WordRow[] {
 
 const CHUNK = 5000
 
-/** Merge rows into the user's words. Returns how many distinct words were merged. */
-export async function mergeWords(sql: Sql, userId: string, rows: WordRow[], now: number): Promise<number> {
-  const merged = collapse(rows.map((r) => ({ ...r, updatedAt: Math.min(r.updatedAt, now) })))
+/**
+ * Merge rows into the user's words. `accepted`: distinct (word, locale) merged;
+ * `changed`: how many of them actually changed (a row that loses to a newer
+ * one, or repeats what is stored, changes nothing).
+ */
+export async function mergeWords(sql: Sql, userId: string, rows: WordRow[], now: number): Promise<{ accepted: number; changed: number }> {
+  const merged = collapse(rows.map((r) => ({ ...r, locale: canonicalLocale(r.locale), updatedAt: Math.min(r.updatedAt, now) })))
+  let changed = 0
   for (let i = 0; i < merged.length; i += CHUNK) {
     const batch = merged.slice(i, i + CHUNK).map((r) => ({ w: r.word, l: r.locale, c: r.count, s: r.source, d: r.deleted, t: r.updatedAt }))
-    await sql(
-      `INSERT INTO "word" ("userId", "word", "locale", "count", "source", "deleted", "updatedAt", "changedAt")
+    const res = await sql<{ n: number }>(
+      `WITH m AS (INSERT INTO "word" ("userId", "word", "locale", "count", "source", "deleted", "updatedAt", "changedAt")
        SELECT $1, r.w, r.l, r.c, r.s, r.d, ${ts('r.t')}, ${ts('$3')}
        FROM jsonb_to_recordset($2::text::jsonb) AS r(w text, l text, c int, s text, d boolean, t float8)
        ON CONFLICT ("userId", "word", "locale") DO UPDATE SET
@@ -66,11 +81,14 @@ export async function mergeWords(sql: Sql, userId: string, rows: WordRow[], now:
          "changedAt" = EXCLUDED."changedAt"
        WHERE EXCLUDED."count" > "word"."count"
           OR EXCLUDED."updatedAt" > "word"."updatedAt"
-          OR (EXCLUDED."updatedAt" = "word"."updatedAt" AND EXCLUDED."deleted" AND NOT "word"."deleted")`,
+          OR (EXCLUDED."updatedAt" = "word"."updatedAt" AND EXCLUDED."deleted" AND NOT "word"."deleted")
+       RETURNING 1)
+       SELECT count(*)::int AS n FROM m`,
       [userId, JSON.stringify(batch), now],
     )
+    changed += res[0]?.n ?? 0
   }
-  return merged.length
+  return { accepted: merged.length, changed }
 }
 
 /** Insert words that are not there yet (a tombstone counts as there). */
@@ -82,6 +100,7 @@ export async function importWords(
   words: string[],
   now: number,
 ): Promise<number> {
+  locale = canonicalLocale(locale)
   const unique = [...new Set(words)]
   let added = 0
   for (let i = 0; i < unique.length; i += CHUNK) {
@@ -125,7 +144,7 @@ export async function searchWords(sql: Sql, userId: string, s: WordSearch) {
     where.push(`lower("word") LIKE $${params.length}`)
   }
   if (s.locale) {
-    params.push(s.locale)
+    params.push(canonicalLocale(s.locale))
     where.push(`"locale" = $${params.length}`)
   }
   if (s.source) {

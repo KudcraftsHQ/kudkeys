@@ -20,6 +20,7 @@ import { memoryStore } from '../lib/store'
 import { LIMITS } from '../routes/sync'
 import { retained } from '../sync/backups'
 import { mergePrefs } from '../sync/settings'
+import { canonicalLocale } from '../sync/words'
 import { TOKEN } from './client'
 
 const EMAIL = 'sync-tester@kudcrafts.com'
@@ -76,7 +77,8 @@ const w = (word: string, over: Partial<{ locale: string; count: number; source: 
   ...over,
 })
 const allWords = async () => (await json(call('GET', '/api/sync/words'))).body.words as any[]
-const find = async (word: string, locale = 'en_US') => (await allWords()).find((x) => x.word === word && x.locale === locale)
+// rows are sent as en_US (as older clients and imports might) and stored as the canonical language, en
+const find = async (word: string, locale = 'en') => (await allWords()).find((x) => x.word === word && x.locale === locale)
 
 beforeAll(async () => {
   const dir = join(import.meta.dir, '../../prisma/migrations')
@@ -142,7 +144,7 @@ describe('words', () => {
 
   test('5000 in one call is fine', async () => {
     const r = await json(call('POST', '/api/sync/words', { words: Array.from({ length: 5000 }, (_, i) => w(`bulkfake${i}`, { locale: 'xx' })) }))
-    expect(r.body).toEqual({ accepted: 5000, now: new Date(T0 - LIMITS.sinceOverlapMs).toISOString() })
+    expect(r.body).toEqual({ accepted: 5000, changed: 5000, now: new Date(T0 - LIMITS.sinceOverlapMs).toISOString() })
   })
 
   test('union by (word, locale) and count = max, both ways', async () => {
@@ -261,6 +263,58 @@ describe('words', () => {
   })
 })
 
+describe('words: locales, web writes, spaces', () => {
+  test('locales are stored as the language: en_US, en-GB, EN → en; in → id; search by any form', async () => {
+    expect(['en_US', 'en-GB', 'EN', 'en', 'in', 'id_ID', 'in-ID', 'pt-BR', 'zh_Hant_TW'].map(canonicalLocale)).toEqual([
+      'en', 'en', 'en', 'en', 'id', 'id', 'id', 'pt', 'zh',
+    ])
+    await call('POST', '/api/sync/words', {
+      words: [w('locfrob', { locale: 'en_US', count: 2 }), w('locfrob', { locale: 'en-GB', count: 5 }), w('locfrob', { locale: 'EN', count: 1 })],
+    })
+    const rows = (await allWords()).filter((x) => x.word === 'locfrob')
+    expect(rows.map((x) => [x.locale, x.count])).toEqual([['en', 5]])
+    // a phone tombstone (en) now reaches the row an en_US import made
+    await call('POST', '/api/sync/words/import', { locale: 'en_US', source: 'swiftkey', words: ['locimport'] })
+    clock = T0 + H
+    await call('POST', '/api/sync/words', { words: [w('locimport', { locale: 'en', deleted: true, updatedAt: clock })] })
+    expect((await allWords()).filter((x) => x.word === 'locimport')).toMatchObject([{ locale: 'en', deleted: true }])
+    await call('POST', '/api/sync/words/import', { locale: 'in', source: 'swiftkey', words: ['locindo'] })
+    expect((await find('locindo', 'id'))!.source).toBe('swiftkey')
+    const r = await json(call('GET', '/api/words?q=locfrob&locale=en_US'))
+    expect(r.body.words.map((x: any) => x.locale)).toEqual(['en'])
+  })
+
+  test('words with spaces are refused (the phone keeps single words); an import skips them', async () => {
+    expect((await call('POST', '/api/sync/words', { words: [w('two words')] })).status).toBe(400)
+    expect((await call('POST', '/api/words', { word: 'two words', locale: 'en', deleted: false })).status).toBe(400)
+    const r = await json(call('POST', '/api/sync/words/import', { locale: 'en', source: 'swiftkey', words: ['spc one', 'spcsolo'] }))
+    expect(r.body).toEqual({ added: 1, skipped: 1 })
+  })
+
+  test('web add/remove use the server clock, and say when nothing changed', async () => {
+    // the phone's clock was ahead: its add is clamped to the server's now
+    clock = T0 + 5 * H
+    await call('POST', '/api/sync/words', { words: [w('webclock', { locale: 'en', count: 3, updatedAt: T0 + 9 * H })] })
+    clock = T0 + 6 * H
+    // the browser's clock is behind: irrelevant now, the server stamps the remove at its own time
+    let r = await json(call('POST', '/api/words', { word: 'webclock', locale: 'en_US', deleted: true }))
+    expect(r.body).toEqual({ changed: true, locale: 'en' })
+    expect(await find('webclock')).toMatchObject({ deleted: true, count: 3, updatedAt: new Date(T0 + 6 * H).toISOString() })
+    // removing it again changes nothing, and says so
+    r = await json(call('POST', '/api/words', { word: 'webclock', locale: 'en', deleted: true }))
+    expect(r.body.changed).toBe(false)
+    // restore keeps the source it is given
+    clock = T0 + 7 * H
+    r = await json(call('POST', '/api/words', { word: 'webclock', locale: 'en', deleted: false, source: 'typed' }))
+    expect(r.body.changed).toBe(true)
+    expect(await find('webclock')).toMatchObject({ deleted: false, source: 'typed', count: 3 })
+    expect((await call('POST', '/api/words', { word: 'webclock', locale: 'en', deleted: false, source: 'stolen' })).status).toBe(400)
+    // and the phone's own POST says how many rows changed
+    const p = await json(call('POST', '/api/sync/words', { words: [w('webclock', { locale: 'en', count: 1, updatedAt: T0 })] }))
+    expect(p.body).toMatchObject({ accepted: 1, changed: 0 })
+  })
+})
+
 describe('settings', () => {
   test('404 before the first sync; validation; 256 KB limit', async () => {
     expect((await call('GET', '/api/sync/settings')).status).toBe(404)
@@ -287,8 +341,45 @@ describe('settings', () => {
     expect(r.body).toEqual({ prefs: { theme: 'light', vibrate: false }, updatedAt: new Date(T0).toISOString() })
     expect((await json(call('GET', '/api/sync/settings'))).body).toEqual(r.body)
     const s = await json(call('GET', '/api/sync/status'))
-    expect(s.body.settings).toMatchObject({ deviceId: 'phone-a', keys: 3 })
+    expect(s.body.settings).toMatchObject({ deviceId: 'phone-a', keys: 2 }) // live keys, not the removed one
     await pg.query(`DELETE FROM keyboard_settings`)
+  })
+
+  test('an empty type group never hides later keys in it (the reviewer\'s scenario)', async () => {
+    // the phone's first sync: all six groups, float and stringSet empty
+    const groups = { boolean: { show_hints: true }, int: { delay: 300 }, long: {}, float: {}, string: { theme: 'dark' }, stringSet: {} }
+    let r = await json(call('PUT', '/api/sync/settings', { prefs: groups, updatedAt: T0, deviceId: 'phone-a' }))
+    expect(r.body.prefs).toEqual({ boolean: { show_hints: true }, int: { delay: 300 }, string: { theme: 'dark' } })
+    // later the key font scale (a float) changes: it must reach the server and every other phone
+    clock = T0 + H
+    r = await json(call('PUT', '/api/sync/settings', { prefs: { ...groups, float: { font_scale: 1.2 } }, updatedAt: T0 + H, deviceId: 'phone-a' }))
+    expect(r.body.prefs.float).toEqual({ font_scale: 1.2 })
+    expect((await json(call('GET', '/api/sync/settings'))).body.prefs.float).toEqual({ font_scale: 1.2 })
+    // an empty group sent later removes nothing; a null removes that key only
+    clock = T0 + 2 * H
+    r = await json(call('PUT', '/api/sync/settings', { prefs: { float: {}, long: {} }, updatedAt: T0 + 2 * H, deviceId: 'phone-a' }))
+    expect(r.body.prefs.float).toEqual({ font_scale: 1.2 })
+    r = await json(call('PUT', '/api/sync/settings', { prefs: { float: { font_scale: null }, int: { delay: null } }, updatedAt: T0 + 2 * H, deviceId: 'phone-a' }))
+    expect(r.body.prefs).toEqual({ boolean: { show_hints: true }, string: { theme: 'dark' } })
+    await pg.query(`DELETE FROM keyboard_settings`)
+  })
+
+  test('mergePrefs: empty groups, legacy {} leaves, a value replaced by a group', () => {
+    let m = mergePrefs(null, { long: {} }, 10)
+    m = mergePrefs(m, { long: { k: 5 } }, 20)
+    expect(m.prefs).toEqual({ long: { k: 5 } })
+    // a document stored before the fix, with {} as a leaf value
+    m = mergePrefs({ prefs: { long: {}, int: { a: 1 } }, keyTimes: { '["long"]': 10, '["int","a"]': 10 } }, { long: { k: 5 } }, 20)
+    expect(m.prefs).toEqual({ int: { a: 1 }, long: { k: 5 } })
+    expect(Object.keys(m.keyTimes).sort()).toEqual(['["int","a"]', '["long","k"]'])
+    // a newer write replaces a value with a group (and back)
+    m = mergePrefs(mergePrefs(null, { a: 1 }, 10), { a: { b: 2 } }, 20)
+    expect(m.prefs).toEqual({ a: { b: 2 } })
+    m = mergePrefs(m, { a: 3 }, 30)
+    expect(m.prefs).toEqual({ a: 3 })
+    // an older write never wins a structural conflict
+    m = mergePrefs(m, { a: { b: 4 } }, 25)
+    expect(m.prefs).toEqual({ a: 3 })
   })
 
   test('HeliBoard-style grouped prefs merge key by key, arrays are values', () => {
@@ -370,6 +461,53 @@ describe('backups', () => {
     expect(kept.length).toBeLessThanOrEqual(14 + 8)
     const days = new Set(kept.map((t) => Math.floor((t + 7 * H) / (24 * H))))
     expect(days.size).toBe(kept.length) // one per day at most
+  })
+
+  test('manual backups are kept apart: the newest 10, whatever the day', async () => {
+    clock = Date.parse('2026-10-20T01:00:00.000Z')
+    const manual: string[] = []
+    for (let i = 0; i < 12; i++) {
+      clock += 60_000
+      manual.push((await json(upload(zip(5000), 'manual'))).body.id)
+    }
+    // the auto backup an hour later, same day, doesn't replace them
+    clock += H
+    const auto = (await json(upload(zip(5000), 'auto'))).body.id
+    const kept = ((await json(call('GET', '/api/backups'))).body as any[]).map((b) => b.id)
+    expect(kept).toEqual([auto, ...manual.slice(2).reverse()])
+  })
+
+  test('a much smaller auto backup (an emptied keyboard) prunes nothing, and the last full one is always kept', async () => {
+    const start = Date.parse('2026-09-01T03:00:00.000Z')
+    for (let d = 0; d < 3; d++) {
+      clock = start + d * 24 * H
+      await upload(zip(100_000), 'auto')
+    }
+    const good = ((await json(call('GET', '/api/backups'))).body as any[]).map((b) => b.id)
+    // reinstall: same day as the last good one, an almost empty keyboard
+    clock = start + 2 * 24 * H + 2 * H
+    await upload(zip(500), 'auto')
+    let kept = ((await json(call('GET', '/api/backups'))).body as any[]).map((b) => b.id)
+    for (const id of good) expect(kept).toContain(id)
+    // then 80 days of small backups: every good one would have aged out, but the newest good one stays
+    for (let d = 3; d < 83; d++) {
+      clock = start + d * 24 * H
+      await upload(zip(600), 'auto')
+    }
+    const list = (await json(call('GET', '/api/backups'))).body as any[]
+    kept = list.map((b) => b.id)
+    expect(kept).toContain(good[0]) // newest of the good ones
+    expect(list.filter((b) => b.sizeBytes === 100_000).length).toBe(1)
+    expect(list.length).toBeLessThanOrEqual(14 + 8 + 1)
+  })
+
+  test('the upload checksum: a mismatch is refused, a match is stored', async () => {
+    const data = zip(2000, 3)
+    const sha = new Bun.CryptoHasher('sha256').update(data).digest('hex')
+    const bad = await json(upload(data, 'auto', { 'x-backup-sha256': sha.replace(/^./, sha[0] === 'a' ? 'b' : 'a') }))
+    expect(bad).toEqual({ status: 400, body: { error: 'checksum_mismatch' } })
+    expect((await json(call('GET', '/api/backups'))).body).toEqual([])
+    expect((await upload(data, 'auto', { 'x-backup-sha256': sha.toUpperCase() })).status).toBe(200)
   })
 
   test('retained(): daily and weekly buckets', () => {

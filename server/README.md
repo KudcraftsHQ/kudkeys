@@ -225,7 +225,7 @@ as for `/api/me`; a body over its limit is `413 {"error":"too_large","maxBytes"}
 | `GET /api/sync/settings` | — | `{prefs, updatedAt}`, or 404 `{"error":"not_found"}` before the first sync |
 | `PUT /api/sync/settings` | `{prefs: {…}, updatedAt, deviceId: 1–200 chars}` | `{prefs, updatedAt}`: the merged result. Write it back to the phone |
 | `GET /api/sync/words?since=<time>` | — | `{words: [{word, locale, count, source, deleted, updatedAt}], now}` |
-| `POST /api/sync/words` | `{words: [{word, locale, count, source, deleted, updatedAt}]}` (≤ 5,000) | `{accepted, now}` |
+| `POST /api/sync/words` | `{words: [{word, locale, count, source, deleted, updatedAt}]}` (≤ 5,000) | `{accepted, changed, now}` |
 | `POST /api/sync/words/import` | `{locale, source: "swiftkey" \| "manual", words: [string]}` (≤ 50,000) | `{added, skipped}` |
 | `GET /api/sync/status` | — | Totals for the web app (below) |
 
@@ -237,6 +237,11 @@ and other non-objects are values. Rules:
   wins (a tie goes to the request, so a retried PUT is harmless);
 - **a key sent as `null` is removed** and stays removed until a newer write sets it;
 - **a key left out is kept**: sending part of the settings never deletes the rest;
+- **an empty object is an empty group, never a value**: HeliBoard's `{"float":{}}` adds and removes
+  nothing, so a key that later appears in that group merges like any other (send `null` per key to
+  remove one);
+- a path that is a prefix of another (a value where a group now is, or the reverse) is replaced by
+  the newer write;
 - the answer's `updatedAt` is the newest time of any key;
 - `prefs` (as stored after merging) is at most **256 KB** of JSON; the request body at most 320 KB.
 
@@ -247,8 +252,8 @@ sync bookkeeping, keyboard height/padding scales) before sending; the server sto
 
 | Field | Rule |
 |---|---|
-| `word` | 1–48 characters (HeliBoard's maximum), no control characters or line breaks, no surrounding spaces. Case-sensitive: `Fenno` and `fenno` are two words |
-| `locale` | `en`, `en_US`, `id`, `pt-BR`, … (2–3 letters, then up to 3 `_`/`-` parts) |
+| `word` | 1–48 characters (HeliBoard's maximum), **one word: no spaces**, control characters or line breaks (the keyboard's dictionaries hold single words). Case-sensitive: `Fenno` and `fenno` are two words |
+| `locale` | **Stored as the language**: the lowercase ISO 639 code, no region or script (`en`, `id`, `pt`). Any tag is accepted and normalised: `en_US`, `en-GB`, `EN` → `en`; Java's `in` and `id_ID` → `id` (also `iw` → `he`, `ji` → `yi`). The phone keys words the same way (one synced dictionary per language), so a tombstone from the phone always meets the row a web add or an import made. Answers always carry the canonical form |
 | `count` | integer 0–1,000,000,000 |
 | `source` | `typed` (learned on the phone), `swiftkey` (imported), `manual` (added on the web or in the app) |
 | `deleted` | `true` = a tombstone: the word was removed |
@@ -263,8 +268,9 @@ Merge rule (`POST`, applied in Postgres in one statement per 5,000 rows):
 - `source` stays the first one seen, except that an add reviving a tombstone brings its own;
 - the same word twice in one call is merged by the same rule first.
 
-`accepted` is the number of distinct `(word, locale)` merged. Sending a row that changes nothing
-(same count or lower, not newer) is a no-op and doesn't show up in anyone's `?since=`.
+`accepted` is the number of distinct `(word, locale)` merged, `changed` how many of them actually
+changed. Sending a row that changes nothing (same count or lower, not newer) is a no-op and doesn't
+show up in anyone's `?since=`.
 
 **Pulling:** `GET /api/sync/words` without `since` returns every row, **tombstones included**
 (delete those locally; write the others into the synced dictionary). With `since`, only rows
@@ -283,18 +289,23 @@ skipped, not refused. `added + skipped` = the number of strings sent. Body at mo
 ```json
 {"settings": {"updatedAt":"…","syncedAt":"…","deviceId":"…","keys":212} | null,
  "words": {"total":17164,"removed":3,"bySource":{"swiftkey":17000,"typed":160,"manual":4},
-           "byLocale":{"id":12000,"en_US":5164},"lastChangedAt":"…"},
+           "byLocale":{"id":12000,"en":5164},"lastChangedAt":"…"},
  "backups": {"count":12,"totalBytes":48200000,"latestAt":"…"}}
 ```
 
-`syncedAt` is the server time of the last settings PUT; `words.total` and its breakdowns count
-live words, `removed` the tombstones.
+`syncedAt` is the server time of the last settings PUT, `keys` the number of settings stored;
+`words.total` and its breakdowns count live words, `removed` the tombstones.
 
 `GET /api/words?q=&locale=&source=&removed=1&offset=0&limit=50` (the web app's Words page):
 `{total, offset, limit, words: [...]}`, most used first. `q` matches anywhere in the word, case
 insensitive (`%` and `_` are literal); `removed=1` lists tombstones instead of live words;
-`limit` ≤ 200. Adding and removing on the web are `POST /api/sync/words` with one row
-(`source: "manual"` / `deleted: true`, `updatedAt` now).
+`limit` ≤ 200; `locale` takes any form (`en_US` finds `en`).
+
+`POST /api/words` `{word, locale, deleted, source?}` (the web app's add, remove and restore) →
+`{changed, locale}`. The server stamps the write with **its own clock**, never the browser's, so a
+browser whose clock is behind can't lose to the row it is removing. `source` defaults to `manual`
+(a restore passes the word's own). `changed: false` means a newer change already holds the word
+(or it was already in that state); the page says so instead of claiming it worked.
 
 ### Backups (v0.4)
 
@@ -304,7 +315,7 @@ secrets), stored as one gzip-compressed blob in Postgres with its sha256. Sessio
 | Call | Request | Answer |
 |---|---|---|
 | `GET /api/backups` | — | `[{id, createdAt, deviceName, kind, sizeBytes}]`, newest first |
-| `POST /api/backups` | the zip as the body, `Content-Type: application/zip` (or `application/octet-stream`); headers `X-Device-Id` (required, ≤ 200), `X-Device-Name` (optional, ≤ 200, ASCII), `X-Backup-Kind: auto \| manual` (required) | `200 {id}` |
+| `POST /api/backups` | the zip as the body, `Content-Type: application/zip` (or `application/octet-stream`); headers `X-Device-Id` (required, ≤ 200), `X-Device-Name` (optional, ≤ 200, ASCII), `X-Backup-Kind: auto \| manual` (required), `X-Backup-Sha256` (optional, hex: the zip's sha256; the phone always sends it) | `200 {id}`; `400 {"error":"checksum_mismatch"}` when the upload doesn't hash to `X-Backup-Sha256` (a truncated or corrupted upload is never stored) |
 | `GET /api/backups/:id` | — | the zip, byte for byte: `Content-Type: application/zip`, `Content-Length`, `Content-Disposition: attachment`, **`X-Backup-Sha256`** (hex; check it before restoring) and the same as `ETag` |
 | `DELETE /api/backups/:id` | — | `200 {"ok":true}` |
 
@@ -313,12 +324,19 @@ secrets), stored as one gzip-compressed blob in Postgres with its sha256. Sessio
   that isn't a zip (doesn't start with `PK`) or is empty → 400; another content type → 415.
 - The upload is hashed and compressed as it streams in; only the compressed copy is held.
 - An unknown id, or another user's, → 404.
-- **Retention** per user, applied whenever a backup is added: of the **14 most recent days**
-  (Jakarta time) that have a backup, the newest backup of each day is kept; likewise the newest
-  of each of the **8 most recent weeks** (Monday–Sunday) that have one. A backup can count for
-  both; everything else is deleted. This is restic's `--keep-daily 14 --keep-weekly 8`. Days
-  without backups don't count, so a phone that was off for a month never loses its last ones.
-  Manual backups follow the same rule (several in one day keep only the newest).
+- **Retention** per user, applied whenever a backup is added:
+  - **automatic** backups: of the **14 most recent days** (Jakarta time) that have one, the newest
+    of each day is kept; likewise the newest of each of the **8 most recent weeks**
+    (Monday–Sunday) that have one. A backup can count for both. This is restic's
+    `--keep-daily 14 --keep-weekly 8`. Days without backups don't count, so a phone that was off
+    for a month never loses its last ones;
+  - **manual** backups ("Back up now") are kept apart: the **newest 10**, whatever their day, so
+    the automatic backup that runs later the same day never replaces the one taken before an
+    experiment;
+  - the newest **full** automatic backup (at least half the size of the biggest automatic one) is
+    always kept, and an automatic backup **less than half the size of the previous one** (an
+    emptied keyboard after a reinstall) prunes nothing. A run of near-empty backups can never
+    push out the last good one; delete it by hand once it is no longer wanted.
 
 **Privacy:** words, settings values and backup contents are never logged. These routes log counts
 and sizes only (`words import: 120 sent, 118 added`, `backup stored: 812345 bytes …`), and an

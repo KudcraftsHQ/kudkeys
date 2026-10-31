@@ -12,8 +12,8 @@ import { z } from 'zod'
 import type { AppEnv } from '../app'
 import type { Sql } from '../lib/sql'
 import { backupSummary, deleteBackup, getBackupData, insertBackup, listBackups } from '../sync/backups'
-import { getSettings, putSettings, TooLarge } from '../sync/settings'
-import { changedSince, importWords, mergeWords, searchWords, SOURCES, wordSummary } from '../sync/words'
+import { flatten, getSettings, putSettings, TooLarge } from '../sync/settings'
+import { canonicalLocale, changedSince, importWords, mergeWords, searchWords, SOURCES, wordSummary } from '../sync/words'
 
 export const LIMITS = {
   wordsPerCall: 5000,
@@ -37,8 +37,9 @@ const word = z
   .string()
   .min(1, 'words cannot be empty')
   .max(LIMITS.wordLength, `words are at most ${LIMITS.wordLength} characters`)
-  .refine((w) => w.trim() === w && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(w), 'words cannot contain control characters or surrounding spaces')
-const locale = z.string().regex(/^[A-Za-z]{2,3}([_-][A-Za-z0-9]{1,8}){0,3}$/, 'locale like "en", "en_US" or "id"')
+  .refine((w) => !/[\p{Cc}\p{Z}\s]/u.test(w), 'words cannot contain spaces, line breaks or control characters (the keyboard keeps single words)')
+// Any language tag is accepted and stored as its language (canonicalLocale): en_US → en, in → id.
+const locale = z.string().regex(/^[A-Za-z]{2,3}([_-][A-Za-z0-9]{1,8}){0,3}$/, 'locale is a language like "en" or "id"')
 const source = z.enum(SOURCES)
 
 const wordRow = z
@@ -69,6 +70,9 @@ const settingsBody = z
     deviceId: z.string().min(1).max(200),
   })
   .strict()
+
+// The web app's add / remove / restore: one word, stamped with the server's clock (not the browser's).
+const webWordBody = z.object({ word, locale, deleted: z.boolean(), source: source.optional() }).strict()
 
 const searchQuery = z.object({
   q: z.string().max(100).optional(),
@@ -144,8 +148,8 @@ export function syncRouter(deps: { sql: Sql; now?: () => number }) {
     const parsed = wordsBody.safeParse(await readJson(c))
     if (!parsed.success) return invalid(c, parsed.error.issues.slice(0, 20))
     const t = now()
-    const accepted = await mergeWords(sql, c.get('user').id, parsed.data.words, t)
-    return c.json({ accepted, now: iso(t - LIMITS.sinceOverlapMs) })
+    const { accepted, changed } = await mergeWords(sql, c.get('user').id, parsed.data.words, t)
+    return c.json({ accepted, changed, now: iso(t - LIMITS.sinceOverlapMs) })
   })
 
   r.post('/sync/words/import', limit(8 * 1024 * 1024), async (c) => {
@@ -164,7 +168,7 @@ export function syncRouter(deps: { sql: Sql; now?: () => number }) {
     const [s, words, backups] = await Promise.all([getSettings(sql, userId), wordSummary(sql, userId), backupSummary(sql, userId)])
     return c.json({
       settings: s
-        ? { updatedAt: iso(s.updatedAt), syncedAt: iso(s.syncedAt), deviceId: s.deviceId, keys: Object.keys(s.keyTimes).length }
+        ? { updatedAt: iso(s.updatedAt), syncedAt: iso(s.syncedAt), deviceId: s.deviceId, keys: flatten(s.prefs).size }
         : null,
       words: { ...words, lastChangedAt: words.lastChangedAt === null ? null : iso(words.lastChangedAt) },
       backups: { ...backups, latestAt: backups.latestAt === null ? null : iso(backups.latestAt) },
@@ -183,6 +187,16 @@ export function syncRouter(deps: { sql: Sql; now?: () => number }) {
       limit: q.limit,
       words: res.words.map((w) => ({ ...w, updatedAt: iso(w.updatedAt) })),
     })
+  })
+
+  r.post('/words', limit(16 * 1024), async (c) => {
+    const parsed = webWordBody.safeParse(await readJson(c))
+    if (!parsed.success) return invalid(c, parsed.error.issues)
+    const { word: wd, locale: loc, deleted, source: src } = parsed.data
+    const t = now()
+    const row = { word: wd, locale: loc, count: deleted ? 0 : 1, source: src ?? ('manual' as const), deleted, updatedAt: t }
+    const { changed } = await mergeWords(sql, c.get('user').id, [row], t)
+    return c.json({ changed: changed > 0, locale: canonicalLocale(loc) })
   })
 
   // ── Backups ─────────────────────────────────────────────────────────
@@ -236,11 +250,15 @@ export function syncRouter(deps: { sql: Sql; now?: () => number }) {
     if (size === 0 || head[0] !== 0x50 || head[1] !== 0x4b) {
       return invalid(c, [{ path: ['body'], message: 'the body is not a zip file' }])
     }
+    const sha256 = hasher.digest('hex')
+    // The phone sends the zip's sha256: a truncated or corrupted upload is refused, not stored as a good backup.
+    const expected = c.req.header('x-backup-sha256')?.trim().toLowerCase()
+    if (expected && expected !== sha256) return c.json({ error: 'checksum_mismatch' }, 400)
     const { id, pruned } = await insertBackup(sql, c.get('user').id, {
       createdAt: now(),
       ...h.data,
       sizeBytes: size,
-      sha256: hasher.digest('hex'),
+      sha256,
       data,
     })
     console.log(`[kudkeys] backup stored: ${size} bytes (${data.byteLength} gzip), ${pruned} pruned`)

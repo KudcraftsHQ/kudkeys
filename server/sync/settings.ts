@@ -5,6 +5,11 @@
 // grouped {"boolean": {key: value}, …} both merge key by key. A key sent as
 // null is removed (and stays removed until a newer write sets it). A key the
 // phone leaves out is kept: sending part of the settings never deletes the rest.
+//
+// An empty object is a group with no keys in it, never a value: it adds and
+// removes nothing (HeliBoard always sends every type group, often empty). A
+// path that is a prefix of another (a value where a group now is, or the other
+// way round) is a structural conflict, and the newer write replaces the other.
 
 import { ms, ts, type Sql } from '../lib/sql'
 
@@ -16,7 +21,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 export function flatten(prefs: Prefs, prefix: string[] = [], out: Flat = new Map()): Flat {
   for (const [k, v] of Object.entries(prefs)) {
     const path = [...prefix, k]
-    if (isObject(v) && Object.keys(v).length > 0) flatten(v, path, out)
+    if (isObject(v)) flatten(v, path, out) // an empty group adds nothing
     else out.set(JSON.stringify(path), v)
   }
   return out
@@ -36,17 +41,38 @@ export function unflatten(flat: Flat): Prefs {
   return root
 }
 
+/** True when one path is a prefix of the other (["a"] and ["a","b"]). */
+function overlaps(a: string, b: string): boolean {
+  // paths are JSON arrays: ["a"] is a prefix of ["a","b"] when '["a"' + ',' starts it
+  return a === b || b.startsWith(a.slice(0, -1) + ',') || a.startsWith(b.slice(0, -1) + ',')
+}
+
+/** The stored prefs hold an empty object at `path` (written before empty groups were ignored). */
+function isGroupLeaf(prefs: Prefs, path: string): boolean {
+  let node: unknown = prefs
+  for (const k of JSON.parse(path) as string[]) {
+    if (!isObject(node)) return false
+    node = node[k]
+  }
+  return isObject(node) && Object.keys(node).length === 0
+}
+
 export type Stored = { prefs: Prefs; keyTimes: Record<string, number>; updatedAt: number; deviceId: string; syncedAt: number; version: number }
 
 /** Merge `incoming` (written at device time `at`) into what is stored. Ties go to the incoming write. */
 export function mergePrefs(stored: Pick<Stored, 'prefs' | 'keyTimes'> | null, incoming: Prefs, at: number) {
   const values = stored ? flatten(stored.prefs) : new Map<string, unknown>()
-  const times: Record<string, number> = { ...stored?.keyTimes }
+  const times: Record<string, number> = {}
+  // drop times of paths that hold no value and no tombstone any more (legacy `{}` leaves)
+  for (const [p, t] of Object.entries(stored?.keyTimes ?? {})) if (values.has(p) || !isGroupLeaf(stored!.prefs, p)) times[p] = t
   for (const [path, v] of flatten(incoming)) {
-    if (path in times && times[path]! > at) continue
+    if (Object.entries(times).some(([p, t]) => t > at && overlaps(p, path))) continue // a newer write holds it
     times[path] = at
     if (v === null) values.delete(path)
-    else values.set(path, v)
+    else {
+      for (const other of [...values.keys()]) if (other !== path && overlaps(other, path)) values.delete(other)
+      values.set(path, v)
+    }
   }
   const updatedAt = Math.max(0, ...Object.values(times))
   return { prefs: unflatten(values), keyTimes: times, updatedAt }
