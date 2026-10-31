@@ -115,6 +115,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private val instructKey: ImageButton = findViewById(R.id.kud_instruct_key)
     private val micKey: ImageButton = findViewById(R.id.kud_mic_key)
     private val privatePill: TextView = findViewById(R.id.kud_private_pill)
+    private val privateTag: TextView = findViewById(R.id.kud_private_tag)
     private val voiceRow: View = findViewById(R.id.kud_voice_row)
     private val voiceDot: View = findViewById(R.id.kud_voice_dot)
     private val voiceTime: TextView = findViewById(R.id.kud_voice_time)
@@ -146,6 +147,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         fixKey.setOnClickListener(comingSoon)
         instructKey.setOnClickListener(comingSoon)
         micKey.setOnTouchListener { v, event -> onMicTouch(v, event) }
+        barMessage.setOnClickListener { quickVoice?.onMessageTapped() }
     }
 
     private lateinit var listener: Listener
@@ -430,7 +432,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     /** Re-reads whether the current field is private (call after settings were reloaded for a new field). */
     fun updatePrivacy() = updateKeys()
 
-    val isPrivatePillShown get() = privatePill.isVisible
+    /** The amber Private marker is on screen: the centred pill (empty strip) or the compact tag (suggestions). */
+    val isPrivatePillShown get() = privatePill.isVisible || privateTag.isVisible
 
     fun renderVoice(state: VoiceBarState) {
         voiceBarState = state
@@ -448,7 +451,10 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 voiceText.text = state.text.ifEmpty { "…" }
                 voiceHint.isVisible = false
             }
-            is VoiceBarState.Message -> barMessage.text = state.text
+            is VoiceBarState.Message -> {
+                barMessage.text = state.text
+                barMessage.isClickable = state.opensSettings
+            }
             VoiceBarState.Idle -> Unit
         }
         val locked = state is VoiceBarState.Recording && state.locked
@@ -467,15 +473,24 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         updateMiddle()
     }
 
-    /** What the middle of the bar shows: voice row, message, or suggestions (with the Private pill when empty). */
+    /**
+     * What the middle of the bar shows: voice row, message, or suggestions. In a private field the amber marker is
+     * always there: the centred pill while the strip is empty, a compact tag before the suggestions while typing.
+     */
     private fun updateMiddle() {
         val voice = voiceBarState is VoiceBarState.Recording || voiceBarState is VoiceBarState.Finishing
         val message = voiceBarState is VoiceBarState.Message
-        // Suggestions win while typing; the pill fills the bar whenever the strip is empty.
-        val pill = isPrivateField && !voice && !message && !isExternalSuggestionVisible && suggestedWords.isEmpty
+        val stripEmpty = !isExternalSuggestionVisible && suggestedWords.isEmpty
+        val pill = isPrivateField && !voice && !message && stripEmpty
         voiceRow.isVisible = voice
         barMessage.isVisible = message
         privatePill.isVisible = pill
+        // The tag keeps its space (INVISIBLE) under the pill, so the strip width doesn't jump when typing starts.
+        privateTag.visibility = when {
+            !isPrivateField -> GONE
+            voice || message || pill -> INVISIBLE
+            else -> VISIBLE
+        }
         suggestionsStrip.visibility = if (voice || message || pill) INVISIBLE else VISIBLE
         if (voice || message) dismissMoreSuggestionsPanel()
     }
