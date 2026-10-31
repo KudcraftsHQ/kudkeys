@@ -309,6 +309,8 @@ final class SuggestionStripLayoutHelper {
     }
 
     private static void addDivider(final ViewGroup stripView, final View dividerView) {
+        // Kud Keys: no lines between suggestions (SwiftKey has none); the divider keeps its width so spacing stays.
+        dividerView.setVisibility(View.INVISIBLE);
         stripView.addView(dividerView);
         final LinearLayout.LayoutParams params = (LinearLayout.LayoutParams)dividerView.getLayoutParams();
         params.gravity = Gravity.CENTER;
@@ -399,14 +401,8 @@ final class SuggestionStripLayoutHelper {
     private TextView layoutWord(final Context context, final int positionInStrip, final int width) {
         final TextView wordView = mWordViews.get(positionInStrip);
         final CharSequence word = wordView.getText();
-        if (positionInStrip == mCenterPositionInStrip && mMoreSuggestionsAvailable) {
-            // TODO: This "more suggestions hint" should have a nicely designed icon.
-            wordView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, mMoreSuggestionsHint);
-            // HACK: Align with other TextViews that have no compound drawables.
-            wordView.setCompoundDrawablePadding(-mMoreSuggestionsHint.getIntrinsicHeight());
-        } else {
-            wordView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);
-        }
+        // Kud Keys: no "…" hint under the middle word; long-press still opens more suggestions.
+        wordView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);
         // {@link StyleSpan} in a content description may cause an issue of TTS/TalkBack.
         // Use a simple {@link String} to avoid the issue.
         wordView.setContentDescription(

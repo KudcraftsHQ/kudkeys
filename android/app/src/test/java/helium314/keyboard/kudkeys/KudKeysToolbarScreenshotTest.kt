@@ -118,7 +118,7 @@ class KudKeysToolbarScreenshotTest {
     @Test fun privateField() = render("2-private") {
         loadSettingsFor(EditorInfo().apply { imeOptions = EditorInfo.IME_ACTION_SEARCH })
         strip.setSuggestions(SuggestedWords.getEmptyInstance(), false)
-        assertTrue(strip.isPrivatePillShown)
+        assertFalse(strip.isPrivatePillShown) // no amber marker; the incognito look shows privacy
     }
 
     @Test fun recordingWithLiveText() = render("3-recording") {
