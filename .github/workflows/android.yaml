@@ -1,4 +1,4 @@
-# Kud Keys Android CI: unit tests + a debug APK for pull requests and pushes that touch android/.
+# Kud Keys Android CI: unit tests, a debug APK and an unsigned minified release APK for pull requests and pushes that touch android/.
 # Releases (signed APK on a v* tag) live in release.yaml.
 name: android
 
@@ -42,6 +42,10 @@ jobs:
 
       - name: Debug APK
         run: ./gradlew --no-daemon assembleDebug
+
+      # Unsigned (no KC_KEYSTORE_FILE here): catches R8 and lintVitalRelease problems before a tag does.
+      - name: Release APK (unsigned, minified)
+        run: ./gradlew --no-daemon assembleRelease
 
       - uses: actions/upload-artifact@v4
         if: always()
