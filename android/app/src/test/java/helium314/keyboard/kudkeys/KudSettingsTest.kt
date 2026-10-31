@@ -40,7 +40,7 @@ class KudSettingsTest {
     @BeforeTest fun reset() = prefs.edit { clear() }
 
     @Test fun swiftKeyDefaults() {
-        assertTrue(Defaults.PREF_AUTO_CORRECTION)
+        assertFalse(Defaults.PREF_AUTO_CORRECTION) // v0.4.5: space keeps the word as typed
         assertFalse(Defaults.PREF_BACKSPACE_REVERTS_AUTOCORRECT)
         assertFalse(KudSettings.DEFAULT_QUICK_PREDICTION_INSERT)
         assertTrue(Defaults.PREF_KEY_USE_DOUBLE_SPACE_PERIOD)
@@ -59,7 +59,7 @@ class KudSettingsTest {
         assertFalse(Defaults.PREF_SHOW_DPAD_KEY)
         assertTrue(Defaults.PREF_POPUP_ON)
         assertFalse(KudSettingsRules.isLargeKeyText(prefs))
-        assertEquals(450, Defaults.PREF_KEY_LONGPRESS_TIMEOUT)
+        assertEquals(300, Defaults.PREF_KEY_LONGPRESS_TIMEOUT)
         assertFalse(Defaults.PREF_SOUND_ON)
         assertTrue(KudSettingsRules.isAndroidVibration(prefs))
         assertEquals(65, KudSettings.DEFAULT_VIBRATION_MS)
