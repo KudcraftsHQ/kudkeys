@@ -91,7 +91,7 @@ export function createAuth(opts: {
 
     emailAndPassword: {
       enabled: true,
-      minPasswordLength: 10,
+      minPasswordLength: 8,
       autoSignIn: true,
       disableSignUp: !(opts.signUpOpen ?? signUpOpen()),
     },

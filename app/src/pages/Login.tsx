@@ -61,12 +61,12 @@ export function Login() {
               id="password"
               type="password"
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-              minLength={mode === 'sign-up' ? 10 : undefined}
+              minLength={mode === 'sign-up' ? 8 : undefined}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            {mode === 'sign-up' && <span className="text-[12px] text-muted">At least 10 characters.</span>}
+            {mode === 'sign-up' && <span className="text-[12px] text-muted">At least 8 characters.</span>}
           </div>
           {error && <ErrorNote>{error}</ErrorNote>}
           <Button type="submit" size="lg" className="w-full mt-1" disabled={submitting}>
@@ -88,6 +88,6 @@ function humanize(code: string | undefined, message: string): string {
   if (code === 'EMAIL_NOT_ALLOWED') return 'This email isn’t on the Kud Keys invite list.'
   if (code === 'INVALID_EMAIL_OR_PASSWORD') return 'Wrong email or password.'
   if (code === 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL') return 'There’s already an account for this email. Sign in instead.'
-  if (code === 'PASSWORD_TOO_SHORT') return 'Use at least 10 characters.'
+  if (code === 'PASSWORD_TOO_SHORT') return 'Use at least 8 characters.'
   return message
 }
