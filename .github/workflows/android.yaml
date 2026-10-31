@@ -47,6 +47,10 @@ jobs:
       - name: Release APK (unsigned, minified)
         run: ./gradlew --no-daemon assembleRelease
 
+      # R8 must keep constructors called by reflection (v0.4.0–v0.4.3 crashed on start without them).
+      - name: Reflection constructors kept
+        run: tools/check-reflection-constructors.sh app/build/outputs/apk/release/app-release-unsigned.apk
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

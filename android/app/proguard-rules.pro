@@ -12,3 +12,9 @@
 # after upgrading to gradle 8, stack traces contain "unknown source"
 -keepattributes SourceFile,LineNumberTable
 -dontobfuscate
+
+# Kud Keys (v0.4 sync): WorkManager builds its Room database and workers by reflection. R8 stripped
+# WorkDatabase_Impl's constructor, so the app crashed as soon as WorkManager started (v0.4.0–v0.4.3).
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class * extends androidx.work.ListenableWorker { public <init>(android.content.Context, androidx.work.WorkerParameters); }
+-keep class * extends androidx.work.InputMerger { public <init>(); }
