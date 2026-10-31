@@ -129,6 +129,8 @@ class SyncClient(
     suspend fun uploadBackup(token: String, zip: ByteArray, deviceId: String, deviceName: String, kind: String): SyncResult<String> =
         call("POST", "/api/backups", token, zip.toRequestBody(ZIP), headers = mapOf(
             "X-Device-Id" to deviceId, "X-Device-Name" to headerSafe(deviceName), "X-Backup-Kind" to kind,
+            // the server refuses an upload that doesn't hash to this, so a truncated one is never stored
+            "X-Backup-Sha256" to sha256(zip),
         )) { r -> SyncResult.Ok((parse(r) as? JsonObject)?.get("id")?.str() ?: "") }
 
     suspend fun downloadBackup(token: String, id: String): SyncResult<ByteArray> =
