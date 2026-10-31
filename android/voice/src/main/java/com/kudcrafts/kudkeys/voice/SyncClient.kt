@@ -133,7 +133,11 @@ class SyncClient(
 
     suspend fun downloadBackup(token: String, id: String): SyncResult<ByteArray> =
         call("GET", "/api/backups/" + enc(id), token, null, accept = "application/zip") { r ->
-            SyncResult.Ok(r.body?.bytes() ?: ByteArray(0))
+            val bytes = r.body?.bytes() ?: ByteArray(0)
+            // the server sends the zip's sha256: never restore a damaged download
+            val want = r.header("X-Backup-Sha256")?.trim()?.lowercase()
+            if (!want.isNullOrEmpty() && want != sha256(bytes)) SyncResult.Failed(0, "Backup download damaged")
+            else SyncResult.Ok(bytes)
         }
 
     suspend fun deleteBackup(token: String, id: String): SyncResult<Unit> =
@@ -187,6 +191,9 @@ class SyncClient(
             OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS).build()
         }
+
+        fun sha256(b: ByteArray): String =
+            java.security.MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
 
         private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 

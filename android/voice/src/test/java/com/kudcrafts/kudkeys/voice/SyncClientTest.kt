@@ -124,8 +124,14 @@ class SyncClientTest {
         assertEquals("manual", up.getHeader("X-Backup-Kind"))
         assertArrayEquals(zip, up.body.readByteArray())
 
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/zip").setBody(Buffer().write(zip)))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/zip")
+            .setHeader("X-Backup-Sha256", SyncClient.sha256(zip)).setBody(Buffer().write(zip)))
         assertArrayEquals(zip, (client.downloadBackup("sess.tok", "b3") as SyncResult.Ok).value)
+        take("GET", "/api/backups/b3")
+        // a download that doesn't match its sha256 is refused
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/zip")
+            .setHeader("X-Backup-Sha256", "00".repeat(32)).setBody(Buffer().write(zip)))
+        assertTrue(client.downloadBackup("sess.tok", "b3") is SyncResult.Failed)
         take("GET", "/api/backups/b3")
 
         server.enqueue(MockResponse().setResponseCode(204))
