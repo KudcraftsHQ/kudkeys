@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.latin
 
+import helium314.keyboard.kudkeys.KudMigrations
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.core.content.edit
@@ -53,6 +54,7 @@ import kotlin.collections.set
 
 fun checkVersionUpgrade(context: Context) {
     val prefs = context.prefs()
+    KudMigrations.run(prefs)
     val oldVersion = prefs.getInt(Settings.PREF_VERSION_CODE, 0)
     if (oldVersion != BuildConfig.VERSION_CODE)
         AppUpgrade.onUpgrade(context)

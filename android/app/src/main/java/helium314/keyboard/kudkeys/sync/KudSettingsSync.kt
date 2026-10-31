@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.kudkeys.sync
 
+import helium314.keyboard.kudkeys.KudMigrations
 import android.content.SharedPreferences
 import helium314.keyboard.latin.settings.Settings
 import kotlinx.serialization.json.JsonArray
@@ -37,7 +38,7 @@ object KudSettingsSync {
     )
     private val EXCLUDED_KEYS = setOf(
         Settings.PREF_VERSION_CODE, Settings.PREF_RECENT_EMOJIS, Settings.PREF_EMOJI_MAX_SDK,
-    )
+    ) + KudMigrations.FLAGS
 
     /** Secrets and account state, by name, wherever they are stored: never synced, never in a backup. */
     private val SECRET = Regex("token|secret|password|session|account|draft|server_url|api_key", RegexOption.IGNORE_CASE)
