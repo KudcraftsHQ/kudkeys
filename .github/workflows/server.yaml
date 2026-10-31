@@ -1,6 +1,7 @@
 # Kud Keys server + web app CI: typecheck and tests on every change outside
 # android/, then the Docker image is built and smoke-tested against a real
-# Postgres (migrations, sign-up, /api/me, /api/text/fix, a /v1/stream session with the bearer
+# Postgres (migrations, sign-up, /api/me, /api/text/fix, settings/words sync and a backup
+# round trip, a /v1/stream session with the bearer
 # token against a fake Groq, and its usage row). Runtime queries go through
 # pgbouncer in transaction mode with ?pgbouncer=true, as in production.
 name: server
