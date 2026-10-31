@@ -4,6 +4,10 @@
 // stream and one per text call (tidy, fix, instruct). Transcript and text are
 // never stored: there is no column for them.
 //
+// v0.4 sync: the keyboard's settings, the words it knows, and backups
+// (server/sync/, contract in server/README.md). Written with raw SQL through
+// server/lib/sql.ts so the same queries run on PGlite in tests.
+//
 // Migration: bunx prisma migrate dev --name <change-name>
 // Regenerate client: bunx prisma generate
 
@@ -43,6 +47,9 @@ model KudkeysUser {
   accounts      KudkeysAccount[]
   voiceSessions VoiceSession[]
   textUsage     TextUsage[]
+  settings      KeyboardSettings?
+  words         Word[]
+  backups       Backup[]
 
   @@map("kudkeys_user")
 }
@@ -139,4 +146,74 @@ model TextUsage {
 
   @@index([userId, createdAt])
   @@map("text_usage")
+}
+
+// ─── Sync (v0.4) ────────────────────────────────────────────────────────
+// The keyboard's settings, one row per user. `prefs` is the merged JSON the
+// phones sent (secrets and per-device sizes are left out on the phone).
+// Merge is last-writer-wins per key: `keyTimes` holds, for each flattened key
+// path (JSON array as text), the device time (epoch ms) of the write that set
+// it; a path in keyTimes but not in prefs was removed (sent as null).
+model KeyboardSettings {
+  userId    String   @id
+  prefs     Json
+  keyTimes  Json     @default("{}")
+  // Newest device time of any key: what GET/PUT answer as `updatedAt`.
+  updatedAt DateTime
+  // Device that wrote last.
+  deviceId  String
+  // Server time of the last PUT (the web app's "last synced").
+  syncedAt  DateTime
+  // Optimistic lock for the read-merge-write in PUT.
+  version   Int      @default(0)
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("keyboard_settings")
+}
+
+// Words Kud Keys knows the user uses. Merge: union by (word, locale),
+// count = max, and a delete is a tombstone (deleted = true) that wins over an
+// older add. `updatedAt` is the device's time (the merge rule); `changedAt` is
+// the server's time of the last change, which ?since= reads.
+model Word {
+  userId    String
+  word      String
+  locale    String
+  count     Int
+  // typed | swiftkey | manual
+  source    String
+  deleted   Boolean  @default(false)
+  updatedAt DateTime
+  changedAt DateTime
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, word, locale])
+  @@index([userId, changedAt])
+  @@map("word")
+}
+
+// The phone's full HeliBoard backup zip, gzip-compressed. Per user the newest
+// backup of each of the 14 latest days and 8 latest weeks (Jakarta time) is
+// kept; the rest are deleted whenever a backup is added.
+model Backup {
+  id         String   @id
+  userId     String
+  createdAt  DateTime
+  deviceId   String
+  deviceName String
+  // auto | manual
+  kind       String
+  // Size of the zip as uploaded (before gzip).
+  sizeBytes  Int
+  // sha256 of the zip as uploaded, hex.
+  sha256     String
+  // gzip(zip)
+  data       Bytes
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("backup")
 }
