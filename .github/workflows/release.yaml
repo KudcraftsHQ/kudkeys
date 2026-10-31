@@ -84,6 +84,7 @@ jobs:
           [ -f "$APK" ] || { echo "No signed APK at $APK (unsigned builds are named app-release-unsigned.apk)" >&2; exit 1; }
           APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
           "$APKSIGNER" verify --print-certs "$APK"
+          tools/check-reflection-constructors.sh "$APK"
           mkdir -p dist
           cp "$APK" "dist/kudkeys-${GITHUB_REF_NAME}.apk"
           (cd dist && sha256sum *.apk > SHA256SUMS)
