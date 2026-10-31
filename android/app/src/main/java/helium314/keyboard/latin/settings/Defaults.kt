@@ -14,7 +14,6 @@ import helium314.keyboard.latin.common.Constants.Subtype.ExtraValue
 import helium314.keyboard.latin.utils.LayoutType
 import helium314.keyboard.latin.utils.POPUP_KEYS_LABEL_DEFAULT
 import helium314.keyboard.latin.utils.POPUP_KEYS_ORDER_DEFAULT
-import helium314.keyboard.latin.utils.defaultClipboardToolbarPref
 import helium314.keyboard.latin.utils.defaultPinnedToolbarPref
 import helium314.keyboard.latin.utils.defaultToolbarPref
 
@@ -40,7 +39,6 @@ object Defaults {
         LayoutType.PHONE -> "phone"
         LayoutType.PHONE_SYMBOLS -> "phone_symbols"
         LayoutType.EMOJI_BOTTOM -> "emoji_bottom_row"
-        LayoutType.CLIPBOARD_BOTTOM -> "clip_bottom_row"
     }
 
     private const val DEFAULT_SIZE_SCALE = 1.0f // 100%
@@ -159,11 +157,6 @@ object Defaults {
     const val PREF_LANGUAGE_SWIPE_DISTANCE = 5
     const val PREF_TOUCHPAD_SENSITIVITY = 50
     const val PREF_TOUCHPAD_EDGE_SCROLL = true
-    const val PREF_ENABLE_CLIPBOARD_HISTORY = true
-    const val PREF_CLIPBOARD_HISTORY_RETENTION_TIME = 10 // minutes
-    const val PREF_CLIPBOARD_HISTORY_PINNED_FIRST = true
-    const val PREF_CLIPBOARD_USE_FILES = true
-    const val PREF_CLIPBOARD_FILES_SIZE_LIMIT = 20 // megabytes
     const val PREF_ADD_TO_PERSONAL_DICTIONARY = false
     @JvmField
     val PREF_NAVBAR_COLOR = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
@@ -179,7 +172,6 @@ object Defaults {
     val PREF_TOOLBAR_KEYS = defaultToolbarPref
     const val PREF_AUTO_SHOW_TOOLBAR = false
     const val PREF_AUTO_HIDE_TOOLBAR = false
-    val PREF_CLIPBOARD_TOOLBAR_KEYS = defaultClipboardToolbarPref
     const val PREF_ABC_AFTER_EMOJI = false
     const val PREF_ABC_AFTER_CLIP = false
     const val PREF_ABC_AFTER_SYMBOL_SPACE = true

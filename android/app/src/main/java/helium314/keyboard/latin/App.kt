@@ -42,7 +42,6 @@ class App : Application() {
         checkVersionUpgrade(this)
         if (BuildConfig.DEBUG) // do this on every debug apk start because we may work on adding a new toolbar key
             upgradeToolbarPrefs(prefs())
-        transferOldPinnedClips(this) // todo: remove in a few months, maybe end 2026
         app = this
         Defaults.initDynamicDefaults(this)
     }

@@ -117,9 +117,7 @@ enum class KeyboardElement(val descriptionResId: Int) {
     EMOJI_SYMBOLS(R.string.spoken_description_emoji_category_symbols),
     EMOJI_FLAGS(R.string.spoken_description_emoji_category_flags),
     EMOJI_EMOTICONS(R.string.spoken_description_emoji_category_emoticons),
-    EMOJI_BOTTOM_ROW(R.string.spoken_description_emoji),
-    CLIPBOARD(R.string.spoken_description_mode_clipboard),
-    CLIPBOARD_BOTTOM_ROW(R.string.spoken_description_mode_clipboard);
+    EMOJI_BOTTOM_ROW(R.string.spoken_description_emoji);
 
     val isAlphabet get() = this < SYMBOLS
     val isAlphaOrSymbol get() = this <= SYMBOLS_SHIFTED
@@ -128,7 +126,7 @@ enum class KeyboardElement(val descriptionResId: Int) {
     val isNumberLayout get() = this in NUMPAD..PHONE_SYMBOLS
     val takesFunctionalKeys get() = this <= DPAD
     val isEmojiLayout get() = this in EMOJI_RECENTS..EMOJI_EMOTICONS
-    val isBottomRow get() = this == EMOJI_BOTTOM_ROW || this == CLIPBOARD_BOTTOM_ROW
+    val isBottomRow get() = this == EMOJI_BOTTOM_ROW
     val capsMode get() = when (this) {
         ALPHABET_AUTOMATIC_SHIFTED -> CapsMode.AUTO
         ALPHABET_MANUAL_SHIFTED -> CapsMode.MANUAL

@@ -748,14 +748,7 @@ public final class InputLogic {
             case KeyCode.LANGUAGE_SWITCH:
                 handleLanguageSwitchKey();
                 break;
-            case KeyCode.CLIPBOARD:
-                // Note: If clipboard history is enabled, switching to clipboard keyboard
-                // is being handled in {@link KeyboardState#onEvent(Event,int)}.
-                // If disabled, current clipboard content is committed.
-                if (!sv.mClipboardHistoryEnabled) {
-                    paste(mLatinIME.getCurrentInputEditorInfo().packageName);
-                }
-                break;
+            case KeyCode.CLIPBOARD: // kudkeys: no clipboard history, the clipboard key pastes
             case KeyCode.CLIPBOARD_PASTE:
                 paste(mLatinIME.getCurrentInputEditorInfo().packageName);
                 break;
@@ -785,9 +778,6 @@ public final class InputLogic {
                 break;
             case KeyCode.CLIPBOARD_COPY_ALL:
                 mConnection.copyText(false);
-                break;
-            case KeyCode.CLIPBOARD_CLEAR_HISTORY:
-                mLatinIME.getClipboardHistoryManager().clearHistory();
                 break;
             case KeyCode.CLIPBOARD_CUT:
                 if (mConnection.hasSelection()) {

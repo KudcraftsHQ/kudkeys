@@ -34,7 +34,6 @@ class KeyboardState(private val switchActions: SwitchActions) {
     interface SwitchActions {
         fun setAlphabetKeyboard(shiftMode: ShiftMode)
         fun setEmojiKeyboard()
-        fun setClipboardKeyboard()
         fun setNumpadKeyboard()
         fun setDpadKeyboard()
         fun setSymbolsKeyboard()
@@ -169,7 +168,6 @@ class KeyboardState(private val switchActions: SwitchActions) {
             Utility.SYMBOLS -> switchActions.setSymbolsKeyboard()
             Utility.SYMBOLS_SHIFTED -> switchActions.setSymbolsShiftedKeyboard()
             Utility.EMOJI -> switchActions.setEmojiKeyboard()
-            Utility.CLIPBOARD -> switchActions.setClipboardKeyboard()
             Utility.NUMPAD -> switchActions.setNumpadKeyboard()
             Utility.DPAD -> switchActions.setDpadKeyboard()
         }
@@ -471,9 +469,6 @@ class KeyboardState(private val switchActions: SwitchActions) {
             KeyCode.EMOJI -> toggleLayout(Utility.EMOJI, autoCapsFlags, recapitalizeMode)
             KeyCode.ALPHA -> resetToAlpha(autoCapsFlags, recapitalizeMode)
             // Note: Printing clipboard content is handled in InputLogic.handleFunctionalEvent
-            KeyCode.CLIPBOARD -> if (Settings.getValues().mClipboardHistoryEnabled) {
-                toggleLayout(Utility.CLIPBOARD, autoCapsFlags, recapitalizeMode)
-            }
             KeyCode.NUMPAD -> toggleLayout(Utility.NUMPAD, autoCapsFlags, recapitalizeMode)
             KeyCode.DPAD -> toggleLayout(Utility.DPAD, autoCapsFlags, recapitalizeMode)
             KeyCode.SYMBOL -> toggleLayout(Utility.SYMBOLS, autoCapsFlags, recapitalizeMode)
@@ -502,7 +497,6 @@ class KeyboardState(private val switchActions: SwitchActions) {
         SYMBOLS,
         SYMBOLS_SHIFTED,
         EMOJI,
-        CLIPBOARD,
         NUMPAD,
         DPAD,
     ;
@@ -512,7 +506,6 @@ class KeyboardState(private val switchActions: SwitchActions) {
                 SYMBOLS -> Utility.SYMBOLS
                 SYMBOLS_SHIFTED -> Utility.SYMBOLS_SHIFTED
                 EMOJI -> Utility.EMOJI
-                CLIPBOARD -> Utility.CLIPBOARD
                 NUMPAD -> Utility.NUMPAD
                 DPAD -> Utility.DPAD
             }

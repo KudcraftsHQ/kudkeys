@@ -222,8 +222,6 @@ sealed interface KeyData : AbstractKeyData {
                         popupKeys[i] = popupKeys[i].replace(n.toString(), (n - 1).toString())
                 }
             }
-            if (params.mId.element == KeyboardElement.CLIPBOARD_BOTTOM_ROW)
-                popupKeys.remove("!icon/clipboard_action_key|!code/key_clipboard")
             return SimplePopups(popupKeys)
         }
 

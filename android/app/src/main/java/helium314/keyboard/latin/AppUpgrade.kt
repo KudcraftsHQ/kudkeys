@@ -16,7 +16,6 @@ import helium314.keyboard.latin.common.Constants.Subtype.ExtraValue
 import helium314.keyboard.latin.common.LocaleUtils.constructLocale
 import helium314.keyboard.latin.common.StringUtils
 import helium314.keyboard.latin.common.encodeBase36
-import helium314.keyboard.latin.database.ClipboardDao
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsSubtype
@@ -59,36 +58,21 @@ fun checkVersionUpgrade(context: Context) {
         AppUpgrade.onUpgrade(context)
 }
 
-fun transferOldPinnedClips(context: Context) {
-    @Serializable
-    data class OldClipboardHistoryEntry (
-        var timeStamp: Long,
-        val content: String,
-        var isPinned: Boolean = false
-    )
-    if (isUserLocked(context) || isDeviceLocked(context)) return
-    try {
-        val pinnedClipString = context.protectedPrefs().getString("pinned_clips", "")
-        if (pinnedClipString.isNullOrBlank())
-            return
-        val pinnedClips: List<OldClipboardHistoryEntry> = Json.decodeFromString(pinnedClipString)
-        val dao = ClipboardDao.getInstance(context) ?: return
-        pinnedClips.forEach { dao.addClip(it.timeStamp, it.isPinned, it.content) }
-        context.protectedPrefs().edit { remove("pinned_clips") }
-    } catch (e: Throwable) {
-        Log.e("upgrade", "error transferring old pinned clips", e)
-    }
-}
+/** HeliBoard version this fork is based on, see android/UPSTREAM.md */
+const val UPSTREAM_BASE_VERSION_CODE = 4201
 
 private object AppUpgrade {
     fun onUpgrade(context: Context) {
         val prefs = context.prefs()
-        val oldVersion = prefs.getInt(Settings.PREF_VERSION_CODE, 0)
-        if (oldVersion == 0) {
+        val storedVersion = prefs.getInt(Settings.PREF_VERSION_CODE, 0)
+        if (storedVersion == 0) {
             // fresh install -> no need to upgrade, as this does things like keeping old defaults which is on wanted on actual upgrade
             prefs.edit { putInt(Settings.PREF_VERSION_CODE, BuildConfig.VERSION_CODE) }
             return
         }
+        // kudkeys: the checks below compare against HeliBoard version codes. Kud Keys started from HeliBoard 4.2
+        // (4201) with fresh prefs, so all of them already apply. Gate new upstream migrations on a Kud Keys code.
+        val oldVersion = UPSTREAM_BASE_VERSION_CODE
         // clear extracted dictionaries, in case updated version contains newer ones
         DictionaryInfoUtils.getCacheDirectories(context).forEach {
             for (file in it.listFiles()!!) {
@@ -346,13 +330,6 @@ private object AppUpgrade {
                         file.renameTo(File(dir, name))
                         prefs.edit { putString(Settings.PREF_LAYOUT_PREFIX + LayoutType.EMOJI_BOTTOM.name, name) }
                     }
-                    "custom.clip_bottom_row." -> {
-                        val dir = File(folder, LayoutType.CLIPBOARD_BOTTOM.folder)
-                        dir.mkdirs()
-                        val name = "custom.${encodeBase36("clip_bottom_row")}."
-                        file.renameTo(File(dir, name))
-                        prefs.edit { putString(Settings.PREF_LAYOUT_PREFIX + LayoutType.CLIPBOARD_BOTTOM.name, name) }
-                    }
                     "custom.functional_keys." -> {
                         val dir = File(folder, LayoutType.FUNCTIONAL.folder)
                         dir.mkdirs()
@@ -412,7 +389,7 @@ private object AppUpgrade {
         }
         if (oldVersion <= 2305) {
             (prefs.all.keys.filter { it.startsWith(Settings.PREF_POPUP_KEYS_ORDER) || it.startsWith(Settings.PREF_POPUP_KEYS_HINT_ORDER) } +
-                listOf(Settings.PREF_TOOLBAR_KEYS, Settings.PREF_PINNED_TOOLBAR_KEYS, Settings.PREF_CLIPBOARD_TOOLBAR_KEYS)).forEach {
+                listOf(Settings.PREF_TOOLBAR_KEYS, Settings.PREF_PINNED_TOOLBAR_KEYS, "clipboard_toolbar_keys")).forEach {
                 if (!prefs.contains(it)) return@forEach
                 val newValue = prefs.getString(it, "")!!.replace(",", Separators.KV).replace(";", Separators.ENTRY)
                 prefs.edit { putString(it, newValue) }
@@ -564,9 +541,6 @@ private object AppUpgrade {
                     prefs.edit { putString(key, value.replace("bengali,", "bengali_inscript,")) }
                 }
             }
-        }
-        if (oldVersion <= 3001 && prefs.getInt(Settings.PREF_CLIPBOARD_HISTORY_RETENTION_TIME, Defaults.PREF_CLIPBOARD_HISTORY_RETENTION_TIME) <= 0) {
-            prefs.edit { putInt(Settings.PREF_CLIPBOARD_HISTORY_RETENTION_TIME, 121) }
         }
         if (oldVersion <= 3002) {
             prefs.all.filterKeys { it.startsWith(Settings.PREF_USER_ALL_COLORS_PREFIX) }.forEach {

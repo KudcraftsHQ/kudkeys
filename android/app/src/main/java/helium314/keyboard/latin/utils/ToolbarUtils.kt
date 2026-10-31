@@ -125,29 +125,24 @@ enum class ToolbarMode {
 
 val toolbarKeyStrings = entries.associateWithTo(EnumMap(ToolbarKey::class.java)) { it.toString().lowercase(Locale.US) }
 
+/** kudkeys: clipboard history is removed; these keys only remain so layouts and icon names keep working */
+val hiddenToolbarKeys = setOf(CLIPBOARD, CLEAR_CLIPBOARD, CLOSE_HISTORY)
+
 val defaultToolbarPref by lazy {
-    val default = listOf(SETTINGS, VOICE, CLIPBOARD, UNDO, REDO, SELECT_WORD, COPY, PASTE, LEFT, RIGHT)
-    val others = entries.filterNot { it in default || it == CLOSE_HISTORY }
+    val default = listOf(SETTINGS, VOICE, UNDO, REDO, SELECT_WORD, COPY, PASTE, LEFT, RIGHT)
+    val others = entries.filterNot { it in default || it in hiddenToolbarKeys }
     default.joinToString(Separators.ENTRY) { it.name + Separators.KV + true } + Separators.ENTRY +
             others.joinToString(Separators.ENTRY) { it.name + Separators.KV + false }
 }
 
-val defaultPinnedToolbarPref = entries.filterNot { it == CLOSE_HISTORY }.joinToString(Separators.ENTRY) {
+val defaultPinnedToolbarPref = entries.filterNot { it in hiddenToolbarKeys }.joinToString(Separators.ENTRY) {
     it.name + Separators.KV + false
-}
-
-val defaultClipboardToolbarPref by lazy {
-    val default = listOf(CLEAR_CLIPBOARD, UP, DOWN, LEFT, RIGHT, UNDO, CUT, COPY, PASTE, SELECT_WORD, CLOSE_HISTORY)
-    val others = entries.filterNot { it in default }
-    default.joinToString(Separators.ENTRY) { it.name + Separators.KV + true } + Separators.ENTRY +
-            others.joinToString(Separators.ENTRY) { it.name + Separators.KV + false }
 }
 
 /** add missing keys, typically because a new key has been added */
 fun upgradeToolbarPrefs(prefs: SharedPreferences) {
     upgradeToolbarPref(prefs, Settings.PREF_TOOLBAR_KEYS, defaultToolbarPref)
     upgradeToolbarPref(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, defaultPinnedToolbarPref)
-    upgradeToolbarPref(prefs, Settings.PREF_CLIPBOARD_TOOLBAR_KEYS, defaultClipboardToolbarPref)
 }
 
 private fun upgradeToolbarPref(prefs: SharedPreferences, pref: String, default: String) {
@@ -174,8 +169,6 @@ private fun upgradeToolbarPref(prefs: SharedPreferences, pref: String, default: 
 fun getEnabledToolbarKeys(prefs: SharedPreferences) = getEnabledToolbarKeys(prefs, Settings.PREF_TOOLBAR_KEYS, defaultToolbarPref)
 
 fun getPinnedToolbarKeys(prefs: SharedPreferences) = getEnabledToolbarKeys(prefs, Settings.PREF_PINNED_TOOLBAR_KEYS, defaultPinnedToolbarPref)
-
-fun getEnabledClipboardToolbarKeys(prefs: SharedPreferences) = getEnabledToolbarKeys(prefs, Settings.PREF_CLIPBOARD_TOOLBAR_KEYS, defaultClipboardToolbarPref)
 
 fun addPinnedKey(prefs: SharedPreferences, key: ToolbarKey) {
     // remove the existing version of this key and add the enabled one after the last currently enabled key
@@ -204,7 +197,7 @@ private fun getEnabledToolbarKeys(prefs: SharedPreferences, pref: String, defaul
         val split = it.split(Separators.KV)
         if (split.last() == "true") {
             try {
-                ToolbarKey.valueOf(split.first())
+                ToolbarKey.valueOf(split.first()).takeIf { it !in hiddenToolbarKeys }
             } catch (_: IllegalArgumentException) {
                 null
             }

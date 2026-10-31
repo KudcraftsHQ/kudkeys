@@ -32,9 +32,6 @@
         <include
             android:id="@+id/emoji_palettes_view"
             layout="@layout/emoji_palettes_view" />
-        <include
-            android:id="@+id/clipboard_history_view"
-            layout="@layout/clipboard_history_view" />
 
         <ImageButton
             android:id="@+id/btn_stop_one_handed_mode"

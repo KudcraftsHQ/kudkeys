@@ -3,11 +3,8 @@
 package helium314.keyboard.latin
 
 import android.content.ClipData
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
-import android.net.Uri
-import android.provider.OpenableColumns
 import android.text.InputType
 import android.text.TextUtils
 import android.view.LayoutInflater
@@ -26,14 +23,10 @@ import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.common.isValidNumber
-import helium314.keyboard.latin.database.ClipboardDao
 import helium314.keyboard.latin.databinding.ClipboardSuggestionBinding
-import helium314.keyboard.latin.settings.Defaults
-import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.InputTypeUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.ToolbarKey
-import helium314.keyboard.latin.utils.prefs
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,15 +37,11 @@ class ClipboardHistoryManager(
 
     private lateinit var clipboardManager: ClipboardManager
     private var clipboardSuggestionView: View? = null
-    private var clipboardDao: ClipboardDao? = null
     private var tempPrimaryClip = false
 
     fun onCreate() {
         clipboardManager = latinIME.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboardManager.addPrimaryClipChangedListener(this)
-        clipboardDao = ClipboardDao.getInstance(latinIME)
-        if (latinIME.mSettings.current.mClipboardHistoryEnabled)
-            fetchPrimaryClip()
     }
 
     fun onDestroy() {
@@ -60,31 +49,8 @@ class ClipboardHistoryManager(
     }
 
     override fun onPrimaryClipChanged() {
-        // Make sure we read clipboard content only if history settings is set
-        if (latinIME.mSettings.current.mClipboardHistoryEnabled) {
-            fetchPrimaryClip()
-            dontShowCurrentSuggestion = false
-        }
-    }
-
-    // todo for later
-    //  setting whether to store sensitive clip data?
-    //  care about other clip items than first?
-    private fun fetchPrimaryClip() {
-        if (tempPrimaryClip) return // avoid updating history
-        val clipData = clipboardManager.primaryClip ?: return
-        if (clipData.itemCount == 0) return
-        val clipItem = clipData.getItemAt(0) ?: return
-        val description = clipData.description ?: return
-        val timeStamp = ClipboardManagerCompat.getClipTimestamp(clipData)
-
-        if (description.hasMimeType("text/*")) {
-            val content = clipItem.coerceToText(latinIME)
-            if (TextUtils.isEmpty(content)) return
-            clipboardDao?.addClip(timeStamp, false, content.toString())
-        } else if (maySaveFromUri(clipItem.uri, latinIME)) {
-            clipboardDao?.addClipUri(timeStamp, false, clipItem.uri, description, latinIME)
-        }
+        // kudkeys: no clipboard history; a new clip only re-enables the clipboard suggestion
+        dontShowCurrentSuggestion = false
     }
 
     fun getPrimaryClipIfText(): String? {
@@ -120,57 +86,9 @@ class ClipboardHistoryManager(
             try {
                 clipboardManager.setPrimaryClip(primaryClip)
             } catch (e: Exception) {
-                Log.i(TAG, "could not go back to old primary clip", e)
-                // happens wen the clip was a file
-                // try to find it in out clipboard entries
-                val clip = clipboardDao?.getAll()?.firstOrNull { it.timeStamp == ClipboardManagerCompat.getClipTimestamp(primaryClip) }
-                if (clip?.filename != null)
-                    clipboardManager.setPrimaryClip(ClipData(
-                        ClipDescription(clip.text, clip.mimeTypes?.toTypedArray()),
-                        ClipData.Item(clip.getContentUri(latinIME))
-                    ))
-                else if (clip != null)
-                    clipboardManager.setPrimaryClip(ClipData(
-                        ClipDescription("", arrayOf("text/*")),
-                        ClipData.Item(clip.text)
-                    ))
+                Log.i(TAG, "could not go back to old primary clip", e) // happens when the clip was a file
             }
         }
-    }
-
-    fun toggleClipPinned(id: Long) {
-        clipboardDao?.togglePinned(id)
-    }
-
-    fun clearHistory() {
-        clipboardDao?.clearNonPinned()
-        ClipboardManagerCompat.clearPrimaryClip(clipboardManager)
-        removeClipboardSuggestion()
-    }
-
-    fun canRemove(index: Int) = clipboardDao?.isPinned(index) == false
-
-    fun removeEntry(index: Int) {
-        if (canRemove(index))
-            clipboardDao?.deleteClipAt(index)
-    }
-
-    fun sortHistoryEntries() {
-        clipboardDao?.sort()
-    }
-
-    // We do not want to update history while user is visualizing it, so we check retention only
-    // when history is about to be shown
-    fun prepareClipboardHistory() = clipboardDao?.clearOldClips(true)
-
-    fun getHistorySize() = clipboardDao?.count() ?: 0
-
-    fun getHistoryEntry(position: Int) = clipboardDao?.getAt(position)
-
-    fun getHistoryEntryContent(id: Long) = clipboardDao?.get(id)
-
-    fun setHistoryChangeListener(listener: ClipboardDao.Listener?) {
-        clipboardDao?.listener = listener
     }
 
     private fun isClipSensitive(inputType: Int): Boolean {
@@ -268,21 +186,5 @@ class ClipboardHistoryManager(
         private var dontShowCurrentSuggestion: Boolean = false
 
         const val RECENT_TIME_MILLIS = 3 * 60 * 1000L // 3 minutes (for clipboard suggestions)
-
-        private fun maySaveFromUri(uri: Uri?, context: Context): Boolean {
-            val maxSize = context.prefs().getInt(Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT, Defaults.PREF_CLIPBOARD_FILES_SIZE_LIMIT)
-            val saveUriData = context.prefs().getBoolean(Settings.PREF_CLIPBOARD_USE_FILES, Defaults.PREF_CLIPBOARD_USE_FILES)
-            if (uri == null || !saveUriData) return false
-            try {
-                context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null).use {
-                    if (it?.moveToFirst() != true) return false
-                    val size = it.getLong(0)
-                    return size <= maxSize * 1000000 // maxSize is megabytes
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "error checking clip size", e) // happens with SecurityException: Permission Denial
-                return false
-            }
-        }
     }
 }

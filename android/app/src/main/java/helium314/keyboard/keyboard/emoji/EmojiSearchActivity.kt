@@ -332,7 +332,7 @@ class EmojiSearchActivity : ComponentActivity() {
     }
 
     private fun isAlphaKeyboard() = KeyboardSwitcher.getInstance().keyboardSwitchState !in
-        setOf(KeyboardSwitcher.KeyboardSwitchState.EMOJI, KeyboardSwitcher.KeyboardSwitchState.CLIPBOARD)
+        setOf(KeyboardSwitcher.KeyboardSwitchState.EMOJI)
 
     private fun search(text: String) {
         initDictionaryFacilitator(this)

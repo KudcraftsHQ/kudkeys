@@ -93,9 +93,6 @@ public class SettingsValues {
     public final boolean mAutospaceAfterGestureTyping;
     public final boolean mAutospaceBeforeGestureTyping;
     public final boolean mShiftRemovesAutospace;
-    public final boolean mClipboardHistoryEnabled;
-    public final long mClipboardHistoryRetentionTime;
-    public final boolean mClipboardHistoryPinnedFirst;
     public final boolean mOneHandedModeEnabled;
     public final int mOneHandedModeGravity;
     public final float mOneHandedModeScale;
@@ -285,9 +282,6 @@ public class SettingsValues {
         mAutospaceAfterGestureTyping = prefs.getBoolean(Settings.PREF_AUTOSPACE_AFTER_GESTURE_TYPING, Defaults.PREF_AUTOSPACE_AFTER_GESTURE_TYPING);
         mAutospaceBeforeGestureTyping = prefs.getBoolean(Settings.PREF_AUTOSPACE_BEFORE_GESTURE_TYPING, Defaults.PREF_AUTOSPACE_BEFORE_GESTURE_TYPING);
         mShiftRemovesAutospace = prefs.getBoolean(Settings.PREF_SHIFT_REMOVES_AUTOSPACE, Defaults.PREF_SHIFT_REMOVES_AUTOSPACE);
-        mClipboardHistoryEnabled = prefs.getBoolean(Settings.PREF_ENABLE_CLIPBOARD_HISTORY, Defaults.PREF_ENABLE_CLIPBOARD_HISTORY);
-        mClipboardHistoryRetentionTime = prefs.getInt(Settings.PREF_CLIPBOARD_HISTORY_RETENTION_TIME, Defaults.PREF_CLIPBOARD_HISTORY_RETENTION_TIME);
-        mClipboardHistoryPinnedFirst = prefs.getBoolean(Settings.PREF_CLIPBOARD_HISTORY_PINNED_FIRST, Defaults.PREF_CLIPBOARD_HISTORY_PINNED_FIRST);
 
         mIsFloatingKeyboard = !mIsLocked && SettingsKt.isFloatingKeyboardEnabled(context);
         mFloatingWidth = SettingsKt.readFloatingWidth(context);

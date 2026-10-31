@@ -168,11 +168,6 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_TOUCHPAD_SENSITIVITY = "touchpad_sensitivity";
     public static final String PREF_TOUCHPAD_EDGE_SCROLL = "touchpad_edge_scroll";
 
-    public static final String PREF_ENABLE_CLIPBOARD_HISTORY = "enable_clipboard_history";
-    public static final String PREF_CLIPBOARD_HISTORY_RETENTION_TIME = "clipboard_history_retention_time";
-    public static final String PREF_CLIPBOARD_HISTORY_PINNED_FIRST = "clipboard_history_pinned_first";
-    public static final String PREF_CLIPBOARD_USE_FILES = "clipboard_histor_usey_files";
-    public static final String PREF_CLIPBOARD_FILES_SIZE_LIMIT = "clipboard_history_files_size_limit";
 
     public static final String PREF_ADD_TO_PERSONAL_DICTIONARY = "add_to_personal_dictionary";
     public static final String PREF_NAVBAR_COLOR = "navbar_color";
@@ -185,7 +180,6 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_TOOLBAR_KEYS = "toolbar_keys";
     public static final String PREF_AUTO_SHOW_TOOLBAR = "auto_show_toolbar";
     public static final String PREF_AUTO_HIDE_TOOLBAR = "auto_hide_toolbar";
-    public static final String PREF_CLIPBOARD_TOOLBAR_KEYS = "clipboard_toolbar_keys";
     public static final String PREF_ABC_AFTER_EMOJI = "abc_after_emoji";
     public static final String PREF_ABC_AFTER_CLIP = "abc_after_clip";
     public static final String PREF_ABC_AFTER_SYMBOL_SPACE = "abc_after_symbol_space";
