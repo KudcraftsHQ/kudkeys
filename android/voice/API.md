@@ -98,3 +98,14 @@ class QuickVoice(private val ime: InputMethodService, private val bar: TopBar) {
 
 Note: `Done` can also arrive without `stop()`, when the server ends a session on its own (600 s cap,
 30 s without audio). The collector above handles that the same way.
+
+## Text endpoints (v0.3)
+
+| | |
+|---|---|
+| `TextApi(settings)` | `TextService` with the stored session token: `tidy(text, private)`, `fix(text, private)`, `instruct(instruction, text, private)`, all suspend on IO. No session → `NotSignedIn` without a request; a 401 marks the account signed out. |
+| `TextClient` | The stateless HTTP part (`POST /api/text/{tidy,fix,instruct}`, docs/v0.3-spec.md). Caps: tidy/instruct text 20,000, fix 4,000, instruction 2,000. Read timeout 45 s. |
+| `TextResult` | `Ok`, `NotSignedIn`, `SignedOut` (401), `RateLimited(retryAfterS)` (429), `Unavailable` (5xx, timeout, refused), `NoNetwork` (DNS), `Rejected` (400, bad JSON). Never carries text. |
+| `Tidied(text, questions)` | `TidyQuestion(id, original, start, end, options)`: offsets into `text`; questions out of range, without options or overlapping an earlier one are dropped; `original` is the word as it is in `text`. |
+
+`VoiceState.Listening` / `Finishing` also carry `partial`: the end of `text` that is still a partial (shown dimmed).

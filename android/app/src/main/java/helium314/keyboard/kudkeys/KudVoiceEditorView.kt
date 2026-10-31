@@ -90,7 +90,7 @@ class KudVoiceEditorView @JvmOverloads constructor(
         setWillNotDraw(false)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpi(12), dpi(4), dpi(8), dpi(8))
+            setPadding(dpi(12), dpi(2), dpi(8), dpi(6))
         }
         addView(root, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
@@ -103,10 +103,10 @@ class KudVoiceEditorView @JvmOverloads constructor(
         statusLabel.apply { textSize = 13f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END }
         header.addView(statusLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         iconButton(tidyToggle, R.drawable.kud_ic_tidy, "Tidy on stop")
-        header.addView(tidyToggle, LinearLayout.LayoutParams(dpi(40), dpi(40)))
+        header.addView(tidyToggle, LinearLayout.LayoutParams(dpi(38), dpi(38)))
         iconButton(closeButton, R.drawable.kud_ic_close, "Close, keep draft")
-        header.addView(closeButton, LinearLayout.LayoutParams(dpi(40), dpi(40)))
-        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(40)))
+        header.addView(closeButton, LinearLayout.LayoutParams(dpi(38), dpi(38)))
+        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(38)))
 
         // question card: one at a time, a single row
         card.apply {
@@ -124,15 +124,17 @@ class KudVoiceEditorView @JvmOverloads constructor(
         cardClose.setPadding(dpi(8), dpi(8), dpi(8), dpi(8))
         cardClose.scaleType = ImageView.ScaleType.FIT_CENTER
         card.addView(cardClose, LinearLayout.LayoutParams(dpi(34), dpi(34)))
-        root.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(42)).apply { bottomMargin = dpi(6); marginEnd = dpi(4) })
+        root.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(38)).apply { bottomMargin = dpi(4); marginEnd = dpi(4) })
 
         // the text
         body.apply {
-            textSize = 17f
-            setLineSpacing(dp(3f), 1f)
+            textSize = 16f
+            setLineSpacing(dp(2f), 1f)
             setPadding(0, dpi(2), dpi(4), dpi(6))
         }
         scroll.isVerticalScrollBarEnabled = false
+        scroll.isVerticalFadingEdgeEnabled = true
+        scroll.setFadingEdgeLength(dpi(18))
         scroll.isFillViewport = true
         scroll.addView(body, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -166,7 +168,7 @@ class KudVoiceEditorView @JvmOverloads constructor(
         actions.addView(insertButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(36)).apply { marginEnd = dpi(8) })
         micButton.scaleType = ImageView.ScaleType.CENTER
         actions.addView(micButton, LinearLayout.LayoutParams(dpi(52), dpi(52)))
-        root.addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(56)))
+        root.addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(52)))
 
         tidyToggle.setOnClickListener { controller?.let { it.setTidy(!it.ui.tidyOn) } }
         closeButton.setOnClickListener { controller?.close() }
@@ -206,7 +208,6 @@ class KudVoiceEditorView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (!incognito) return
         val w = watermark ?: ContextCompat.getDrawable(context, R.drawable.kud_incognito_watermark)?.mutate()?.also {
-            it.alpha = 22
             watermark = it
         } ?: return
         val width = (getWidth() * 0.31f).toInt()
@@ -214,7 +215,10 @@ class KudVoiceEditorView @JvmOverloads constructor(
         val left = (getWidth() - width) / 2
         val top = (getHeight() * 0.5f).toInt() - height / 2
         w.setBounds(left, top, left + width, top + height)
+        // fainter than over the keys: text sits on top of it here
+        val saved = canvas.saveLayerAlpha(left.toFloat(), top.toFloat(), (left + width).toFloat(), (top + height).toFloat(), 14)
         w.draw(canvas)
+        canvas.restoreToCount(saved)
     }
 
     // ---- drawing --------------------------------------------------------------------------------------------
@@ -253,7 +257,6 @@ class KudVoiceEditorView @JvmOverloads constructor(
             for (o in q.options) cardChips.addView(chip(o, primary = true) { controller?.answer(o) }, chipParams())
             cardChips.addView(chip("Keep as is", primary = false) { controller?.answer(null) }, chipParams())
         }
-        cardLabel.text = if (q != null && ui.questionsLeft > 1) "Did you say (${ui.questionsLeft})" else "Did you say"
 
         // text
         val sb = SpannableStringBuilder(ui.text)
@@ -356,7 +359,7 @@ class KudVoiceEditorView @JvmOverloads constructor(
         setOnClickListener { onTap() }
     }
 
-    private fun chipParams() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(30)).apply { marginEnd = dpi(6) }
+    private fun chipParams() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(28)).apply { marginEnd = dpi(6) }
 
     private fun enable(v: View, on: Boolean) {
         v.isEnabled = on

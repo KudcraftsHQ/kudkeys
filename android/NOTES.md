@@ -85,7 +85,7 @@ cd android
   ✦ Fix (left) · middle · Instruct · Mic (right). The icons are fixed 44 dp slots and never move. The middle is a
   FrameLayout: HeliBoard's suggestions, and on top of them the amber Private pill (centred while the strip is empty;
   while suggestions show, a compact `kud_private_tag` sits before them and the strip shrinks), the quick-voice row (red dot, time, live text, "‹ Slide to cancel") and short
-  messages. Fix/Instruct show a "Coming soon" toast. Strings/dimens: `res/values/kudkeys_bar.xml`.
+  messages. Strings/dimens: `res/values/kudkeys_bar.xml`. Fix/Instruct and full voice: see "v0.3" below.
 - The stock toolbar is gone: `Settings.readToolbarMode` always returns `SUGGESTION_STRIP`, the Toolbar settings
   screen and key customiser are deleted, no toolbar/pinned keys are created. `ToolbarUtils.kt` remains only for
   the clipboard chip's close button and icon names.
@@ -99,7 +99,7 @@ cd android
   reports the field (`VoiceField`: fieldId, fieldName, package, inputType, imeOptions, privateness); another field
   cancels the session, even during the post-release wait, and text only goes into the field it started in.
   Hiding the keyboard or screen-off drops a recording but lets a released one finish; `onFinishInput` drops all.
-  Errors insert whatever arrived. Comma long-press (`KeyCode.VOICE_INPUT`) starts quick voice locked; nothing
+  Errors insert whatever arrived. A short tap on Mic opens the full voice editor (`Host.onTap`, v0.3). Comma long-press (`KeyCode.VOICE_INPUT`) starts quick voice locked; nothing
   switches to the system voice IME any more. Mic denied for good → "Microphone blocked — tap to open settings"
   (flag in `kudkeys_voice` prefs). Text goes in through `InputLogic.onVoiceTextInput` (smart leading space,
   composing word kept as typed). Mic permission: `MicPermissionActivity`. Voice client: the `:voice` module.
@@ -201,3 +201,39 @@ cd android
   the same in Nova's search box. Don't "fix" either.
 - Clear typing data only clears Kud Keys' own user-history dictionaries (`KudTypingData`); it must never touch the
   shared Android personal dictionary (`UserDictionary`).
+
+## Full voice mode, ✦ Fix, Instruct (v0.3, `docs/v0.3-spec.md` items 1–4)
+
+- **One host:** `KudQuickVoice` owns quick voice, the editor (`VoiceEditorController`) and Fix/Instruct
+  (`TextActionsController`), each with its own `VoiceClient` so their sessions never see each other's state. All three
+  controllers are pure Kotlin with a `Host` for the Android parts; the HTTP is `TextApi`/`TextClient` in `:voice`
+  (`voice/API.md` "Text endpoints").
+- **Editor view:** `KudVoiceEditorView` (built in code) is the last child of `keyboard_view_wrapper` in
+  `main_keyboard_frame.xml`, GONE until open. It measures itself to the tallest sibling (the keys, or emoji), so it follows
+  the keyboard height and the user's resize; it is opaque and clickable over the keys. Colours come from
+  `Settings.getValues().mColors` + `mKudIncognitoLook` (faint watermark in private fields). While open the bar hides
+  Fix/Instruct and the suggestions (Private pill stays) and Mic becomes "back to keys" (`kud_ic_keyboard`); the big
+  round button in the editor is stop / continue dictating. Mic shows an amber dot (`micDot`, a ViewOverlay) while a draft exists.
+- **Editor rules:** opening with no draft records at once; with a draft it just shows it. Stop → `tidy` when the toggle is
+  on (`PrefsDraftStore.tidyOn`, default on) → the chunk is appended (`VoiceDraft.append`: space, or a blank line when
+  either side has lines) with its questions offset. Tidy failure keeps the raw words and says so. Questions: first one on
+  the card, `VoiceDraft.answer` replaces by offsets and shifts the rest (overlaps dropped); "keep as is" / × just drop it.
+  Raw shows `draft.raw` (no cards); Insert inserts what is shown. Instruct (hold, 250 ms like Mic) sends the shown text.
+  Every change pushes the old draft on an undo stack (50, not persisted). Close/hide/onFinishInput stops a recording (its
+  words still join the draft) and closes; Discard clears. Private field → `VoiceStart(private)` and `private: true` on tidy/instruct.
+- **Draft storage:** `PrefsDraftStore` = SharedPreferences `kudkeys_draft` (text, raw, open questions, tidy toggle),
+  excluded from backup/transfer in both storage domains like `kudkeys_voice` (`KudBackupRulesTest`). Never logged. Drafts
+  from private fields are stored too (the spec asks the draft to survive; it is the user's own text, not learning).
+- **Fix / Instruct:** `InputConnectionFieldEditor` reads the selection, else ≤4,000 chars around the cursor (absolute
+  offsets from `getExtractedText`, fallback `LatinIME.kudExpectedSelection`), and replaces in one batch edit after
+  `LatinIME.kudPrepareExternalEdit` (commits the composing word). Before applying, the original range is re-read: changed →
+  "Text changed — try again". Undo (tap "Fixed · Undo" / "Done · Undo", 10 s) re-checks the new text is still there and
+  puts back the old text and selection. A selection stays selected after the edit; otherwise the cursor keeps its
+  distance from the end. Messages: `TextAction.errorMessage` (401 "Sign in to use Fix", 429 "Slow down a moment",
+  5xx/network "Fix unavailable", no session "Sign in from settings"). Field change / keyboard hidden cancels the call.
+  Bar spinner = `KudSpinnerDrawable` in the icon slot (the bar's children are pinned by `KudKeysToolbarScreenshotTest`).
+- **Tests:** `VoiceEditorControllerTest` (record → stop → tidy → answer → instruct → undo → insert, tidy off, append,
+  restart restores the draft, errors), `TextActionsControllerTest` (a Robolectric `EditText`'s InputConnection: replace,
+  selection, 4,000-char window, undo, text changed, errors, field change), `voice/.../TextClientTest` (MockWebServer with
+  the contract's JSON), `KudV03ScreenshotTest` → `$TMPDIR/kudkeys-v03-shots/*.png` (editor states, bar after Fix,
+  Instruct listening/waiting, draft dot, incognito).

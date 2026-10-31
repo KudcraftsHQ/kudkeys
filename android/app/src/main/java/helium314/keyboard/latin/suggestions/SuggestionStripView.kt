@@ -470,7 +470,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         val busy = (state as? TextBarState.Busy)?.action
         setBusyIcon(fixKey, busy == TextAction.Fix, R.drawable.kud_ic_fix)
         setBusyIcon(instructKey, busy == TextAction.Instruct, R.drawable.kud_ic_instruct)
-        instructKey.isActivated = state !is TextBarState.Listening
         when (state) {
             is TextBarState.Listening -> {
                 voiceDot.alpha = 1f
@@ -527,7 +526,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun placeMicDot(v: View) {
         val size = 7.dpToPx(resources)
         val cx = v.width / 2 + 9.dpToPx(resources)
-        val cy = v.height / 2 - 9.dpToPx(resources)
+        val cy = v.height / 2 - 8.dpToPx(resources)
         micDot.setBounds(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
         v.overlay.remove(micDot)
         v.overlay.add(micDot)
@@ -539,7 +538,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun updateMicIcon() {
         val locked = voiceBarState is VoiceBarState.Recording && (voiceBarState as VoiceBarState.Recording).locked
         val (icon, desc) = when {
-            editorUi.open && editorUi.isRecording -> R.drawable.kud_ic_stop to R.string.kud_stop_dictation
+            // the editor has its own big stop button; here Mic only goes back to the keys (a recording stops and stays)
             editorUi.open -> R.drawable.kud_ic_keyboard to R.string.kud_back_to_keys
             locked -> R.drawable.kud_ic_stop to R.string.kud_stop
             else -> R.drawable.sym_keyboard_voice_lxx to R.string.kud_mic
@@ -641,7 +640,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                 MotionEvent.ACTION_DOWN -> view.isPressed = true
                 MotionEvent.ACTION_UP -> {
                     view.isPressed = false
-                    if (editorUi.isRecording) editor.stopDictation() else editor.close()
+                    editor.close()
                 }
                 MotionEvent.ACTION_CANCEL -> view.isPressed = false
             }
