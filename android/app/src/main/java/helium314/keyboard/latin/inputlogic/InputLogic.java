@@ -2474,7 +2474,9 @@ public final class InputLogic {
             // INPUT_STYLE_TYPING.
             performUpdateSuggestionStripSync(settingsValues, SuggestedWords.INPUT_STYLE_TYPING);
         }
-        final SuggestedWordInfo autoCorrectionOrNull = mWordComposer.getAutoCorrectionOrNull();
+        // Kud Keys: with Autocorrect off (the default) a separator never swaps the typed word for a suggestion
+        final SuggestedWordInfo autoCorrectionOrNull = settingsValues.mAutoCorrectEnabled || mWordComposer.isBatchMode()
+                ? mWordComposer.getAutoCorrectionOrNull() : null;
         final String typedWord = mWordComposer.getTypedWord();
         final String stringToCommit = (autoCorrectionOrNull != null) ? autoCorrectionOrNull.mWord : typedWord;
         if (stringToCommit != null) {

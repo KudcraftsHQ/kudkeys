@@ -62,7 +62,9 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
         if (labelQuestion !in popupKeys)
             popupKeys[labelQuestion] = if (labelQuestion == "?") mutableListOf("¿") else mutableListOf("?", "¿")
         if ("punctuation" !in popupKeys)
-            popupKeys["punctuation"] = mutableListOf("${Key.POPUP_KEYS_AUTO_COLUMN_ORDER}8", "\\,", "?", "!", "#", ")", "(", "/", ";", "'", "@", ":", "-", "\"", "+", "\\%", "&")
+            // Kud Keys (SwiftKey): one row, "." itself as the default under the finger, the most used next to it
+            // (auto order puts them right, left, right… of the default as the screen allows)
+            popupKeys["punctuation"] = mutableListOf("${Key.POPUP_KEYS_AUTO_COLUMN_ORDER}9", ".", "\\,", "?", "!", "'", "\"", ":", ";", "-")
     }
 
     private fun readStream(stream: InputStream?, onlyPopupKeys: Boolean, priority: Boolean) {
@@ -81,7 +83,7 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
                     "[tlds]" -> { mode = READER_MODE_TLD; return@forEachLine }
                 }
                 when (mode) {
-                    READER_MODE_POPUP_KEYS -> addPopupKeys(line, priority)
+                    READER_MODE_POPUP_KEYS -> addPopupKeys(line, priority, extraFile = onlyPopupKeys)
                     READER_MODE_EXTRA_KEYS -> if (!onlyPopupKeys) addExtraKey(line.split(colonSpaceRegex, 2))
                     READER_MODE_LABELS -> if (!onlyPopupKeys) addLabel(line.split(colonSpaceRegex, 2))
                     READER_MODE_NUMBER_ROW -> localizedNumberKeys = line.splitOnWhitespace()
@@ -115,7 +117,7 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
         readStream(dataStream, true, priority)
     }
 
-    private fun addPopupKeys(line: String, priority: Boolean) {
+    private fun addPopupKeys(line: String, priority: Boolean, extraFile: Boolean = false) {
         val split = if (line.contains("|"))
                 // if a popup key contains label/code separately, there are cases where space can be in there too
                 // normally this should work for all popup keys, but if we split them on whitespace there is less chance for unnecessary issues
@@ -123,6 +125,8 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
             else line.splitOnWhitespace()
         if (split.size == 1) return
         val key = split.first()
+        // Kud Keys: the "." popup is one SwiftKey-like row; extra files (e.g. "Accented characters") mustn't grow it
+        if (extraFile && key == "punctuation") return
         // punctuation keys must always be normal popups (or getPunctuationPopupKeys needs to be adjusted)
         val popupsMap = if (priority && key != "punctuation") priorityPopupKeys else popupKeys
         if (popupsMap[key] is MutableList)

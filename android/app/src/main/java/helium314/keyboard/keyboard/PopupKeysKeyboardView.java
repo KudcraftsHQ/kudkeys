@@ -45,6 +45,11 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
     private int mOriginY;
     // Kud Keys: how far below the bottom row's centre the long-pressing finger started (see anchorSlideStart)
     private int mSlideOffsetY;
+    // Kud Keys: how far right of the default key's centre the long-pressing finger started (see anchorSlideStart)
+    private int mSlideOffsetX;
+    // Kud Keys: true only for long-press popups (anchorSlideStart ran). Other panels (more suggestions, emoji
+    // skin tones) keep HeliBoard's behaviour: sliding off the sides cancels.
+    private boolean mSlideAnchored;
     private Key mCurrentKey;
 
     private int mActivePointerId;
@@ -180,6 +185,8 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
         mOriginX = panelFinalX;
         mOriginY = y + container.getPaddingTop() + (int) getY();
         mSlideOffsetY = 0;
+        mSlideOffsetX = 0;
+        mSlideAnchored = false;
         controller.onShowPopupKeysPanel(this);
         final PopupKeysKeyboardAccessibilityDelegate accessibilityDelegate = mAccessibilityDelegate;
         if (accessibilityDelegate != null
@@ -196,10 +203,11 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
     }
 
     /**
-     * Kud Keys (SwiftKey behaviour): the panel opens above the key preview, so the finger that long-pressed
-     * is still well below it. Treat that starting height as just inside the bottom edge of the bottom row
-     * (a quarter key up), so a sideways slide selects by x straight away, sliding up reaches the rows above,
-     * and sliding down about one key height still cancels.
+     * Kud Keys (SwiftKey behaviour): selection is relative to where the long-press started, wherever the panel
+     * landed on screen. The finger's start counts as the centre of the default key (the one over the parent key),
+     * so every popup-key width sideways moves the highlight one key (clamped at the row's ends, see detectKey).
+     * Its height counts as just inside the bottom edge of the bottom row (a quarter key up): sliding up reaches the
+     * rows above, sliding down about one key height cancels.
      */
     @Override
     public void anchorSlideStart(final int x, final int y) {
@@ -211,9 +219,14 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
             bottomRowAnchorY = Math.max(bottomRowAnchorY, key.getY() + key.getHeight() - key.getHeight() / 4);
         }
         if (bottomRowAnchorY == Integer.MIN_VALUE) return;
-        // y is already translated with the current offset, so add it back to get the raw distance
+        mSlideAnchored = true;
+        // x and y are already translated with the current offsets, so add them back to get the raw distances
         final int touchY = mKeyDetector.getTouchY(y + mSlideOffsetY);
         mSlideOffsetY = Math.max(0, touchY - bottomRowAnchorY);
+        if (keyboard instanceof PopupKeysKeyboard popupKeysKeyboard) {
+            final int touchX = mKeyDetector.getTouchX(x + mSlideOffsetX);
+            mSlideOffsetX = touchX - popupKeysKeyboard.getDefaultCoordX();
+        }
     }
 
     @Override
@@ -273,6 +286,13 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
 
     private Key detectKey(int x, int y) {
         final Key oldKey = mCurrentKey;
+        final Keyboard keyboard = getKeyboard();
+        if (keyboard != null && mSlideAnchored) {
+            // Kud Keys: sliding sideways past either end keeps the end key instead of cancelling (long-press only)
+            final int touchX = mKeyDetector.getTouchX(x);
+            final int clampedTouchX = Math.max(0, Math.min(keyboard.mOccupiedWidth - 1, touchX));
+            x += clampedTouchX - touchX;
+        }
         final Key newKey = mKeyDetector.detectHitKey(x, y);
         if (newKey == oldKey) {
             return newKey;
@@ -314,7 +334,7 @@ public class PopupKeysKeyboardView extends KeyboardView implements PopupKeysPane
 
     @Override
     public int translateX(final int x) {
-        return x - mOriginX;
+        return x - mOriginX - mSlideOffsetX;
     }
 
     @Override

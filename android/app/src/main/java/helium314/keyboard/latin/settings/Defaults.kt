@@ -59,7 +59,7 @@ object Defaults {
     const val PREF_SHOW_EMOJI_DESCRIPTIONS = true
     @JvmField
     var PREF_POPUP_ON = true
-    const val PREF_AUTO_CORRECTION = true
+    const val PREF_AUTO_CORRECTION = false // Kud Keys: space keeps the word as typed (SwiftKey); KudMigrations
     const val PREF_MORE_AUTO_CORRECTION = false
     const val PREF_AUTO_CORRECT_CONFIDENCE = 0.24f
     const val PREF_AUTOCORRECT_SHORTCUTS = true
@@ -119,7 +119,7 @@ object Defaults {
     const val PREF_SUGGEST_CLIPBOARD_CONTENT = true
     const val PREF_VIBRATION_DURATION_SETTINGS = -1
     const val PREF_KEYPRESS_SOUND_VOLUME = -0.01f
-    const val PREF_KEY_LONGPRESS_TIMEOUT = 450 // Kud Keys: SwiftKey's Long-press duration
+    const val PREF_KEY_LONGPRESS_TIMEOUT = 300 // Kud Keys: SwiftKey-fast popups; KudMigrations moves 450 → 300
     const val PREF_ENABLE_EMOJI_ALT_PHYSICAL_KEY = true
     // supporting hardware keyboard still has a bunch of issues
     // crash https://github.com/HeliBorg/HeliBoard/issues/2047 (possibly fixed with b7cb95fc9da213c99d82e8833fb5f950f39d232e)

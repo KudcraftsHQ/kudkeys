@@ -109,6 +109,19 @@ cd android
   `KudKeysToolbarScreenshotTest` → `$TMPDIR/kudkeys-toolbar/*.png`).
 - Input-field info (`EditorInfo` flags): `J/latin/InputAttributes.java`, `LatinIME.onStartInputView*`.
 
+## Suggestions and space (v0.4.5, SwiftKey)
+
+- **Strip:** always three slots (`SuggestionStripLayoutHelper.getSlotIndices`): while typing, left = the typed word
+  verbatim, centre = the best other suggestion, right = the next; with nothing typed, centre = best, left/right = 2nd/3rd.
+  The typed word never shows twice. A long word shrinks its font (not the letter width) down to 60%
+  (`MIN_TEXT_SIZE_SCALE`), then ellipsizes at the end; empty slots keep their width. Test + screenshots:
+  `KudSuggestionStripTest` → `$TMPDIR/kudkeys-strip/`.
+- **Space keeps the word:** Autocorrect defaults off, and `InputLogic.commitCurrentAutoCorrection` only swaps the word
+  when it is on, so space/punctuation commit exactly what was typed; tapping a suggestion still replaces. Test:
+  `KudSpaceVerbatimTest`. `InputLogicTest.reset` turns autocorrect back on (it pins HeliBoard's logic).
+- **One-time migrations:** `J/kudkeys/KudMigrations.kt`, run from `checkVersionUpgrade` (also after a restore), each
+  marked by its own never-synced flag. v0.4.5: autocorrect off, long-press 450 → 300 (a chosen duration stays).
+
 ## Settings defaults
 
 - Default values: `J/latin/settings/Defaults.kt`. Pref keys: `J/latin/settings/Settings.java`. Values read at
@@ -162,7 +175,7 @@ cd android
   `KudTypingData.clear` (user history files + the system personal dictionary).
 - The emoji key in `functional_keys.json` is behind `emojiKeyEnabled` (`PREF_SHOW_EMOJI_KEY`, default now true).
 - Defaults changed to SwiftKey's: backspace reverts autocorrect off, autospace after punctuation on, emoji
-  suggestions off, D-pad (Arrow keys) off, key pop-ups on, long-press 450 ms. `InputLogicTest.reset` puts back
+  suggestions off, D-pad (Arrow keys) off, key pop-ups on, long-press 300 ms (450 until v0.4.5). `InputLogicTest.reset` puts back
   HeliBoard's two typing defaults, because those tests pin HeliBoard's logic.
 - Resize (`KudResizeScreen.kt`): `KudResize` is the handle math (pure, tested) on the height / side padding /
   bottom padding scales; `KudResizeStore` reads/writes them for the current orientation; the keyboard picture is
@@ -322,10 +335,15 @@ cd android
 
 ## SwiftKey touch behaviours (popup slide, hold delete)
 
-- **Popup slide**: when a long-press opens popup keys, `PointerTracker.onLongPressed` calls
-  `PopupKeysPanel.anchorSlideStart`; `PopupKeysKeyboardView` shifts its y mapping (`mSlideOffsetY`) so the finger's
-  starting height is the middle of the bottom row. Sideways picks by x at once, one popup row up reaches the row
-  above, sliding far away still cancels as HeliBoard did. Test: `KudPopupSlideTest` (real touch events).
+- **Popup slide** (relative, v0.4.5): when a long-press opens popup keys, `PointerTracker.onLongPressed` calls
+  `PopupKeysPanel.anchorSlideStart`; `PopupKeysKeyboardView` shifts its mapping (`mSlideOffsetX`, `mSlideOffsetY`) so
+  the finger's start is the centre of the default key (the one over the parent key) just inside the bottom row. Every
+  popup-key width sideways moves the highlight one key, wherever the panel had to be shifted to fit on screen;
+  past either end it stays on the end key (`detectKey` clamps x, never cancels sideways). One row up reaches the row
+  above; about one key height down cancels, and then lifting types nothing (`PointerTracker.onMoveEvent` disables
+  the pointer). The `.` popup is one row, `.` itself the default: `"punctuation"` in `LocaleKeyboardInfos`
+  (`. , ? ! ' " : ; -`, auto order, so on a phone it reads `- ; : " ' ! ? . ,` with `,` right and `?` `!` left of `.`).
+  Test: `KudPopupSlideTest` (real touch events, screenshot → `$TMPDIR/kudkeys-popup/`).
 - **Hold delete** (Typing → Delete words when held, `KudHoldDelete`, default on): 8 character repeats (400 ms start
   + 7 × 50 ms ≈ 750 ms), then `KeyCode.DELETE_WORD` every 175 ms. The rule (`charCountToDelete`) is ctrl+backspace:
   trailing spaces + the word; ' ’ - inside a word stay with it; punctuation/emoji runs are a word; marks, ZWJ,

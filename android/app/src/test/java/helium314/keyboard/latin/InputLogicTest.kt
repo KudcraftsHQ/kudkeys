@@ -735,6 +735,7 @@ class InputLogicTest {
         latinIME.prefs().edit {
             putBoolean(Settings.PREF_AUTOSPACE_AFTER_PUNCTUATION, false)
             putBoolean(Settings.PREF_BACKSPACE_REVERTS_AUTOCORRECT, true)
+            putBoolean(Settings.PREF_AUTO_CORRECTION, true)
         }
 
         setText("") // (re)sets selection and composing word
