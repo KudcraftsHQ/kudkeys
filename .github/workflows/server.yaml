@@ -1,6 +1,6 @@
 # Kud Keys server + web app CI: typecheck and tests on every change outside
 # android/, then the Docker image is built and smoke-tested against a real
-# Postgres (migrations, sign-up, /api/me, a /v1/stream session with the bearer
+# Postgres (migrations, sign-up, /api/me, /api/text/fix, a /v1/stream session with the bearer
 # token against a fake Groq, and its usage row). Runtime queries go through
 # pgbouncer in transaction mode with ?pgbouncer=true, as in production.
 name: server
@@ -75,6 +75,7 @@ jobs:
             -e KUDKEYS_TOKENS=ci-static-token-ci-static-token-1234 \
             -e GROQ_API_KEY=gsk-fake \
             -e GROQ_TRANSCRIPTIONS_URL=http://localhost:18099/openai/v1/audio/transcriptions \
+            -e GROQ_CHAT_URL=http://localhost:18099/openai/v1/chat/completions \
             kudkeys
           for i in $(seq 1 60); do curl -fsS localhost:8080/api/health && break; sleep 1; done
           curl -fsS localhost:8080/health

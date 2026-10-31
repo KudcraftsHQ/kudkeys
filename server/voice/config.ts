@@ -1,5 +1,9 @@
 import { GROQ_TRANSCRIPTIONS_URL } from "./providers/groq";
 import { OPENAI_REALTIME_URL } from "./providers/openai";
+import { GROQ_CHAT_URL } from "../text/groq-chat";
+
+/** The text endpoints' model (Groq chat) when KUDKEYS_TEXT_MODEL is unset. Chosen by server/scripts/eval-text.ts. */
+export const DEFAULT_TEXT_MODEL = "qwen/qwen3.8-27b";
 
 export type ProviderName = "groq" | "openai";
 
@@ -22,6 +26,8 @@ export type Config = {
     delay?: string;
     noiseReduction?: "near_field" | "far_field";
   };
+  /** Groq chat for /api/text/* (tidy, fix, instruct). Uses GROQ_API_KEY whatever the voice provider. */
+  text: { apiKey: string | null; model: string; url: string; perMinute: number };
   defaultLanguages: string[];
   maxSessionSeconds: number;
   idleSeconds: number;
@@ -59,6 +65,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       url: env.OPENAI_REALTIME_URL?.trim() || OPENAI_REALTIME_URL,
       delay: env.KUDKEYS_DELAY?.trim() || undefined,
       noiseReduction: (noise as Config["openai"]["noiseReduction"]) || undefined,
+    },
+    text: {
+      apiKey: env.GROQ_API_KEY?.trim() || null,
+      model: env.KUDKEYS_TEXT_MODEL?.trim() || DEFAULT_TEXT_MODEL,
+      url: env.GROQ_CHAT_URL?.trim() || GROQ_CHAT_URL,
+      perMinute: int(env.KUDKEYS_TEXT_RPM, 30),
     },
     defaultLanguages: list(env.KUDKEYS_LANGUAGES).length ? list(env.KUDKEYS_LANGUAGES) : ["id", "en"],
     maxSessionSeconds: int(env.KUDKEYS_MAX_SESSION_SECONDS, 600),

@@ -1,0 +1,12 @@
+{
+  "kind": "tidy",
+  "about": "Slang that must stay slang. Short; one paragraph; no list.",
+  "input": {
+    "text": "eh lu udah makan belom gue nggak jadi dateng nih soalnya macet parah banget wkwk yaudah ntar gue kabarin lagi ya"
+  },
+  "keywords": [],
+  "expect": {
+    "contains": ["lu", "udah", "belom", "gue", "nggak", "dateng", "banget", "yaudah", "ntar"],
+    "notContains": ["tidak", "sudah", "saya", "belum", "datang", "nanti", "1."]
+  }
+}

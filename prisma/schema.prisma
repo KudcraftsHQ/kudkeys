@@ -1,7 +1,8 @@
 // Kud Keys — Prisma schema.
 //
-// Accounts (Better Auth), each user's voice profile, and one usage row per
-// voice stream. Transcript text is never stored: there is no column for it.
+// Accounts (Better Auth), each user's voice profile, one usage row per voice
+// stream and one per text call (tidy, fix, instruct). Transcript and text are
+// never stored: there is no column for them.
 //
 // Migration: bunx prisma migrate dev --name <change-name>
 // Regenerate client: bunx prisma generate
@@ -41,6 +42,7 @@ model KudkeysUser {
   sessions      KudkeysSession[]
   accounts      KudkeysAccount[]
   voiceSessions VoiceSession[]
+  textUsage     TextUsage[]
 
   @@map("kudkeys_user")
 }
@@ -116,4 +118,25 @@ model VoiceSession {
 
   @@index([userId, startedAt])
   @@map("voice_session")
+}
+
+// One row per /api/text/* call that reached the model. Counts and timing only:
+// never the text. For a private field (`private: true`) the character counts
+// are null too, so the row says only which kind, when and how long.
+model TextUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  // tidy | fix | instruct
+  kind      String
+  charsIn   Int?
+  charsOut  Int?
+  ms        Int
+  model     String
+  ok        Boolean
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("text_usage")
 }

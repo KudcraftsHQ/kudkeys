@@ -1,0 +1,13 @@
+{
+  "kind": "fix",
+  "about": "A chat message with typos and missing punctuation. Keep slang and abbreviations (yg, bgt, gk), keep the language mix.",
+  "input": {
+    "text": "halo mas, sya udah kirm file nya ke email kmu ya. tolong d cek dulu yg bagian invoice soalnya ada bbrp angka yg aku ragu bgt. thanks bnyak!! btw meeting bsok jadi jam 10 kan"
+  },
+  "keywords": ["Fenno"],
+  "expect": {
+    "contains": ["udah", "yg", "bgt", "btw"],
+    "notContains": ["sudah", "yang", "banget", "tidak"],
+    "changed": true
+  }
+}

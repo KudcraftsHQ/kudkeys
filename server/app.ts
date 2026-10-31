@@ -10,6 +10,8 @@ import { join } from 'node:path'
 import { isAllowed } from './lib/allowlist'
 import type { Store } from './lib/store'
 import { meRouter } from './routes/me'
+import { textRouter } from './routes/text'
+import type { TextEngine } from './text/engine'
 
 export type SessionUser = { id: string; email: string; name: string | null }
 export type AppEnv = { Variables: { user: SessionUser } }
@@ -25,6 +27,8 @@ export interface AppDeps {
   getSession: (headers: Headers) => Promise<SessionUser | null>
   /** Better Auth's handler, mounted at /api/auth/*. */
   authHandler?: (req: Request) => Promise<Response>
+  /** /api/text/* (tidy, fix, instruct); null or omitted = those answer 503. */
+  text?: { engine: TextEngine | null; perMinute?: number }
   /** "groq:whisper-large-v3", or null when no provider key is set. */
   transcription: string | null
   /** Origins allowed to send cookie writes (BETTER_AUTH_URL + KUDKEYS_ORIGIN). */
@@ -103,6 +107,11 @@ export function createApp(deps: AppDeps) {
   app.use('/api/me', requireUser)
   app.use('/api/me/*', requireUser)
   app.route('/api/me', meRouter({ store: deps.store, now: deps.now }))
+  app.use('/api/text/*', requireUser)
+  app.route(
+    '/api/text',
+    textRouter({ store: deps.store, engine: deps.text?.engine ?? null, perMinute: deps.text?.perMinute, now: deps.now }),
+  )
   app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404))
 
   if (deps.publicDir) mountSpa(app, deps.publicDir)

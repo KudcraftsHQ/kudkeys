@@ -22,6 +22,7 @@ test('migrations apply; profile defaults and usage columns are as the API expect
     'kudkeys_session',
     'kudkeys_user',
     'kudkeys_verification',
+    'text_usage',
     'voice_session',
   ])
 
@@ -44,10 +45,18 @@ test('migrations apply; profile defaults and usage columns are as the API expect
     'userId',
   ])
 
+  // text_usage: counts and timing, no column for text.
+  const textCols = await pg.query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'text_usage' ORDER BY 1`,
+  )
+  expect(textCols.rows.map((r) => r.column_name)).toEqual(['charsIn', 'charsOut', 'createdAt', 'id', 'kind', 'model', 'ms', 'ok', 'userId'])
+  await pg.exec(`INSERT INTO text_usage (id, "userId", kind, ms, model, ok) VALUES ('t1', 'u1', 'fix', 120, 'qwen/qwen3.8-27b', true)`)
+
   // Deleting a user takes their sessions and usage with them.
   await pg.exec(
     `INSERT INTO voice_session (id, "userId", session, "startedAt", "endedAt", "audioSeconds", finals, outcome) VALUES ('v1', 'u1', 'ab12', now(), now(), 1.5, 1, 'stopped')`,
   )
   await pg.exec(`DELETE FROM kudkeys_user WHERE id = 'u1'`)
   expect((await pg.query(`SELECT * FROM voice_session`)).rows.length).toBe(0)
+  expect((await pg.query(`SELECT * FROM text_usage`)).rows.length).toBe(0)
 })

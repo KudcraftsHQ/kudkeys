@@ -9,6 +9,7 @@ import { parseAllowlist } from './lib/allowlist'
 import { db } from './lib/db'
 import { prismaStore } from './lib/store'
 import { createServer, streamAuthenticator } from './server'
+import { createTextEngine } from './text/engine'
 import { activeModel, loadConfig } from './voice/config'
 
 if (!process.env.BETTER_AUTH_SECRET) {
@@ -24,6 +25,7 @@ const auth = createAuth({ database: prismaAdapter(db, { provider: 'postgresql' }
 const store = prismaStore(db)
 const getSession = (headers: Headers) => lookupSession(auth, headers)
 const model = activeModel(cfg)
+const textEngine = cfg.text.apiKey ? createTextEngine({ apiKey: cfg.text.apiKey, url: cfg.text.url, model: cfg.text.model }) : null
 
 const app = createApp({
   store,
@@ -31,6 +33,7 @@ const app = createApp({
   getSession,
   authHandler: (req) => auth.handler(req),
   transcription: model,
+  text: { engine: textEngine, perMinute: cfg.text.perMinute },
   trustedOrigins: trustedOrigins(),
   publicDir: process.env.KUDKEYS_PUBLIC_DIR ?? resolve(import.meta.dir, 'public'),
 })
@@ -41,4 +44,6 @@ const server = createServer(cfg, {
   authenticate: streamAuthenticator({ tokens: cfg.tokens, getSession, store, allowlist }),
 })
 const keyVar = cfg.provider === 'groq' ? 'GROQ_API_KEY' : 'OPENAI_API_KEY'
-console.log(`[kudkeys] listening on :${server.port} — transcription: ${model ?? `not configured (set ${keyVar})`}`)
+console.log(
+  `[kudkeys] listening on :${server.port} — transcription: ${model ?? `not configured (set ${keyVar})`} — text: ${textEngine ? `groq:${textEngine.model}` : 'not configured (set GROQ_API_KEY)'}`,
+)

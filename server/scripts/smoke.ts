@@ -1,6 +1,6 @@
 // Smoke test of a running server (e.g. the Docker image): sign up an allowed
-// email, read /api/me, stream two seconds of tone with the session token and
-// see the usage row. Never point it at production: it creates an account.
+// email, read /api/me, call /api/text/fix, stream two seconds of tone with the
+// session token and see the usage row. Never point it at production: it creates an account.
 //
 //   bun server/scripts/smoke.ts http://localhost:8080 hammas@example.com
 
@@ -25,6 +25,10 @@ res = await fetch(`${base}/api/me`, { method: 'PATCH', headers: { ...json, ...au
 const me = (await res.json()) as { email: string; voiceKeywords: string[] }
 if (me.email !== email || me.voiceKeywords.length !== 2) fail(`/api/me ${JSON.stringify(me)}`)
 console.log('me', JSON.stringify(me))
+
+res = await fetch(`${base}/api/text/fix`, { method: 'POST', headers: { ...json, ...auth }, body: JSON.stringify({ text: 'smoke test' }) })
+if (res.status !== 200) fail(`/api/text/fix ${res.status} ${await res.text()}`)
+console.log('text fix', JSON.stringify(await res.json()))
 
 const before = ((await (await fetch(`${base}/api/me/usage`, { headers: auth })).json()) as { sessions: unknown[] }).sessions.length
 const ws = new WebSocket(`${base.replace(/^http/, 'ws')}/v1/stream`, { headers: auth } as unknown as string[])
