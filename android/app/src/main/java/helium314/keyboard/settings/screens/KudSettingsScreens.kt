@@ -116,7 +116,7 @@ fun KudMainSettingsScreen(
             // Account goes here (key KudSettings.PREF_ACCOUNT); hidden until it exists
             Preference(
                 name = stringResource(R.string.kud_section_languages),
-                description = SubtypeSettings.getEnabledSubtypes(true).joinToString(", ") { it.displayName() },
+                description = SubtypeSettings.getEnabledSubtypes(true).map { kudLanguageName(it, LocalContext.current) }.distinct().joinToString(", "),
                 onClick = onClickLanguages,
                 icon = R.drawable.ic_settings_languages,
             ) { NextScreenIcon() }
@@ -169,13 +169,10 @@ fun KudLanguagesScreen(onClickAddLanguages: () -> Unit, onClickBack: () -> Unit)
     rememberPrefChanges()
     SearchSettingsScreen(onClickBack = onClickBack, title = stringResource(R.string.kud_section_languages), settings = emptyList()) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            SubtypeSettings.getEnabledSubtypes(true).forEach { subtype ->
+            SubtypeSettings.getEnabledSubtypes(true).distinct().forEach { subtype ->
                 val layout = SubtypeLocaleUtils.getMainLayoutDisplayName(subtype.mainLayoutNameOrQwerty())
                     ?: subtype.mainLayoutNameOrQwerty()
-                val secondary = subtype.getExtraValueOf(ExtraValue.SECONDARY_LOCALES)
-                    ?.split(Separators.KV)?.filter { it.isNotBlank() }
-                    ?.joinToString(" + ") { it.constructLocale().localizedDisplayName(ctx.resources) }
-                val name = subtype.displayName() + (secondary?.takeIf { it.isNotEmpty() }?.let { " + $it" } ?: "")
+                val name = kudLanguageName(subtype, ctx)
                 Row(
                     Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -204,6 +201,14 @@ fun KudLanguagesScreen(onClickAddLanguages: () -> Unit, onClickBack: () -> Unit)
             Explainer(R.drawable.kud_ic_info, R.string.kud_languages_multilingual_title, R.string.kud_languages_multilingual_text)
         }
     }
+}
+
+/** "English (US) + Indonesian": the subtype's name with its multilingual (secondary) languages. */
+private fun kudLanguageName(subtype: android.view.inputmethod.InputMethodSubtype, ctx: Context): String {
+    val secondary = subtype.getExtraValueOf(ExtraValue.SECONDARY_LOCALES)
+        ?.split(Separators.KV)?.filter { it.isNotBlank() }
+        ?.joinToString(" + ") { it.constructLocale().localizedDisplayName(ctx.resources) }
+    return subtype.displayName() + (secondary?.takeIf { it.isNotEmpty() }?.let { " + $it" } ?: "")
 }
 
 @Composable
@@ -389,9 +394,8 @@ fun createKudSettings(context: Context) = listOf(
             name = setting.title,
             value = value,
             range = 100f..800f,
-            steps = 13,
             valueText = stringResource(R.string.abbreviation_unit_milliseconds, value.roundToInt().toString()),
-            onValueChange = { value = it },
+            onValueChange = { value = (it / 10f).roundToInt() * 10f },
             onValueChangeFinished = { prefs.edit { putInt(Settings.PREF_KEY_LONGPRESS_TIMEOUT, value.roundToInt()) } },
         )
     },
@@ -405,11 +409,10 @@ fun createKudSettings(context: Context) = listOf(
             name = setting.title,
             value = value,
             range = 0f..10f,
-            steps = 9,
             valueText = if (stored < 0 && value == KudSettingsRules.volumeToSteps(stored).toFloat()) stringResource(R.string.kud_value_default)
                 else value.roundToInt().toString(),
             enabled = soundOn,
-            onValueChange = { value = it },
+            onValueChange = { value = it.roundToInt().toFloat() },
             onValueChangeFinished = {
                 val volume = value.roundToInt() / 10f
                 prefs.edit { putFloat(Settings.PREF_KEYPRESS_SOUND_VOLUME, volume) }
@@ -456,11 +459,10 @@ fun createKudSettings(context: Context) = listOf(
             name = setting.title,
             value = value,
             range = 5f..100f,
-            steps = 18,
             valueText = stringResource(R.string.abbreviation_unit_milliseconds, value.roundToInt().toString()),
             enabled = !androidDefault && vibrateOn,
             titleEnabled = !androidDefault,
-            onValueChange = { value = it },
+            onValueChange = { value = (it / 5f).roundToInt() * 5f },
             onValueChangeFinished = {
                 KudSettingsRules.setVibrationMs(prefs, value.roundToInt())
                 AudioAndHapticFeedbackManager.getInstance().vibrate(value.roundToInt().toLong())
