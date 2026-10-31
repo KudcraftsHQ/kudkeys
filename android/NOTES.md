@@ -17,7 +17,11 @@ still `helium314.keyboard.*` (see `UPSTREAM.md` for why); `J/` = `java/helium314
 | applicationId | `com.kudcrafts.kudkeys` (debug: `com.kudcrafts.kudkeys.debug`); namespace `helium314.keyboard.latin` |
 
 Build types: `debug` (no minify, `.debug` suffix) and `release` (R8 minify; signed only when `KC_KEYSTORE_FILE`
-is set). Version comes from `KC_VERSION_NAME` / `KC_VERSION_CODE` (default `0.0.0-dev` / 1).
+is set; `voice/consumer-rules.pro` keeps the voice module). CI builds the unsigned release too. Version comes from
+`KC_VERSION_NAME` / `KC_VERSION_CODE` (default `0.0.0-dev` / 1); `release.yaml` sets the code from the tag as
+`(major*10000 + minor*100 + patch)*100 + (rc ? N : 99)` for `vX.Y.Z-rc.N` / `vX.Y.Z`.
+Android backup is on, but `res/xml/kud_backup_rules.xml` + `kud_data_extraction_rules.xml` exclude
+`kudkeys_voice.xml` (token) in both storage domains.
 
 ## Build and test
 
@@ -79,19 +83,25 @@ cd android
 
 - **The bar** is `J/latin/suggestions/SuggestionStripView.kt` + `res/layout/suggestions_strip.xml`: one row,
   ✦ Fix (left) · middle · Instruct · Mic (right). The icons are fixed 44 dp slots and never move. The middle is a
-  FrameLayout: HeliBoard's suggestions, and on top of them the amber Private pill (only while the strip is empty;
-  suggestions win while typing), the quick-voice row (red dot, time, live text, "‹ Slide to cancel") and short
+  FrameLayout: HeliBoard's suggestions, and on top of them the amber Private pill (centred while the strip is empty;
+  while suggestions show, a compact `kud_private_tag` sits before them and the strip shrinks), the quick-voice row (red dot, time, live text, "‹ Slide to cancel") and short
   messages. Fix/Instruct show a "Coming soon" toast. Strings/dimens: `res/values/kudkeys_bar.xml`.
 - The stock toolbar is gone: `Settings.readToolbarMode` always returns `SUGGESTION_STRIP`, the Toolbar settings
   screen and key customiser are deleted, no toolbar/pinned keys are created. `ToolbarUtils.kt` remains only for
   the clipboard chip's close button and icon names.
 - **Privacy**: `J/kudkeys/KudPrivacy.kt` `isPrivate(editorInfo, packageName)` (incognito flag, passwords, URI,
   search action / FILTER, Nova + the default HOME app). `InputAttributes.mIsPrivate` feeds
-  `SettingsValues.mIncognitoModeEnabled`, which already gates every learning path (user history, auto-add to the
+  `SettingsValues.mIncognitoModeEnabled`, which already gates every learning path. `LatinIME` re-checks privacy on
+  every `onStartInput` / `onStartInputView` (also `restarting=true`) and reloads settings when it differs. It (user history, auto-add to the
   personal dictionary, emoji history, emoji recents); `InputLogic.unlearnWord` is gated too.
 - **Quick voice**: `J/kudkeys/QuickVoiceController.kt` is the touch/state machine (pure Kotlin, tested with fake
-  touches and a fake engine); `KudQuickVoice.kt` hosts it in `LatinIME` (one per IME, cancelled in
-  `onFinishInputView` and `hideWindow`); text goes in through `InputLogic.onVoiceTextInput` (smart leading space,
+  touches and a fake engine); `KudQuickVoice.kt` hosts it in `LatinIME` (one per IME). Every start-input
+  reports the field (`VoiceField`: fieldId, fieldName, package, inputType, imeOptions, privateness); another field
+  cancels the session, even during the post-release wait, and text only goes into the field it started in.
+  Hiding the keyboard or screen-off drops a recording but lets a released one finish; `onFinishInput` drops all.
+  Errors insert whatever arrived. Comma long-press (`KeyCode.VOICE_INPUT`) starts quick voice locked; nothing
+  switches to the system voice IME any more. Mic denied for good → "Microphone blocked — tap to open settings"
+  (flag in `kudkeys_voice` prefs). Text goes in through `InputLogic.onVoiceTextInput` (smart leading space,
   composing word kept as typed). Mic permission: `MicPermissionActivity`. Voice client: the `:voice` module.
 - **Settings → Voice**: `J/settings/screens/VoiceScreen.kt` (server URL, token, Test connection via
   `J/kudkeys/VoiceConnectionTest.kt`, which streams silence and sends `stop` once the server is ready).
