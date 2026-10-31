@@ -9,7 +9,7 @@ import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
  * Settings UI: `settings/screens/KudSettingsScreens.kt`.
  */
 object KudSettings {
-    /** Placeholder for the Account entry at the top of settings (added by another change; hidden until then). */
+    /** Key of the Account entry at the top of settings (KudAccountRow); the account itself lives in VoiceSettings. */
     const val PREF_ACCOUNT = "kudkeys_account"
 
     /** Typing → Quick prediction insert: space inserts the middle prediction before the next word is started. */

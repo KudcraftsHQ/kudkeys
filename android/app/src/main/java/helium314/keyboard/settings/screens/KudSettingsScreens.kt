@@ -110,10 +110,11 @@ fun KudMainSettingsScreen(
     onClickSound: () -> Unit,
     onClickAdvanced: () -> Unit,
     onClickBack: () -> Unit,
+    onClickAccount: () -> Unit = {},
 ) {
     SearchSettingsScreen(onClickBack = onClickBack, title = stringResource(R.string.ime_settings), settings = emptyList()) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            // Account goes here (key KudSettings.PREF_ACCOUNT); hidden until it exists
+            KudAccountRow(onClickAccount) // KudSettings.PREF_ACCOUNT
             Preference(
                 name = stringResource(R.string.kud_section_languages),
                 description = SubtypeSettings.getEnabledSubtypes(true).map { kudLanguageName(it, LocalContext.current) }.distinct().joinToString(", "),
@@ -534,6 +535,7 @@ object KudDestination {
     const val Resize = "kud_resize"
     const val PhysicalKeyboard = "kud_physical_keyboard"
     const val More = "kud_advanced"
+    const val Account = "kud_account"
 }
 
 // ---- rows ----

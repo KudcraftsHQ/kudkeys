@@ -21,6 +21,9 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         DebugFlags.init(this)
+        // kudkeys: names this device on the web app's Devices page
+        com.kudcrafts.kudkeys.voice.VoiceSettings.userAgent =
+            "KudKeys/${BuildConfig.VERSION_NAME} (Android ${android.os.Build.VERSION.RELEASE}; ${android.os.Build.MODEL})"
         FoldableUtils.init(this)
         Settings.init(this)
         SubtypeSettings.init(this)

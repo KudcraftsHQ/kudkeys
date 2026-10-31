@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kud Keys: the account (sign-in, profile). English only, like the other Kud Keys strings. -->
+<resources>
+    <string name="kud_account_sign_in" translatable="false">Sign in</string>
+    <string name="kud_account_sign_in_summary" translatable="false">Voice typing works with your Kud Keys account, and spells your keywords right</string>
+    <string name="kud_account_signed_out" translatable="false">Signed out — sign in again</string>
+    <string name="kud_account_title" translatable="false">Account</string>
+    <string name="kud_account_sign_in_intro" translatable="false">Sign in with your Kud Keys account. Voice typing uses it, with the keywords and languages on your profile.</string>
+    <string name="kud_account_email" translatable="false">Email</string>
+    <string name="kud_account_password" translatable="false">Password</string>
+    <string name="kud_account_signing_in" translatable="false">Signing in…</string>
+    <string name="kud_account_no_account" translatable="false">No account? Kud Keys is invite-only. Create one at keys.kudcrafts.com</string>
+    <string name="kud_account_err_password" translatable="false">Wrong email or password.</string>
+    <string name="kud_account_err_offline" translatable="false">No internet connection. Check Wi-Fi or mobile data and try again.</string>
+    <string name="kud_account_err_unreachable" translatable="false">Can\'t reach %s. Try again in a moment.</string>
+    <string name="kud_account_err_not_allowed" translatable="false">This email isn\'t allowed to use Kud Keys.</string>
+    <string name="kud_account_name" translatable="false">Name</string>
+    <string name="kud_account_keywords" translatable="false">Voice keywords</string>
+    <string name="kud_account_keywords_summary" translatable="false">Names and brands voice typing should spell right. Sent with every voice note.</string>
+    <string name="kud_account_keyword_add" translatable="false">Add a keyword</string>
+    <string name="kud_account_keyword_add_button" translatable="false">Add</string>
+    <string name="kud_account_keyword_remove" translatable="false">Remove %s</string>
+    <string name="kud_account_keywords_too_long" translatable="false">Keywords are at most 100 characters.</string>
+    <string name="kud_account_keywords_too_many" translatable="false">At most 100 keywords.</string>
+    <string name="kud_account_languages" translatable="false">Languages</string>
+    <string name="kud_account_languages_summary" translatable="false">With one language voice typing is told which; with several it detects per phrase.</string>
+    <string name="kud_account_save" translatable="false">Save</string>
+    <string name="kud_account_saving" translatable="false">Saving…</string>
+    <string name="kud_account_saved" translatable="false">Saved. Voice uses it from the next note.</string>
+    <string name="kud_account_usage" translatable="false">Usage</string>
+    <string name="kud_account_usage_week" translatable="false">This week</string>
+    <string name="kud_account_usage_month" translatable="false">This month</string>
+    <string name="kud_account_usage_value" translatable="false">%1$s min · %2$d voice notes</string>
+    <string name="kud_account_usage_recent" translatable="false">Recent voice notes</string>
+    <string name="kud_account_usage_none" translatable="false">No voice notes yet.</string>
+    <string name="kud_account_web" translatable="false">Manage on the web</string>
+    <string name="kud_account_web_summary" translatable="false">Devices, password and full usage at keys.kudcrafts.com</string>
+    <string name="kud_account_sign_out" translatable="false">Sign out</string>
+    <string name="kud_account_sign_out_summary" translatable="false">Voice stops working on this phone until you sign in again</string>
+    <string name="kud_account_loading" translatable="false">Loading…</string>
+    <string name="kud_account_retry" translatable="false">Try again</string>
+    <string name="kud_voice_account_none" translatable="false">Not signed in</string>
+    <string name="kud_voice_advanced" translatable="false">Advanced</string>
+    <string name="kud_voice_token_legacy" translatable="false">Legacy token</string>
+    <string name="kud_voice_token_legacy_summary" translatable="false">Only used when you\'re not signed in</string>
+</resources>

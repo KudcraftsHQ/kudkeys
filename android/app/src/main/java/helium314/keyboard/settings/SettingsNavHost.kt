@@ -41,6 +41,7 @@ import helium314.keyboard.settings.screens.SecondaryLayoutScreen
 import helium314.keyboard.settings.screens.SubtypeScreen
 import helium314.keyboard.settings.screens.TextCorrectionScreen
 import helium314.keyboard.settings.screens.VoiceScreen
+import helium314.keyboard.settings.screens.KudAccountScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -83,6 +84,7 @@ fun SettingsNavHost(
                 onClickSound = { navController.navigate(KudDestination.Sound) },
                 onClickAdvanced = { navController.navigate(KudDestination.More) },
                 onClickBack = ::goBack,
+                onClickAccount = { navController.navigate(KudDestination.Account) },
             )
         }
         composable(KudDestination.More) {
@@ -106,6 +108,7 @@ fun SettingsNavHost(
         composable(KudDestination.RichInput) { KudRichInputScreen(onClickBack = ::goBack) }
         composable(KudDestination.LayoutKeys) { KudLayoutKeysScreen(onClickBack = ::goBack) }
         composable(KudDestination.Resize) { KudResizeScreen(onClickBack = ::goBack) }
+        composable(KudDestination.Account) { KudAccountScreen(onClickBack = ::goBack) }
         composable(KudDestination.Sound) { KudSoundScreen(onClickBack = ::goBack) }
         composable(SettingsDestination.About) {
             AboutScreen(onClickBack = ::goBack)
@@ -117,7 +120,7 @@ fun SettingsNavHost(
             PreferencesScreen(onClickBack = ::goBack)
         }
         composable(SettingsDestination.Voice) {
-            VoiceScreen(onClickBack = ::goBack)
+            VoiceScreen(onClickBack = ::goBack, onClickAccount = { navController.navigate(KudDestination.Account) })
         }
         composable(SettingsDestination.Advanced) {
             AdvancedSettingsScreen(onClickBack = ::goBack)
