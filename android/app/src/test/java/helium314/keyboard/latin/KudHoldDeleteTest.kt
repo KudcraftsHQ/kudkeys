@@ -20,6 +20,7 @@ import org.robolectric.annotation.Config
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** Typing → Delete words when held: character repeats first, then a word per repeat. */
 @RunWith(RobolectricTestRunner::class)
@@ -70,13 +71,15 @@ class KudHoldDeleteTest {
 
     @Test fun timing() {
         val start = 400; val interval = 50
-        val delays = (1..12).map { KudHoldDelete.delayBeforeRepeat(true, KeyCode.DELETE, it, start, interval) }
-        assertEquals(listOf(400, 50, 50, 50, 50, 50, 50, 50, 175, 175, 175, 175), delays)
-        // the 8th character repeat lands at 750 ms, the first word at 925 ms
-        assertEquals(750, delays.take(8).sum())
-        assertEquals(KeyCode.DELETE, KudHoldDelete.codeForRepeat(true, KeyCode.DELETE, 8))
-        assertEquals(KeyCode.DELETE_WORD, KudHoldDelete.codeForRepeat(true, KeyCode.DELETE, 9))
+        val delays = (1..11).map { KudHoldDelete.delayBeforeRepeat(true, KeyCode.DELETE, it, start, interval) }
+        // a longer wait than a normal repeat, then words slowly, speeding up to a top speed
+        assertEquals(listOf(550, 320, 272, 231, 197, 167, 142, 121, 110, 110, 110), delays)
+        assertTrue(delays.zipWithNext().all { (a, b) -> b <= a })
+        // every repeat of a held backspace is a word
+        assertEquals(KeyCode.DELETE_WORD, KudHoldDelete.codeForRepeat(true, KeyCode.DELETE, 1))
+        assertEquals(KeyCode.DELETE_WORD, KudHoldDelete.codeForRepeat(true, KeyCode.DELETE, 30))
         // off, or another repeating key: HeliBoard's timing and codes
+        assertEquals(400, KudHoldDelete.delayBeforeRepeat(false, KeyCode.DELETE, 1, start, interval))
         assertEquals(50, KudHoldDelete.delayBeforeRepeat(false, KeyCode.DELETE, 20, start, interval))
         assertEquals(KeyCode.DELETE, KudHoldDelete.codeForRepeat(false, KeyCode.DELETE, 20))
         assertEquals(50, KudHoldDelete.delayBeforeRepeat(true, KeyCode.ARROW_LEFT, 20, start, interval))
@@ -127,39 +130,37 @@ class KudHoldDeleteTest {
 
     private val sentence = "Aku mau makan nasi goreng, terus minum es teh 😀 "
 
-    @Test fun charactersFirstThenWords() {
+    @Test fun tapDeletesACharacterThenEveryRepeatAWord() {
         start(sentence)
-        val steps = hold(KudHoldDelete.CHAR_REPEATS + 5)
-        // the press and 8 repeats take one character (or one emoji) each: " ", "😀", " ", "h", "e", "t", " ", "s", "e"
+        val steps = hold(5)
+        // the press itself takes one character (the trailing space)
         assertEquals("Aku mau makan nasi goreng, terus minum es teh 😀", steps[0])
+        // then a whole word per repeat, never characters
         assertEquals("Aku mau makan nasi goreng, terus minum es teh ", steps[1])
-        assertEquals("Aku mau makan nasi goreng, terus minum es teh", steps[2])
-        assertEquals("Aku mau makan nasi goreng, terus minum ", steps[KudHoldDelete.CHAR_REPEATS])
-        // then a word per repeat
-        assertEquals("Aku mau makan nasi goreng, terus ", steps[KudHoldDelete.CHAR_REPEATS + 1])
-        assertEquals("Aku mau makan nasi goreng, ", steps[KudHoldDelete.CHAR_REPEATS + 2])
-        assertEquals("Aku mau makan nasi goreng", steps[KudHoldDelete.CHAR_REPEATS + 3])
-        assertEquals("Aku mau makan nasi ", steps[KudHoldDelete.CHAR_REPEATS + 4])
-        assertEquals("Aku mau makan ", steps[KudHoldDelete.CHAR_REPEATS + 5])
+        assertEquals("Aku mau makan nasi goreng, terus minum es ", steps[2])
+        assertEquals("Aku mau makan nasi goreng, terus minum ", steps[3])
+        assertEquals("Aku mau makan nasi goreng, terus ", steps[4])
+        assertEquals("Aku mau makan nasi goreng, ", steps[5])
     }
 
     @Test fun holdingToTheStartEmptiesTheField() {
         start("Halo, apa kabar?")
-        // 9 characters ("?rabak apa" minus the last "a"), then "a", ", " and "Halo"
-        val steps = hold(KudHoldDelete.CHAR_REPEATS + 3)
-        assertEquals("Halo, a", steps[KudHoldDelete.CHAR_REPEATS])
-        assertEquals("Halo, ", steps[KudHoldDelete.CHAR_REPEATS + 1])
-        assertEquals("Halo", steps[KudHoldDelete.CHAR_REPEATS + 2])
+        // the press takes "?", then "kabar", "apa", ", " and "Halo"
+        val steps = hold(5)
+        assertEquals("Halo, apa kabar", steps[0])
+        assertEquals("Halo, apa ", steps[1])
+        assertEquals("Halo, ", steps[2])
+        assertEquals("Halo", steps[3])
         assertEquals("", steps.last())
     }
 
     @Test fun settingOffDeletesCharactersOnly() {
         latinIME.prefs().edit { putBoolean(KudHoldDelete.PREF_DELETE_WORDS_WHEN_HELD, false) }
         start(sentence)
-        val steps = hold(KudHoldDelete.CHAR_REPEATS + 3)
-        assertEquals("Aku mau makan nasi goreng, terus minum ", steps[KudHoldDelete.CHAR_REPEATS])
-        assertEquals("Aku mau makan nasi goreng, terus minum", steps[KudHoldDelete.CHAR_REPEATS + 1])
-        assertEquals("Aku mau makan nasi goreng, terus min", steps[KudHoldDelete.CHAR_REPEATS + 3])
+        val steps = hold(8 + 3)
+        assertEquals("Aku mau makan nasi goreng, terus minum ", steps[8])
+        assertEquals("Aku mau makan nasi goreng, terus minum", steps[8 + 1])
+        assertEquals("Aku mau makan nasi goreng, terus min", steps[8 + 3])
     }
 
     @Test fun selectionGoesFirst() {
@@ -167,13 +168,12 @@ class KudHoldDeleteTest {
         val selStart = sentence.indexOf("goreng")
         val selEnd = sentence.indexOf(" es")
         start(sentence, selStart, selEnd)
-        val steps = hold(KudHoldDelete.CHAR_REPEATS + 2)
+        val steps = hold(3)
         assertEquals("Aku mau makan nasi  es teh 😀 ", steps[0])
-        // then characters before the cursor, then words
-        assertEquals("Aku mau makan nasi es teh 😀 ", steps[1])
-        assertEquals("Aku mau mak es teh 😀 ", steps[KudHoldDelete.CHAR_REPEATS])
-        assertEquals("Aku mau  es teh 😀 ", steps[KudHoldDelete.CHAR_REPEATS + 1])
-        assertEquals("Aku  es teh 😀 ", steps[KudHoldDelete.CHAR_REPEATS + 2])
+        // then a word before the cursor per repeat
+        assertEquals("Aku mau makan  es teh 😀 ", steps[1])
+        assertEquals("Aku mau  es teh 😀 ", steps[2])
+        assertEquals("Aku  es teh 😀 ", steps[3])
     }
 
     @Test fun unreadableFieldFallsBackToCharacters() {
