@@ -1,15 +1,24 @@
 {
-  "name": "kudkeys-server",
-  "private": true,
+  "name": "server",
+  "module": "index.ts",
   "type": "module",
+  "private": true,
   "scripts": {
-    "start": "bun src/index.ts",
+    "dev": "bun --env-file=../.env --hot index.ts",
+    "start": "bun --env-file=../.env index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
     "stream": "bun scripts/stream-wav.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.6.0"
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@prisma/client": "6",
+    "better-auth": "^1.6.11",
+    "hono": "^4.12.18",
+    "zod": "^4.4.3"
   }
 }

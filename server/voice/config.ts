@@ -29,8 +29,8 @@ export type Config = {
 };
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
+  // Legacy static tokens. Optional now that accounts exist: a signed-in user's session token works too.
   const tokens = list(env.KUDKEYS_TOKENS);
-  if (tokens.length === 0) throw new Error("KUDKEYS_TOKENS is empty: set at least one token (openssl rand -hex 32)");
   if (tokens.some((t) => t.length < 24)) throw new Error("every KUDKEYS_TOKENS entry must be at least 24 characters");
 
   const provider = (env.KUDKEYS_PROVIDER?.trim() || "groq") as ProviderName;

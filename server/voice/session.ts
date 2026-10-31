@@ -13,6 +13,44 @@ export type Socket = {
 
 type State = "waiting" | "streaming" | "finishing" | "closed";
 
+/** Who opened the stream: a signed-in user (with their voice profile) or a legacy static token. */
+export type StreamAuth =
+  | { kind: "user"; userId: string; voiceKeywords: string[]; languages: string[] }
+  | { kind: "token" };
+
+/** What a finished session reports. Numbers only, never text. */
+export type SessionSummary = {
+  session: string;
+  startedAt: Date;
+  endedAt: Date;
+  audioSeconds: number;
+  finals: number;
+  outcome: string;
+  model: string | null;
+};
+
+export type SessionOptions = {
+  auth?: StreamAuth;
+  /** Called once when a session that got past `start` ends. */
+  onEnd?: (summary: SessionSummary) => void;
+};
+
+const MAX_KEYWORDS = 100;
+
+/** The keyboard's keywords first (they're about this field), then the profile's, without duplicates. */
+export function mergeKeywords(fromStart: string[] | undefined, fromProfile: string[]): string[] | undefined {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of [...(fromStart ?? []), ...fromProfile]) {
+    const key = k.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(k.trim());
+    if (out.length === MAX_KEYWORDS) break;
+  }
+  return out.length ? out : fromStart;
+}
+
 export class VoiceSession {
   readonly id = crypto.randomUUID().slice(0, 8);
   private state: State = "waiting";
@@ -25,12 +63,17 @@ export class VoiceSession {
   private startedAt = Date.now();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private outcome = "open";
+  private started = false;
+  private model: string | null = null;
+  private readonly auth: StreamAuth;
 
   constructor(
     private readonly socket: Socket,
     private readonly cfg: Config,
     private readonly makeTranscriber: TranscriberFactory | null,
+    private readonly opts: SessionOptions = {},
   ) {
+    this.auth = opts.auth ?? { kind: "token" };
     this.touch();
   }
 
@@ -82,13 +125,13 @@ export class VoiceSession {
     if (this.state !== "waiting") return this.fail("bad_request", "already started");
     if (!this.makeTranscriber) return this.fail("provider", "transcription provider is not configured on the server");
     this.state = "streaming";
+    this.started = true;
     this.inputRate = msg.sampleRate;
+    const user = this.auth.kind === "user" ? this.auth : null;
+    const languages = msg.languages ?? (user?.languages.length ? user.languages : this.cfg.defaultLanguages);
+    const keywords = user ? mergeKeywords(msg.keywords, user.voiceKeywords) : msg.keywords;
     this.transcriber = this.makeTranscriber(
-      {
-        languages: msg.languages ?? this.cfg.defaultLanguages,
-        keywords: msg.keywords,
-        prompt: msg.prompt,
-      },
+      { languages, keywords, prompt: msg.prompt },
       {
         onPartial: (segment, text) => this.send({ type: "partial", segment, text }),
         onFinal: (segment, text, confidence) => {
@@ -98,6 +141,7 @@ export class VoiceSession {
         onError: (message) => this.fail("provider", message),
       },
     );
+    this.model = this.transcriber.model;
     this.resampler = new Resampler(msg.sampleRate, this.transcriber.sampleRate);
     try {
       await this.transcriber.ready();
@@ -141,10 +185,24 @@ export class VoiceSession {
     this.idleTimer = null;
     this.transcriber?.close();
     if (this.outcome !== "logged") {
-      const audioSeconds = this.inputRate ? (this.samplesIn / this.inputRate).toFixed(1) : "0";
+      const audioSeconds = this.inputRate ? this.samplesIn / this.inputRate : 0;
+      // The auth kind, never the token or who it belongs to.
       console.log(
-        `session ${this.id} ${this.outcome} audio=${audioSeconds}s finals=${this.finals} wall=${Date.now() - this.startedAt}ms`,
+        `session ${this.id} ${this.outcome} auth=${this.auth.kind} audio=${audioSeconds.toFixed(1)}s finals=${this.finals} wall=${Date.now() - this.startedAt}ms`,
       );
+      if (this.started && this.opts.onEnd) {
+        try {
+          this.opts.onEnd({
+            session: this.id,
+            startedAt: new Date(this.startedAt),
+            endedAt: new Date(),
+            audioSeconds: Math.round(audioSeconds * 10) / 10,
+            finals: this.finals,
+            outcome: this.outcome,
+            model: this.model,
+          });
+        } catch {}
+      }
       this.outcome = "logged";
     }
   }

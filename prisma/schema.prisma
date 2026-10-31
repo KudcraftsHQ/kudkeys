@@ -1,0 +1,119 @@
+// Kud Keys — Prisma schema.
+//
+// Accounts (Better Auth), each user's voice profile, and one usage row per
+// voice stream. Transcript text is never stored: there is no column for it.
+//
+// Migration: bunx prisma migrate dev --name <change-name>
+// Regenerate client: bunx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Runtime queries go through pgbouncer (transaction mode).
+  // URL must include `?pgbouncer=true` so Prisma disables prepared statements.
+  url       = env("DATABASE_URL_POOLING")
+  // Migrations + introspection need a direct connection (pgbouncer can't
+  // handle DDL or advisory locks in transaction mode).
+  directUrl = env("DATABASE_URL")
+}
+
+// ─── Better Auth ────────────────────────────────────────────────────────
+// Sign-up is open only to emails in KUDKEYS_ALLOWED_EMAILS (server/auth.ts).
+
+model KudkeysUser {
+  id            String   @id
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  name          String
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Voice profile. Names and brands Whisper should spell right; merged into
+  // the prompt of every stream this user opens.
+  voiceKeywords String[] @default([])
+  // Default languages when the keyboard's `start` sends none.
+  languages     String[] @default(["id", "en"])
+
+  sessions      KudkeysSession[]
+  accounts      KudkeysAccount[]
+  voiceSessions VoiceSession[]
+
+  @@map("kudkeys_user")
+}
+
+model KudkeysSession {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("kudkeys_session")
+}
+
+model KudkeysAccount {
+  id                    String    @id
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("kudkeys_account")
+}
+
+model KudkeysVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("kudkeys_verification")
+}
+
+// ─── Usage ──────────────────────────────────────────────────────────────
+// One row per voice stream opened with a user session (legacy static tokens
+// have no user, so no row). Numbers only: never transcript text, and written
+// for private fields too, because nothing here says what was said.
+
+model VoiceSession {
+  id           String   @id @default(cuid())
+  userId       String
+  // The short id the server logs and sends in `ready`.
+  session      String
+  startedAt    DateTime
+  endedAt      DateTime
+  audioSeconds Float
+  finals       Int
+  // stopped | idle | limit | cancelled | client closed | error <code>
+  outcome      String
+  model        String?
+
+  user KudkeysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@map("voice_session")
+}

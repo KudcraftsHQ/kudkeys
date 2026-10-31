@@ -1,8 +1,8 @@
 // End to end with KUDKEYS_PROVIDER=openai: a keyboard client → our server → a fake OpenAI realtime server.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { loadConfig } from "../src/config";
-import { createServer } from "../src/server";
+import { loadConfig } from "../voice/config";
+import { createServer } from "../server";
 import { connect, TOKEN } from "./client";
 
 

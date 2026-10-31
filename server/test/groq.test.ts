@@ -1,9 +1,9 @@
 // End to end with Groq (the default): a keyboard client → our server → a fake Groq transcription API.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { loadConfig } from "../src/config";
-import { parseResult } from "../src/providers/groq";
-import { createServer } from "../src/server";
+import { loadConfig } from "../voice/config";
+import { parseResult } from "../voice/providers/groq";
+import { createServer } from "../server";
 import { connect, TOKEN } from "./client";
 
 type Mode = "ok" | "silence" | "refuse" | "429-once";
@@ -22,7 +22,7 @@ beforeAll(() => {
         return new Response("not found", { status: 404 });
       }
       const form = await req.formData();
-      const file = form.get("file") as Blob;
+      const file = form.get("file") as unknown as Blob;
       const wav = new DataView(await file.arrayBuffer());
       const rate = wav.getUint32(24, true);
       const seconds = wav.getUint32(40, true) / 2 / rate;

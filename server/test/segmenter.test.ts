@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SEGMENTER, Segmenter } from "../src/segmenter";
+import { DEFAULT_SEGMENTER, Segmenter } from "../voice/segmenter";
 
 const RATE = 16000;
 const tone = (ms: number, amp = 5000) =>

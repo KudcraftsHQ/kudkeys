@@ -1,7 +1,7 @@
 // Streams a WAV file to the server the way the keyboard will: 100 ms frames, in real time.
 // Prints the words as they arrive plus the two latencies that matter.
 //
-//   KUDKEYS_URL=ws://localhost:8080 KUDKEYS_TOKEN=… bun scripts/stream-wav.ts note.wav [--fast] [--keywords Fenno,TypeMap]
+//   KUDKEYS_URL=ws://localhost:8080 KUDKEYS_TOKEN=<static token or account session token> bun scripts/stream-wav.ts note.wav [--fast] [--keywords Fenno,TypeMap]
 //
 // The WAV must be 16-bit PCM at 16, 24 or 48 kHz (stereo is mixed down). Convert anything else:
 //   ffmpeg -i note.m4a -ac 1 -ar 16000 -sample_fmt s16 note.wav
