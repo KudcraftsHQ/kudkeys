@@ -120,7 +120,7 @@ cd android
 - Subtypes / multilingual typing: `J/latin/utils/SubtypeSettings.kt`, `J/latin/settings/SettingsSubtype.kt`,
   `res/xml/method.xml` (Indonesian is `imeSubtypeLocale="in"`, `languageTag="id"`).
 - Settings UI is Compose: `J/settings/` (`SettingsNavHost.kt`, `screens/*Screen.kt`, `SettingsContainer.kt`).
-  New settings screens (e.g. Settings → Voice) are added to `SettingsNavHost.kt` + `MainSettingsScreen.kt`.
+  New settings screens are added to `SettingsNavHost.kt` + `KudMainSettingsScreen` (or `KudAdvancedScreen`).
 - About screen with the GPL/HeliBoard credit: `J/settings/screens/AboutScreen.kt`; links in
   `J/latin/common/Constants.kt` (`Links`).
 
@@ -141,3 +141,38 @@ cd android
 - Clipboard history: view, bottom row, DB (`latin/database/` is gone), provider, toolbar keys.
   `KeyCode.CLIPBOARD` now pastes.
 - Unused translated strings for those features are still in `res/values*/strings.xml` (harmless).
+
+## Settings organised like SwiftKey (v0.2)
+
+- Home = `KudMainSettingsScreen` in `J/settings/screens/KudSettingsScreens.kt`: Languages · Typing · Emoji ·
+  Rich input · Layout & keys · Sound & vibration · Advanced (= `KudAdvancedScreen`: HeliBoard's Preferences,
+  Appearance, Text correction, Secondary layouts, Dictionaries, Advanced, About). HeliBoard's `MainSettingsScreen`
+  is gone. Room for **Account** at the top: pref key `KudSettings.PREF_ACCOUNT` (`kudkeys_account`), not shown yet.
+- A SwiftKey row that is exactly one HeliBoard pref reuses that `Setting` (its title/summary were renamed to
+  SwiftKey's wording in the HeliBoard `create*Settings`, so search and Advanced show the same names). Rows that
+  combine or translate prefs have `KudSettingKeys.*` keys in `createKudSettings`; their pref logic is
+  `KudSettingsRules` (cursor control = horizontal space swipe MOVE_CURSOR vs SWITCH_LANGUAGE, accented =
+  more popup keys "all", large key text = font scale 1.2, Android default vibration = duration -1, …).
+- New prefs (`J/kudkeys/KudSettings.kt`, read into `SettingsValues.mKud*`): quick prediction insert
+  (`InputLogic.kudQuickPredictionToInsert`, called from `LatinIME.onEvent` on space; a second space within the
+  double-space timeout is still a period), emoji access on enter key (`TextKeyData.createActionPopupKeys` keeps the
+  enter key's emoji popup only when the emoji key is hidden and this is on), voice typing (off: Mic invisible in
+  the bar, no mic hint above the comma, voice dropped from popups in `PopupKeysUtils`, comma long-press ignored),
+  keypress sound profile (classic = one click, `AudioAndHapticFeedbackManager`). Clear typing data:
+  `KudTypingData.clear` (user history files + the system personal dictionary).
+- The emoji key in `functional_keys.json` is behind `emojiKeyEnabled` (`PREF_SHOW_EMOJI_KEY`, default now true).
+- Defaults changed to SwiftKey's: backspace reverts autocorrect off, autospace after punctuation on, emoji
+  suggestions off, D-pad (Arrow keys) off, key pop-ups on, long-press 450 ms. `InputLogicTest.reset` puts back
+  HeliBoard's two typing defaults, because those tests pin HeliBoard's logic.
+- Resize (`KudResizeScreen.kt`): `KudResize` is the handle math (pure, tested) on the height / side padding /
+  bottom padding scales; `KudResizeStore` reads/writes them for the current orientation; the keyboard picture is
+  `KudKeyboardPreview` (a `KeyboardView` drawn into a bitmap, keys area stretched into the live frame).
+
+## Incognito look (v0.2)
+
+- Private fields (`InputAttributes.mIsPrivate`, the same rule as the Private pill) set `SettingsValues.mKudIncognitoLook`:
+  `KeyboardTheme.getKudIncognitoColors` (background #1c1f26, letter keys and space #2a2e37, functional keys
+  borderless via `DefaultColors(kudBorderlessFunctionalKeys = true)`), `KeyboardTheme.getKeyboardTheme` returns
+  the LXX border theme (rounded key shapes), and `MainKeyboardView.onDraw` draws `res/drawable/kud_incognito_watermark.xml`
+  faintly over the keys. The normal look is unchanged (borderless).
+- `KudV02ScreenshotTest` writes every settings screen and both keyboard looks to `$TMPDIR/kudkeys-v02-shots/`.
