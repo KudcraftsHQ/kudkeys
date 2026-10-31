@@ -58,14 +58,17 @@ object KudSyncWork {
         )
     }
 
-    /** Just signed in: start clean (the first sync pulls first), schedule, and sync now. */
+    /**
+     * Just signed in: the first sync pulls first. The same account as before keeps its bookkeeping (removals not
+     * sent yet go first); another account starts clean. Then schedule, and sync now.
+     */
     fun onSignedIn(context: Context) {
-        KudSyncStore(context).resetForSignOut()
+        KudSyncStore(context).onSignedIn(VoiceSettings(context.applicationContext).accountEmail)
         ensureScheduled(context)
         syncSoon(context)
     }
 
-    /** Signed out (or the server said so): nothing runs any more, and the next account starts clean. */
+    /** Signed out (or the server said so): nothing runs any more; the next sign-in starts with a full pull. */
     fun onSignedOut(context: Context) {
         cancelAll(context)
         KudSyncStore(context).resetForSignOut()

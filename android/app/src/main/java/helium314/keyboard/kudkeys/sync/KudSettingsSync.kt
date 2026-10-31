@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import helium314.keyboard.latin.settings.Settings
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -75,6 +76,10 @@ object KudSettingsSync {
         val out = sortedMapOf<String, Any>()
         val grouped = o.isNotEmpty() && o.keys.all { it in GROUPS } && o.values.all { it is JsonObject }
         if (grouped) {
+            // A key in two groups (its type changed in an app update, and the old copy is still on the server):
+            // the group that matches the pref's type here wins, so a String never lands in an int pref.
+            val typeOf = { v: Any? -> when (v) { is Boolean -> "boolean"; is Int -> "int"; is Long -> "long"; is Float -> "float"; is String -> "string"; is Set<*> -> "stringSet"; else -> null } }
+            val seen = mutableMapOf<String, String>()
             for ((group, values) in o) for ((k, e) in values as JsonObject) {
                 val p = e as? JsonPrimitive
                 val v: Any? = when (group) {
@@ -85,7 +90,11 @@ object KudSettingsSync {
                     "string" -> p?.takeIf { it.isString }?.contentOrNull
                     else -> (e as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }?.toSet()
                 }
-                if (v != null) out[k] = v
+                if (v == null) continue
+                val prev = seen[k]
+                if (prev != null && prev == typeOf(current[k])) continue // already the right type
+                seen[k] = group
+                out[k] = v
             }
         } else {
             for ((k, e) in o) inferred(e, current[k])?.let { out[k] = it }
@@ -109,6 +118,50 @@ object KudSettingsSync {
                 p.longOrNull != null -> p.longOrNull
                 else -> p.doubleOrNull?.toFloat()
             }
+        }
+    }
+
+    /** [o] with only synced keys and no empty groups (grouped like [toJson]; a flat legacy key is kept as is). */
+    fun syncedOnly(o: JsonObject): JsonObject = buildJsonObject {
+        for ((k, v) in o) {
+            if (v is JsonObject && k in GROUPS) {
+                val kept = v.filterKeys(::isSynced)
+                if (kept.isNotEmpty()) put(k, JsonObject(kept))
+            } else if (isSynced(k)) put(k, v)
+        }
+    }
+
+    /**
+     * What to send so the server ends up holding [local]: every key whose value differs from [base] (what the
+     * server held after the last sync), and `null` for every key of [base] that [local] no longer has (a setting
+     * reset to default, a deleted layout or colour, a key whose type changed). Grouped like [toJson].
+     */
+    fun diff(base: JsonObject, local: JsonObject): JsonObject {
+        val b = paths(base)
+        val l = paths(local)
+        val out = mutableMapOf<String, MutableMap<String, JsonElement>>()
+        for ((p, v) in l) if (!same(b[p], v)) out.getOrPut(p.first) { mutableMapOf() }[p.second] = v
+        for (p in b.keys - l.keys) out.getOrPut(p.first) { mutableMapOf() }[p.second] = JsonNull
+        return buildJsonObject {
+            out[""]?.forEach { (k, v) -> put(k, v) }
+            for ((group, values) in out) if (group != "") put(group, JsonObject(values))
+        }
+    }
+
+    /** Equal as settings: numbers by value (the server writes 1.0 back as 1). */
+    private fun same(a: JsonElement?, b: JsonElement): Boolean {
+        if (a == b) return true
+        if (a !is JsonPrimitive || b !is JsonPrimitive || a.isString || b.isString) return false
+        val x = a.doubleOrNull ?: return false
+        val y = b.doubleOrNull ?: return false
+        return x == y
+    }
+
+    /** (group, key) → value; a flat legacy document's keys sit in group "". */
+    private fun paths(o: JsonObject): Map<Pair<String, String>, JsonElement> = buildMap {
+        for ((k, v) in o) {
+            if (v is JsonObject && k in GROUPS) v.forEach { (key, value) -> put(k to key, value) }
+            else put("" to k, v)
         }
     }
 

@@ -216,10 +216,15 @@ fun KudBackupsScreen(onClickBack: () -> Unit, sync: KudSync? = null) {
                 restoring = null
                 busyId = b.id
                 message = ctx.getString(R.string.kud_backups_restoring)
-                scope.launch {
+                // In the app's scope, not this screen's: leaving the screen mid-restore neither cancels it nor loses
+                // its outcome, which then still shows as a toast.
+                val app = ctx.applicationContext
+                KudSync.appScope.launch {
                     val o = s.restore(b.id)
+                    val text = outcomeText(app, o, KudSync.RESTORE_ERROR) ?: app.getString(R.string.kud_backups_restored)
                     busyId = null
-                    message = outcomeText(ctx, o, KudSync.RESTORE_ERROR) ?: ctx.getString(R.string.kud_backups_restored)
+                    message = text
+                    Toast.makeText(app, text, Toast.LENGTH_LONG).show()
                 }
             },
             title = { Text(stringResource(R.string.kud_backups_restore_title)) },

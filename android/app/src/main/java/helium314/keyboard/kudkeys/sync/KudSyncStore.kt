@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.AtomicFile
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.util.UUID
 
@@ -26,6 +27,8 @@ data class KudSyncState(
     val settingsUpdatedAt: Long = 0,
     /** The first sync after a sign-in (pull first, then push) has run. */
     val initialDone: Boolean = false,
+    /** The account (email) this bookkeeping belongs to; "" before the first sign-in. */
+    val account: String = "",
 )
 
 /** A suggestion removed from the strip, waiting to go to the server as a tombstone. */
@@ -51,6 +54,22 @@ class KudSyncStore(private val dir: File) {
 
     fun update(f: (KudSyncState) -> KudSyncState) = synchronized(lock) { state = f(state) }
 
+    /**
+     * Words known to be removed, by lang then word → removal time (epoch ms): removed here (strip) or pulled as a
+     * tombstone. A typed word last used before its removal is never sent again, so it can't revive the tombstone.
+     */
+    var removed: Map<String, Map<String, Long>>
+        get() = synchronized(lock) { read("removed.json") { json.decodeFromString<Map<String, Map<String, Long>>>(it) } ?: emptyMap() }
+        set(value) = synchronized(lock) { write("removed.json", json.encodeToString(value)) }
+
+    /**
+     * The synced settings as the server held them after the last sync (grouped JSON, synced keys only). The next
+     * sync sends only what differs from it: changed keys, and `null` for keys that are gone (reset to default).
+     */
+    var syncedSettings: JsonObject?
+        get() = synchronized(lock) { read("settings.json") { json.parseToJsonElement(it) as? JsonObject } }
+        set(value) = synchronized(lock) { if (value == null) File(dir, "settings.json").delete() else write("settings.json", value.toString()) }
+
     /** Counts last pushed, by lang then word. */
     var pushed: Map<String, Map<String, Int>>
         get() = synchronized(lock) { read("pushed.json") { json.decodeFromString<Map<String, Map<String, Int>>>(it) } ?: emptyMap() }
@@ -70,11 +89,26 @@ class KudSyncStore(private val dir: File) {
         tombstones = tombstones.filterNot { (it.lang to it.word) in keys } + t
     }
 
-    /** Signed out: forget what was synced (the next sign-in starts with a full pull). Keeps device id and switch. */
+    /**
+     * Signed out (on purpose or by a 401): the next sign-in starts with a full pull. What belongs to the account
+     * is kept, above all the removals not sent yet, in case the same account signs back in ([onSignedIn]).
+     */
     fun resetForSignOut() = synchronized(lock) {
+        update { it.copy(initialDone = false, wordsSince = null, lastError = null, lastSyncAt = 0, lastBackupAt = 0) }
+    }
+
+    /**
+     * Just signed in as [account]. The same account carries on where it left off (pending removals go first, words
+     * already sent aren't sent again, settings changed while signed out stay); another account starts clean.
+     */
+    fun onSignedIn(account: String) = synchronized(lock) {
         val s = state
-        listOf("pushed.json", "mirror.json", "tombstones.json").forEach { File(dir, it).delete() }
-        state = KudSyncState(deviceId = s.deviceId, autoBackup = s.autoBackup)
+        if (s.account.isNotEmpty() && s.account.equals(account, ignoreCase = true)) {
+            resetForSignOut()
+            return@synchronized
+        }
+        listOf("pushed.json", "mirror.json", "tombstones.json", "removed.json", "settings.json").forEach { File(dir, it).delete() }
+        state = KudSyncState(deviceId = s.deviceId, autoBackup = s.autoBackup, account = account)
     }
 
     private fun <T> read(name: String, parse: (String) -> T): T? {
