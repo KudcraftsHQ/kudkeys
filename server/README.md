@@ -120,3 +120,18 @@ Close codes: 1000 normal, 1008 the keyboard broke the protocol, 1011 provider or
 `bun test` runs the stream end to end against a fake Groq API and a fake OpenAI realtime
 server: phrase splitting, silence never sent, Whisper's made-up text dropped, 429 retry,
 refused key, optional partials, resampling, the session cap, and a missing key.
+
+## Deploy
+
+Coolify on vienna-1: project **Kud Keys**, app `kudkeys-server` (`ktmqsbqbalqnilyka83vx4rf`),
+Dockerfile build from `server/`, domain `http://keys.kudcrafts.com` (Cloudflare proxies and
+terminates HTTPS — an `https://` domain in Coolify causes a redirect loop).
+
+```bash
+coolify deploy uuid ktmqsbqbalqnilyka83vx4rf
+curl https://keys.kudcrafts.com/health
+coolify app env create ktmqsbqbalqnilyka83vx4rf --key GROQ_API_KEY --value … --build-time=false   # then redeploy
+```
+
+The keyboard's token is `KUDKEYS_TOKENS` in Coolify; a copy lives in `~/.config/kudkeys/token`
+on hammas-dev (mode 600).
