@@ -30,7 +30,7 @@ import helium314.keyboard.settings.screens.PreferencesScreen
 import helium314.keyboard.settings.screens.SecondaryLayoutScreen
 import helium314.keyboard.settings.screens.SubtypeScreen
 import helium314.keyboard.settings.screens.TextCorrectionScreen
-import helium314.keyboard.settings.screens.ToolbarScreen
+import helium314.keyboard.settings.screens.VoiceScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -67,7 +67,7 @@ fun SettingsNavHost(
                 onClickAbout = { navController.navigate(SettingsDestination.About) },
                 onClickTextCorrection = { navController.navigate(SettingsDestination.TextCorrection) },
                 onClickPreferences = { navController.navigate(SettingsDestination.Preferences) },
-                onClickToolbar = { navController.navigate(SettingsDestination.Toolbar) },
+                onClickVoice = { navController.navigate(SettingsDestination.Voice) },
                 onClickAdvanced = { navController.navigate(SettingsDestination.Advanced) },
                 onClickAppearance = { navController.navigate(SettingsDestination.Appearance) },
                 onClickLanguage = { navController.navigate(SettingsDestination.Languages) },
@@ -85,8 +85,8 @@ fun SettingsNavHost(
         composable(SettingsDestination.Preferences) {
             PreferencesScreen(onClickBack = ::goBack)
         }
-        composable(SettingsDestination.Toolbar) {
-            ToolbarScreen(onClickBack = ::goBack)
+        composable(SettingsDestination.Voice) {
+            VoiceScreen(onClickBack = ::goBack)
         }
         composable(SettingsDestination.Advanced) {
             AdvancedSettingsScreen(onClickBack = ::goBack)
@@ -135,7 +135,7 @@ object SettingsDestination {
     const val About = "about"
     const val TextCorrection = "text_correction"
     const val Preferences = "preferences"
-    const val Toolbar = "toolbar"
+    const val Voice = "voice"
     const val Advanced = "advanced"
     const val Debug = "debug"
     const val Appearance = "appearance"

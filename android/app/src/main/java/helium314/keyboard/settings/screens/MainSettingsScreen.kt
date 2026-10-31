@@ -32,7 +32,7 @@ fun MainSettingsScreen(
     onClickAbout: () -> Unit,
     onClickTextCorrection: () -> Unit,
     onClickPreferences: () -> Unit,
-    onClickToolbar: () -> Unit,
+    onClickVoice: () -> Unit,
     onClickAdvanced: () -> Unit,
     onClickAppearance: () -> Unit,
     onClickLanguage: () -> Unit,
@@ -67,9 +67,10 @@ fun MainSettingsScreen(
                     icon = R.drawable.ic_settings_appearance
                 ) { NextScreenIcon() }
                 Preference(
-                    name = stringResource(R.string.settings_screen_toolbar),
-                    onClick = onClickToolbar,
-                    icon = R.drawable.ic_settings_toolbar
+                    name = stringResource(R.string.kud_settings_voice),
+                    description = stringResource(R.string.kud_settings_voice_summary),
+                    onClick = onClickVoice,
+                    icon = R.drawable.sym_keyboard_voice_lxx
                 ) { NextScreenIcon() }
                 Preference(
                     name = stringResource(R.string.settings_screen_correction),

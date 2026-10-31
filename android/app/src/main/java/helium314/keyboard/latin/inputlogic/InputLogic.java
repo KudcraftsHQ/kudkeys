@@ -272,6 +272,38 @@ public final class InputLogic {
     }
 
     /**
+     * kudkeys: insert dictated text. The composing word is kept as typed (no autocorrect), and a space goes in
+     * front when the text before the cursor ends in a non-space character.
+     */
+    public InputTransaction onVoiceTextInput(SettingsValues settingsValues, String text, CapsMode keyboardCapsMode, LatinIME.UIHandler handler) {
+        final Event event = Event.createSoftwareTextEvent(text, KeyCode.MULTIPLE_CODE_POINTS, null);
+        final InputTransaction inputTransaction = new InputTransaction(settingsValues, event,
+                SystemClock.uptimeMillis(), mSpaceState, getActualCapsMode(settingsValues, keyboardCapsMode));
+        if (text.isEmpty()) return inputTransaction;
+        mConnection.beginBatchEdit();
+        if (mWordComposer.isComposingWord()) {
+            if (mWordComposer.isCursorFrontOrMiddleOfComposingWord()) {
+                mConnection.finishComposingText();
+                resetComposingState(false);
+            } else {
+                commitTyped(settingsValues, "");
+            }
+        }
+        resetComposingState(true);
+        final String toCommit = helium314.keyboard.kudkeys.VoiceText.withLeadingSpace(
+                mConnection.getTextBeforeCursor(1, 0), text);
+        mConnection.commitText(toCommit, 1);
+        mConnection.endBatchEdit();
+        handler.postUpdateSuggestionStrip(SuggestedWords.INPUT_STYLE_TYPING);
+        mSpaceState = SpaceState.NONE;
+        mEnteredText = toCommit;
+        mWordBeingCorrectedByCursor = null;
+        inputTransaction.setDidAffectContents();
+        inputTransaction.requireShiftUpdate(InputTransaction.SHIFT_UPDATE_NOW);
+        return inputTransaction;
+    }
+
+    /**
      * A suggestion was picked from the suggestion strip.
      * @param settingsValues the current values of the settings.
      * @param suggestionInfo the suggestion info.
@@ -1471,6 +1503,7 @@ public final class InputLogic {
     }
 
     void unlearnWord(String word, SettingsValues settingsValues, DictionaryFacilitator.UnlearnEvent event) {
+        if (settingsValues.mIncognitoModeEnabled) return; // kudkeys: private fields don't touch the history at all
         NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(settingsValues.mSpacingAndPunctuations, 2);
         long timeStampInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
         mDictionaryFacilitator.unlearnFromUserHistory(word, ngramContext, timeStampInSeconds, event);

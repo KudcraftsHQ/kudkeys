@@ -428,7 +428,7 @@ class InputLogicTest {
     @Test fun `no intermediate commit in URL field with protocol`() {
         setInputType(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         chainInput("http://bla.com/img.jpg")
-        assertEquals("http", lastAddedWord) // todo: somehow avoid?
+        assertEquals("", lastAddedWord) // kudkeys: URL fields are private and learn nothing
         assertEquals("http://bla.com/img.jpg", text)
         assertEquals("bla.com/img.jpg", composingText)
     }
@@ -437,7 +437,7 @@ class InputLogicTest {
         latinIME.prefs().edit { putBoolean(Settings.PREF_URL_DETECTION, true) }
         setInputType(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         chainInput("http://bla.com/img.jpg")
-        assertEquals("http", lastAddedWord) // todo: somehow avoid?
+        assertEquals("", lastAddedWord) // kudkeys: URL fields are private and learn nothing
         assertEquals("http://bla.com/img.jpg", text)
         assertEquals("bla.com/img.jpg", composingText)
     }
@@ -927,9 +927,9 @@ class InputLogicTest {
 
 }
 
-private var currentScript = ScriptUtils.SCRIPT_LATIN
-private val messages = mutableListOf<Message>() // for latinIME / ShadowInputMethodService
-private val delayedMessages = mutableListOf<Message>() // for latinIME / ShadowInputMethodService
+internal var currentScript = ScriptUtils.SCRIPT_LATIN
+internal val messages = mutableListOf<Message>() // for latinIME / ShadowInputMethodService
+internal val delayedMessages = mutableListOf<Message>() // for latinIME / ShadowInputMethodService
 
 // Shadows are handled by Robolectric. @Implementation overrides built-in functionality.
 // This is used for avoiding crashes (LocaleManagerCompat, InputMethodManager, KeyboardSwitcher)

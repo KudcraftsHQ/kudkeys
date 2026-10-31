@@ -75,26 +75,29 @@ cd android
 - `KudKeysLayoutScreenshotTest` renders letters / shifted / symbols to `$TMPDIR/kudkeys-layout/*.png`; compare
   them with the SwiftKey screenshot by eye after any layout change.
 
-## Toolbar and suggestion strip (the toolbar/voice-UI work)
+## Top bar, privacy and quick voice (Kud Keys code in `J/kudkeys/`)
 
-- The whole top bar is `J/latin/suggestions/SuggestionStripView.kt`: suggestions, the toolbar (expand key,
-  toolbar keys, pinned keys) and the incognito icon. Layout XML: `res/layout/suggestions_strip.xml`, inside
-  `res/layout/strip_container.xml` (which also holds the emoji tab strip).
-- Suggestion layout and widths: `J/latin/suggestions/SuggestionStripLayoutHelper.java`.
-- Toolbar keys: enum `ToolbarKey`, `createToolbarKey()`, default key lists and the key → `KeyCode` mapping in
-  `J/latin/utils/ToolbarUtils.kt`. `hiddenToolbarKeys` (CLIPBOARD, CLEAR_CLIPBOARD, CLOSE_HISTORY) are never
-  offered; they remain only for icon/layout compatibility. Icons per style in
-  `J/keyboard/internal/KeyboardIconsSet.kt`.
-- Toolbar mode setting: `ToolbarMode` (EXPANDABLE default, TOOLBAR_KEYS, SUGGESTION_STRIP, HIDDEN);
-  settings screen `J/settings/screens/ToolbarScreen.kt`.
-- Key presses from the toolbar go through `J/keyboard/KeyboardActionListenerImpl.kt` →
-  `J/latin/inputlogic/InputLogic.java` (`handleFunctionalEvent`). `KeyCode.VOICE_INPUT` is where the stock
-  voice key lands today.
-- The clipboard paste chip in the strip: `J/latin/ClipboardHistoryManager.kt` (`getClipboardSuggestionView`),
-  shown from `LatinIME.java` (`getClipboardSuggestionView` call). History itself is gone.
-- Input-field info for the privacy rules (`EditorInfo` flags): `J/latin/InputAttributes.java`
-  (`mIsPasswordField`, `mNoLearning`, …) and `LatinIME.onStartInputView*`; incognito handling in
-  `SettingsValues.java` (`mIncognitoModeEnabled`, `PREF_ALWAYS_INCOGNITO_MODE`).
+- **The bar** is `J/latin/suggestions/SuggestionStripView.kt` + `res/layout/suggestions_strip.xml`: one row,
+  ✦ Fix (left) · middle · Instruct · Mic (right). The icons are fixed 44 dp slots and never move. The middle is a
+  FrameLayout: HeliBoard's suggestions, and on top of them the amber Private pill (only while the strip is empty;
+  suggestions win while typing), the quick-voice row (red dot, time, live text, "‹ Slide to cancel") and short
+  messages. Fix/Instruct show a "Coming soon" toast. Strings/dimens: `res/values/kudkeys_bar.xml`.
+- The stock toolbar is gone: `Settings.readToolbarMode` always returns `SUGGESTION_STRIP`, the Toolbar settings
+  screen and key customiser are deleted, no toolbar/pinned keys are created. `ToolbarUtils.kt` remains only for
+  the clipboard chip's close button and icon names.
+- **Privacy**: `J/kudkeys/KudPrivacy.kt` `isPrivate(editorInfo, packageName)` (incognito flag, passwords, URI,
+  search action / FILTER, Nova + the default HOME app). `InputAttributes.mIsPrivate` feeds
+  `SettingsValues.mIncognitoModeEnabled`, which already gates every learning path (user history, auto-add to the
+  personal dictionary, emoji history, emoji recents); `InputLogic.unlearnWord` is gated too.
+- **Quick voice**: `J/kudkeys/QuickVoiceController.kt` is the touch/state machine (pure Kotlin, tested with fake
+  touches and a fake engine); `KudQuickVoice.kt` hosts it in `LatinIME` (one per IME, cancelled in
+  `onFinishInputView` and `hideWindow`); text goes in through `InputLogic.onVoiceTextInput` (smart leading space,
+  composing word kept as typed). Mic permission: `MicPermissionActivity`. Voice client: the `:voice` module.
+- **Settings → Voice**: `J/settings/screens/VoiceScreen.kt` (server URL, token, Test connection via
+  `J/kudkeys/VoiceConnectionTest.kt`, which streams silence and sends `stop` once the server is ready).
+- Tests: `app/src/test/java/helium314/keyboard/kudkeys/` (privacy rule, learning skipped, voice state machine,
+  `KudKeysToolbarScreenshotTest` → `$TMPDIR/kudkeys-toolbar/*.png`).
+- Input-field info (`EditorInfo` flags): `J/latin/InputAttributes.java`, `LatinIME.onStartInputView*`.
 
 ## Settings defaults
 

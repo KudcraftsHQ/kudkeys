@@ -69,6 +69,8 @@ import helium314.keyboard.latin.settings.Settings;
 import helium314.keyboard.latin.settings.SettingsSubtype;
 import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.suggestions.SuggestionStripView;
+import helium314.keyboard.kudkeys.KudPrivacy;
+import helium314.keyboard.kudkeys.KudQuickVoice;
 import helium314.keyboard.latin.suggestions.SuggestionStripViewAccessor;
 import helium314.keyboard.latin.touchinputconsumer.GestureConsumer;
 import helium314.keyboard.latin.utils.ColorUtilKt;
@@ -193,6 +195,8 @@ public class LatinIME extends InputMethodService implements
     private GestureConsumer mGestureConsumer = GestureConsumer.NULL_GESTURE_CONSUMER;
 
     private final ClipboardHistoryManager mClipboardHistoryManager = new ClipboardHistoryManager(this);
+    /** kudkeys: hold-to-talk on the Mic icon */
+    private KudQuickVoice mQuickVoice;
 
     public static final class UIHandler extends LeakGuardHandlerWrapper<LatinIME> {
         private static final int MSG_UPDATE_SHIFT_STATE = 0;
@@ -556,6 +560,8 @@ public class LatinIME extends InputMethodService implements
 
         loadSettings();
         mClipboardHistoryManager.onCreate();
+        KudPrivacy.INSTANCE.refreshHomePackage(this);
+        mQuickVoice = new KudQuickVoice(this);
         mHandler.onCreate();
         if (FoldableUtils.INSTANCE.isFoldable())
             foldableObserver = new FoldableUtils.FoldableObserver(this);
@@ -702,6 +708,7 @@ public class LatinIME extends InputMethodService implements
 
     @Override
     public void onDestroy() {
+        if (mQuickVoice != null) mQuickVoice.destroy();
         mClipboardHistoryManager.onDestroy();
         mDictionaryFacilitator.closeDictionaries();
         mSettings.onDestroy();
@@ -781,6 +788,7 @@ public class LatinIME extends InputMethodService implements
             mSuggestionStripView.setRtl(mRichImm.getCurrentSubtype().isRtlSubtype());
             mSuggestionStripView.setListener(this, view);
         }
+        if (mQuickVoice != null) mQuickVoice.attach(mSuggestionStripView);
     }
 
     @Override
@@ -864,6 +872,7 @@ public class LatinIME extends InputMethodService implements
 
     void onStartInputViewInternal(final EditorInfo editorInfo, final boolean restarting) {
         super.onStartInputView(editorInfo, restarting);
+        KudPrivacy.INSTANCE.refreshHomePackage(this); // the default launcher counts as a search field
 
 
         mDictionaryFacilitator.onStartInput();
@@ -883,7 +892,7 @@ public class LatinIME extends InputMethodService implements
         if (isDifferentTextField || !currentSettingsValues.hasSameOrientation(getResources().getConfiguration())) {
             loadSettings();
             if (hasSuggestionStripView())
-                mSuggestionStripView.updateVoiceKey();
+                mSuggestionStripView.updatePrivacy();
         }
 
         switcher.updateKeyboardTheme(mDisplayContext);
@@ -995,9 +1004,6 @@ public class LatinIME extends InputMethodService implements
         if (!mHandler.hasPendingResumeSuggestions()) {
             mHandler.cancelUpdateSuggestionStrip();
             setNeutralSuggestionStrip();
-            if (hasSuggestionStripView() && currentSettingsValues.mAutoShowToolbar && !tryShowClipboardSuggestion()) {
-                mSuggestionStripView.setToolbarVisibility(true);
-            }
         }
 
         mainKeyboardView.setMainDictionaryAvailability(mDictionaryFacilitator.hasAtLeastOneInitializedMainDictionary());
@@ -1047,6 +1053,7 @@ public class LatinIME extends InputMethodService implements
     void onFinishInputViewInternal(final boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         Log.i(TAG, "onFinishInputView");
+        if (mQuickVoice != null) mQuickVoice.cancel(); // kudkeys: leaving the field drops a recording, releases the mic
         cleanupInternalStateForFinishInput();
     }
 
@@ -1130,8 +1137,7 @@ public class LatinIME extends InputMethodService implements
     @Override
     public void hideWindow() {
         Log.i(TAG, "hideWindow");
-        if (hasSuggestionStripView() && mSettings.getCurrent().mToolbarMode == ToolbarMode.EXPANDABLE)
-            mSuggestionStripView.setToolbarVisibility(false);
+        if (mQuickVoice != null) mQuickVoice.cancel(); // kudkeys: hiding the keyboard drops a recording
         mKeyboardSwitcher.onHideWindow();
 
         if (TRACE) Debug.stopMethodTracing();
@@ -1444,6 +1450,14 @@ public class LatinIME extends InputMethodService implements
         mKeyboardSwitcher.onEvent(event, getCurrentAutoCapsState(), getCurrentRecapitalizeState());
     }
 
+    /** kudkeys: insert text from quick voice */
+    public void onVoiceTextInput(@NonNull String text) {
+        if (text.isEmpty()) return;
+        InputTransaction completeInputTransaction = mInputLogic.onVoiceTextInput(mSettings.getCurrent(), text,
+                mKeyboardSwitcher.getKeyboardCapsMode(), mHandler);
+        updateStateAfterInputTransaction(completeInputTransaction);
+    }
+
     public void onStartBatchInput() {
         mInputLogic.onStartBatchInput(mSettings.getCurrent(), mKeyboardSwitcher, mHandler);
         mGestureConsumer.onGestureStarted(mRichImm.getCurrentSubtypeLocale(), mKeyboardSwitcher.getKeyboard());
@@ -1513,10 +1527,6 @@ public class LatinIME extends InputMethodService implements
                 || noSuggestionsFromDictionaries) {
             mSuggestionStripView.setSuggestions(suggestedWords,
                     mRichImm.getCurrentSubtype().isRtlSubtype());
-            // Auto hide the toolbar if dictionary suggestions are available
-            if (currentSettingsValues.mAutoHideToolbar && !noSuggestionsFromDictionaries) {
-                mSuggestionStripView.setToolbarVisibility(false);
-            }
         }
     }
 
@@ -1538,9 +1548,7 @@ public class LatinIME extends InputMethodService implements
 
     @Override
     public void showSuggestionStrip() {
-        if (hasSuggestionStripView()) {
-            mSuggestionStripView.setToolbarVisibility(false);
-        }
+        // kudkeys: suggestions are always visible, there is no toolbar to hide
     }
 
     // Called from {@link SuggestionStripView} through the {@link SuggestionStripView#Listener}
@@ -1579,22 +1587,12 @@ public class LatinIME extends InputMethodService implements
         final SettingsValues currentSettings = mSettings.getCurrent();
         if (tryShowClipboardSuggestion()) {
             // clipboard suggestion has been set
-            if (hasSuggestionStripView() && currentSettings.mAutoHideToolbar)
-                mSuggestionStripView.setToolbarVisibility(false);
             return;
         }
         final SuggestedWords neutralSuggestions = currentSettings.mSuggestPunctuation
                 ? currentSettings.mPunctuationSuggestions
                 : SuggestedWords.getEmptyInstance();
         setSuggestedWords(neutralSuggestions);
-        if (hasSuggestionStripView() && currentSettings.mAutoShowToolbar) {
-            final int codePointBeforeCursor = mInputLogic.mConnection.getCodePointBeforeCursor();
-            if (mInputLogic.mConnection.hasSelection()
-                    || codePointBeforeCursor == Constants.NOT_A_CODE
-                    || codePointBeforeCursor == Constants.CODE_ENTER) {
-                mSuggestionStripView.setToolbarVisibility(true);
-            }
-        }
     }
 
     @Override

@@ -346,7 +346,8 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     }
 
     public static ToolbarMode readToolbarMode(final SharedPreferences prefs) {
-        return ToolbarMode.valueOf(prefs.getString(PREF_TOOLBAR_MODE, Defaults.PREF_TOOLBAR_MODE));
+        // kudkeys: one fixed bar (Fix, suggestions, Instruct, Mic); the stock toolbar modes are gone
+        return ToolbarMode.SUGGESTION_STRIP;
     }
 
     public static KeyboardActionListener.SwipeAction readHorizontalSpaceSwipe(SharedPreferences prefs) {

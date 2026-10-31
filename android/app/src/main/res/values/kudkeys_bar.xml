@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- kudkeys: top bar, quick voice and Settings → Voice. SPDX-License-Identifier: GPL-3.0-only -->
+<resources>
+    <dimen name="kud_bar_icon_width">44dp</dimen>
+    <string name="kud_fix" translatable="false">Fix</string>
+    <string name="kud_instruct" translatable="false">Instruct</string>
+    <string name="kud_mic" translatable="false">Hold to talk</string>
+    <string name="kud_stop" translatable="false">Stop and insert</string>
+    <string name="kud_private" translatable="false">Private</string>
+    <string name="kud_slide_to_cancel" translatable="false">‹ Slide to cancel</string>
+    <string name="kud_coming_soon" translatable="false">Coming soon</string>
+    <string name="kud_settings_voice" translatable="false">Voice</string>
+    <string name="kud_settings_voice_summary" translatable="false">Server and token for hold-to-talk</string>
+    <string name="kud_voice_server_url" translatable="false">Server URL</string>
+    <string name="kud_voice_token" translatable="false">Token</string>
+    <string name="kud_voice_token_set" translatable="false">Set</string>
+    <string name="kud_voice_token_unset" translatable="false">Not set</string>
+    <string name="kud_voice_test" translatable="false">Test connection</string>
+    <string name="kud_voice_test_running" translatable="false">Testing…</string>
+    <string name="kud_voice_test_ok" translatable="false">Connected. The token works.</string>
+</resources>

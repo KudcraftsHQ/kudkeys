@@ -46,22 +46,17 @@ import helium314.keyboard.latin.settings.DebugSettings
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ToolbarKey
-import helium314.keyboard.latin.utils.ToolbarMode
-import helium314.keyboard.latin.utils.addPinnedKey
+import helium314.keyboard.latin.utils.prefs
+import helium314.keyboard.kudkeys.QuickVoiceController
+import helium314.keyboard.kudkeys.VoiceBarState
+import helium314.keyboard.kudkeys.VoiceText
 import helium314.keyboard.latin.utils.createToolbarKey
 import helium314.keyboard.latin.utils.dpToPx
-import helium314.keyboard.latin.utils.getEnabledToolbarKeys
-import helium314.keyboard.latin.utils.getPinnedToolbarKeys
-import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.utils.removeFirst
-import helium314.keyboard.latin.utils.removePinnedKey
-import helium314.keyboard.latin.utils.setToolbarButtonsActivatedStateOnPrefChange
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.min
 import androidx.core.view.isGone
-import helium314.keyboard.latin.utils.onClickToolbarKey
-import helium314.keyboard.latin.utils.onLongClickToolbarKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -113,70 +108,44 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         DEBUG_SUGGESTIONS = context.prefs().getBoolean(DebugSettings.PREF_SHOW_SUGGESTION_INFOS, Defaults.PREF_SHOW_SUGGESTION_INFOS)
     }
 
-    // toolbar views, drawables and setup
-    private val toolbar: ViewGroup = findViewById(R.id.toolbar)
-    private val toolbarContainer: View = findViewById(R.id.toolbar_container)
-    private val pinnedKeys: ViewGroup = findViewById(R.id.pinned_keys)
+    // kudkeys: the bar is Fix | middle | Instruct Mic. The icons never move; the middle shows suggestions, or the
+    // Private pill, the quick-voice row or a short message on top of them.
     private val suggestionsStrip: ViewGroup = findViewById(R.id.suggestions_strip)
-    private val toolbarExpandKey = findViewById<ImageButton>(R.id.suggestions_strip_toolbar_key)
-    private val incognitoIcon = KeyboardIconsSet.instance.getNewDrawable(ToolbarKey.INCOGNITO.name, context)
-    private val toolbarArrowIcon = KeyboardIconsSet.instance.getNewDrawable(KeyboardIconsSet.NAME_TOOLBAR_KEY, context)
-    private val defaultToolbarBackground: Drawable = toolbarExpandKey.background
-    private val enabledToolKeyBackground = GradientDrawable()
+    private val fixKey: ImageButton = findViewById(R.id.kud_fix_key)
+    private val instructKey: ImageButton = findViewById(R.id.kud_instruct_key)
+    private val micKey: ImageButton = findViewById(R.id.kud_mic_key)
+    private val privatePill: TextView = findViewById(R.id.kud_private_pill)
+    private val voiceRow: View = findViewById(R.id.kud_voice_row)
+    private val voiceDot: View = findViewById(R.id.kud_voice_dot)
+    private val voiceTime: TextView = findViewById(R.id.kud_voice_time)
+    private val voiceText: TextView = findViewById(R.id.kud_voice_text)
+    private val voiceHint: TextView = findViewById(R.id.kud_voice_hint)
+    private val barMessage: TextView = findViewById(R.id.kud_bar_message)
     private var direction = 1 // 1 if LTR, -1 if RTL
-
-    private val toolbarKeyLayoutParams = LinearLayout.LayoutParams(
-        resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_edge_key_width),
-        LinearLayout.LayoutParams.MATCH_PARENT
-    )
+    private var isPrivateField = false
+    private var voiceBarState: VoiceBarState = VoiceBarState.Idle
+    private var quickVoice: QuickVoiceController? = null
 
     init {
         val colors = Settings.getValues().mColors
-
-        // expand key
-        // weird way of setting size (default is config_suggestions_strip_edge_key_width)
-        // but better not change it or people will complain
-        val toolbarHeight = min(toolbarExpandKey.layoutParams.height, resources.getDimension(R.dimen.config_suggestions_strip_height).toInt())
-        toolbarExpandKey.layoutParams.height = toolbarHeight
-        toolbarExpandKey.layoutParams.width = toolbarHeight // we want it square
-        colors.setBackground(toolbarExpandKey, ColorType.STRIP_BACKGROUND) // necessary because background is re-used for defaultToolbarBackground
-        colors.setColor(toolbarExpandKey, ColorType.TOOL_BAR_EXPAND_KEY)
-        colors.setColor(toolbarExpandKey.background, ColorType.TOOL_BAR_EXPAND_KEY_BACKGROUND)
-
-        // background indicator for pinned keys
-        val color = colors.get(ColorType.TOOL_BAR_KEY_ENABLED_BACKGROUND) or -0x1000000 // ignore alpha (in Java this is more readable 0xFF000000)
-        enabledToolKeyBackground.colors = intArrayOf(color, Color.TRANSPARENT)
-        enabledToolKeyBackground.gradientType = GradientDrawable.RADIAL_GRADIENT
-        enabledToolKeyBackground.gradientRadius = resources.getDimensionPixelSize(R.dimen.config_suggestions_strip_height) / 2.1f
-
-        val mToolbarMode = if (isGone) ToolbarMode.HIDDEN else Settings.getValues().mToolbarMode
-        if (mToolbarMode == ToolbarMode.TOOLBAR_KEYS) {
-            setToolbarVisibility(true)
+        for (key in listOf(fixKey, instructKey, micKey)) {
+            key.isActivated = true // toolbar key colours are an "activated" state list
+            colors.setColor(key, ColorType.TOOL_BAR_KEY)
+            colors.setBackground(key, ColorType.STRIP_BACKGROUND)
         }
-
-        // toolbar keys setup (no need to hide them any more when locked, because then suggestion strip is gone anyway
-        for (key in getEnabledToolbarKeys(context.prefs())) {
-            val button = createToolbarKey(context, key)
-            button.layoutParams = toolbarKeyLayoutParams
-            setupKey(button, colors)
-            toolbar.addView(button)
+        val text = colors.get(ColorType.KEY_TEXT)
+        val muted = (text and 0x00FFFFFF) or (0x99 shl 24)
+        voiceText.setTextColor(text)
+        barMessage.setTextColor(text)
+        voiceTime.setTextColor(muted)
+        voiceHint.setTextColor(muted)
+        val comingSoon = OnClickListener {
+            AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
+            KeyboardSwitcher.getInstance().showToast(resources.getString(R.string.kud_coming_soon), true)
         }
-        for (pinnedKey in getPinnedToolbarKeys(context.prefs())) {
-            val button = createToolbarKey(context, pinnedKey)
-            button.layoutParams = toolbarKeyLayoutParams
-            setupKey(button, colors)
-            pinnedKeys.addView(button)
-            val pinnedKeyInToolbar = toolbar.findViewWithTag<View>(pinnedKey)
-            if (pinnedKeyInToolbar != null && Settings.getValues().mQuickPinToolbarKeys)
-                pinnedKeyInToolbar.background = enabledToolKeyBackground
-        }
-        toolbarContainer.doOnNextLayout {
-            // set min with of the toolbar so the weight of the toolbar keys actually does something
-            // todo: results in requestLayout() improperly called by android.widget.LinearLayout during layout: running second layout pass
-            toolbar.minimumWidth = toolbarContainer.width
-        }
-
-        updateKeys()
+        fixKey.setOnClickListener(comingSoon)
+        instructKey.setOnClickListener(comingSoon)
+        micKey.setOnTouchListener { v, event -> onMicTouch(v, event) }
     }
 
     private lateinit var listener: Listener
@@ -196,7 +165,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
                     return true
                 }
 
-                return if (!isExternalSuggestionVisible && toolbarContainer.visibility != VISIBLE && deltaY > 0 && dy < (-10).dpToPx(resources)) showMoreSuggestions()
+                return if (!isExternalSuggestionVisible && voiceBarState == VoiceBarState.Idle && deltaY > 0 && dy < (-10).dpToPx(resources)) showMoreSuggestions()
                 else false
             }
         }
@@ -221,24 +190,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         else {
             newLayoutDirection = if (isRtlLanguage) LAYOUT_DIRECTION_RTL else LAYOUT_DIRECTION_LTR
             direction = if (isRtlLanguage) -1 else 1
-            toolbarExpandKey.scaleX = (if (toolbarContainer.visibility != VISIBLE) 1f else -1f) * direction
         }
         layoutDirection = newLayoutDirection
         suggestionsStrip.layoutDirection = newLayoutDirection
-    }
-
-    fun setToolbarVisibility(toolbarVisible: Boolean) {
-        pinnedKeys.isVisible = !toolbarVisible
-        suggestionsStrip.isVisible = !toolbarVisible
-        toolbarContainer.isVisible = toolbarVisible
-
-        if (DEBUG_SUGGESTIONS) {
-            for (view in debugInfoViews) {
-                view.visibility = suggestionsStrip.visibility
-            }
-        }
-
-        toolbarExpandKey.scaleX = (if (toolbarVisible) -1f else 1f) * direction
     }
 
     fun setSuggestions(suggestions: SuggestedWords, isRtlLanguage: Boolean) {
@@ -265,8 +219,9 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             suggestionsStrip.addView(wrapper)
 
             val closeButton = createToolbarKey(context, ToolbarKey.CLOSE_HISTORY)
-            closeButton.layoutParams = toolbarKeyLayoutParams
-            setupKey(closeButton, Settings.getValues().mColors)
+            closeButton.layoutParams = LinearLayout.LayoutParams(30.dpToPx(resources), LayoutParams.MATCH_PARENT)
+            Settings.getValues().mColors.setColor(closeButton, ColorType.TOOL_BAR_KEY)
+            Settings.getValues().mColors.setBackground(closeButton, ColorType.STRIP_BACKGROUND)
             closeButton.setOnClickListener {
                 listener.removeExternalSuggestions()
             }
@@ -274,8 +229,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         } else {
             suggestionsStrip.addView(view)
         }
-
-        if (Settings.getValues().mAutoHideToolbar) setToolbarVisibility(false)
+        updateMiddle()
     }
 
     fun setMoreSuggestionsHeight(remainingHeight: Int) {
@@ -289,8 +243,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     // overrides: necessarily public, but not used from outside
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences, key: String?) {
-        setToolbarButtonsActivatedStateOnPrefChange(pinnedKeys, key)
-        setToolbarButtonsActivatedStateOnPrefChange(toolbar, key)
         if (key == Settings.PREF_ALWAYS_INCOGNITO_MODE)
             GlobalScope.launch { delay(10); withContext(Dispatchers.Main) { updateKeys() } }
     }
@@ -330,14 +282,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     override fun onClick(view: View) {
         val tag = view.tag
-        if (tag is ToolbarKey) {
-            onClickToolbarKey(view) { listener.onCodeInput(it, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, false) }
-            return
-        }
         AudioAndHapticFeedbackManager.getInstance().performHapticAndAudioFeedback(KeyCode.NOT_SPECIFIED, this, HapticEvent.KEY_PRESS)
-        if (view === toolbarExpandKey) {
-            setToolbarVisibility(toolbarContainer.visibility != VISIBLE)
-        }
 
         // tag for word views is set in SuggestionStripLayoutHelper (setupWordViewsTextAndColor, layoutPunctuationSuggestions)
         if (tag is Int) {
@@ -350,10 +295,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     }
 
     override fun onLongClick(view: View): Boolean {
-        if (view.tag is ToolbarKey) {
-            onLongClickToolbarKey(view)
-            return true
-        }
         AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
         return if (view is TextView && wordViews.contains(view)) {
             onLongClickSuggestion(view)
@@ -363,25 +304,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     }
 
     // actually private stuff
-
-    private fun onLongClickToolbarKey(view: View) {
-        val tag = view.tag as? ToolbarKey ?: return
-        if (!Settings.getValues().mQuickPinToolbarKeys || view.parent === pinnedKeys) {
-            onLongClickToolbarKey(view) { code, isRepeat -> listener.onCodeInput(code, Constants.SUGGESTION_STRIP_COORDINATE, Constants.SUGGESTION_STRIP_COORDINATE, isRepeat) }
-        } else if (view.parent === toolbar) {
-            AudioAndHapticFeedbackManager.getInstance().performHapticFeedback(this, HapticEvent.KEY_LONG_PRESS)
-            val pinnedKeyView = pinnedKeys.findViewWithTag<View>(tag)
-            if (pinnedKeyView == null) {
-                addKeyToPinnedKeys(tag)
-                toolbar.findViewWithTag<View>(tag).background = enabledToolKeyBackground
-                addPinnedKey(context.prefs(), tag)
-            } else {
-                removePinnedKey(context.prefs(), tag)
-                toolbar.findViewWithTag<View>(tag).background = defaultToolbarBackground.constantState?.newDrawable(resources)
-                pinnedKeys.removeView(pinnedKeyView)
-            }
-        }
-    }
 
     @SuppressLint("ClickableViewAccessibility") // no need for View#performClick, we only return false mostly anyway
     private fun onLongClickSuggestion(wordView: TextView): Boolean {
@@ -472,19 +394,12 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
             suggestedWords.mWillAutoCorrect, suggestedWords.mIsObsoleteSuggestions, suggestedWords.mInputStyle, suggestedWords.mSequenceNumber
         )
         setSuggestions(newSuggestedWords, direction != 1)
-        suggestionsStrip.isVisible = true
-
-        // Show the toolbar if no suggestions are left and the "Auto show toolbar" setting is enabled
-        if (this.suggestedWords.isEmpty && Settings.getValues().mAutoShowToolbar) {
-            setToolbarVisibility(true)
-        }
+        updateMiddle()
     }
 
     private fun clear() {
         suggestionsStrip.removeAllViews()
         if (DEBUG_SUGGESTIONS) removeAllDebugInfoViews()
-        if (!toolbarContainer.isVisible)
-            suggestionsStrip.isVisible = true
         dismissMoreSuggestionsPanel()
         for (word in wordViews) {
             word.setOnTouchListener(null)
@@ -500,52 +415,91 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         }
     }
 
-    fun updateVoiceKey() {
-        val show = Settings.getValues().mShowsVoiceInputKey
-        toolbar.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
-        pinnedKeys.findViewWithTag<View>(ToolbarKey.VOICE)?.isVisible = show
-    }
-
     private fun updateKeys() {
-        updateVoiceKey()
-        val settingsValues = Settings.getValues()
-
-        val toolbarIsExpandable = settingsValues.mToolbarMode == ToolbarMode.EXPANDABLE
-        if (settingsValues.mIncognitoModeEnabled) {
-            toolbarExpandKey.setImageDrawable(incognitoIcon)
-            toolbarExpandKey.isVisible = true
-        } else {
-            toolbarExpandKey.setImageDrawable(toolbarArrowIcon)
-            toolbarExpandKey.isVisible = toolbarIsExpandable
-        }
-
-        toolbarExpandKey.setOnClickListener(if (!toolbarIsExpandable) null else this)
-        pinnedKeys.visibility = suggestionsStrip.visibility
+        isPrivateField = Settings.getValues().mIncognitoModeEnabled
         isExternalSuggestionVisible = false
+        updateMiddle()
     }
 
-    private fun addKeyToPinnedKeys(pinnedKey: ToolbarKey) {
-        val original = toolbar.findViewWithTag<ImageButton>(pinnedKey) ?: return
-        // copy the original key to a new ImageButton
-        val copy = ImageButton(context, null, R.attr.suggestionWordStyle)
-        copy.tag = pinnedKey
-        copy.scaleType = original.scaleType
-        copy.scaleX = original.scaleX
-        copy.scaleY = original.scaleY
-        copy.contentDescription = original.contentDescription
-        copy.setImageDrawable(original.drawable)
-        copy.layoutParams = original.layoutParams
-        copy.isActivated = original.isActivated
-        setupKey(copy, Settings.getValues().mColors)
-        pinnedKeys.addView(copy)
+    // ---- kudkeys: quick voice and the Private pill ----
+
+    fun setQuickVoice(controller: QuickVoiceController?) {
+        quickVoice = controller
     }
 
-    private fun setupKey(view: ImageButton, colors: Colors) {
-        view.setOnClickListener(this)
-        view.setOnLongClickListener(this)
-        (view.layoutParams as LinearLayout.LayoutParams).weight = 1f
-        colors.setColor(view, ColorType.TOOL_BAR_KEY)
-        colors.setBackground(view, ColorType.STRIP_BACKGROUND)
+    /** Re-reads whether the current field is private (call after settings were reloaded for a new field). */
+    fun updatePrivacy() = updateKeys()
+
+    val isPrivatePillShown get() = privatePill.isVisible
+
+    fun renderVoice(state: VoiceBarState) {
+        voiceBarState = state
+        when (state) {
+            is VoiceBarState.Recording -> {
+                voiceDot.alpha = 1f
+                voiceTime.isVisible = true
+                voiceTime.text = VoiceText.elapsed(state.elapsedMs)
+                voiceText.text = state.text
+                voiceHint.isVisible = !state.locked
+            }
+            is VoiceBarState.Finishing -> {
+                voiceDot.alpha = 0.35f
+                voiceTime.isVisible = false
+                voiceText.text = state.text.ifEmpty { "…" }
+                voiceHint.isVisible = false
+            }
+            is VoiceBarState.Message -> barMessage.text = state.text
+            VoiceBarState.Idle -> Unit
+        }
+        val locked = state is VoiceBarState.Recording && state.locked
+        if (locked != (micKey.tag == STOP_TAG)) {
+            if (locked) {
+                micKey.tag = STOP_TAG
+                micKey.setImageResource(R.drawable.kud_ic_stop)
+                micKey.contentDescription = resources.getString(R.string.kud_stop)
+            } else {
+                micKey.tag = null
+                micKey.setImageResource(R.drawable.sym_keyboard_voice_lxx)
+                Settings.getValues().mColors.setColor(micKey, ColorType.TOOL_BAR_KEY)
+                micKey.contentDescription = resources.getString(R.string.kud_mic)
+            }
+        }
+        updateMiddle()
+    }
+
+    /** What the middle of the bar shows: voice row, message, or suggestions (with the Private pill when empty). */
+    private fun updateMiddle() {
+        val voice = voiceBarState is VoiceBarState.Recording || voiceBarState is VoiceBarState.Finishing
+        val message = voiceBarState is VoiceBarState.Message
+        // Suggestions win while typing; the pill fills the bar whenever the strip is empty.
+        val pill = isPrivateField && !voice && !message && !isExternalSuggestionVisible && suggestedWords.isEmpty
+        voiceRow.isVisible = voice
+        barMessage.isVisible = message
+        privatePill.isVisible = pill
+        suggestionsStrip.visibility = if (voice || message || pill) INVISIBLE else VISIBLE
+        if (voice || message) dismissMoreSuggestionsPanel()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun onMicTouch(view: View, event: MotionEvent): Boolean {
+        val controller = quickVoice ?: return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+                view.isPressed = true
+                controller.onMicDown(event.rawX, event.rawY)
+            }
+            MotionEvent.ACTION_MOVE -> controller.onMicMove(event.rawX, event.rawY)
+            MotionEvent.ACTION_UP -> {
+                view.isPressed = false
+                controller.onMicUp()
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                view.isPressed = false
+                controller.onMicTouchCancelled()
+            }
+        }
+        return true
     }
 
     companion object {
@@ -553,5 +507,6 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         var DEBUG_SUGGESTIONS = false
         private const val DEBUG_INFO_TEXT_SIZE_IN_DIP = 6.5f
         private val TAG = SuggestionStripView::class.java.simpleName
+        private const val STOP_TAG = "kud_stop"
     }
 }
