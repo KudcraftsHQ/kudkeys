@@ -6,6 +6,7 @@
 
 package helium314.keyboard.keyboard;
 
+import helium314.keyboard.kudkeys.KudPeriodPanel;
 import android.animation.AnimatorInflater;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
@@ -114,6 +115,7 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
     // More keys panel (used by both popup keys keyboard and more suggestions view)
     // TODO: Consider extending to support multiple popup keys panels
     private PopupKeysPanel mPopupKeysPanel;
+    private KudPeriodPanel mKudPeriodPanel;
 
     // Gesture floating preview text
     private final int mGestureFloatingPreviewTextLingerTimeout;
@@ -486,6 +488,12 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         if (popupKeys == null) {
             return null;
         }
+        if (KudPeriodPanel.isInstantKey(key, getKeyboard())) {
+            // Kud Keys: SwiftKey's "." panel, drawn over the key itself
+            if (mKudPeriodPanel == null) mKudPeriodPanel = new KudPeriodPanel(getContext());
+            mKudPeriodPanel.show(this, this, key, getKeyboard(), mKeyboardActionListener);
+            return mKudPeriodPanel;
+        }
         Keyboard popupKeysKeyboard = mPopupKeysKeyboardCache.get(key);
         if (popupKeysKeyboard == null) {
             // {@link KeyPreviewDrawParams#mPreviewVisibleWidth} should have been set at
@@ -601,6 +609,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final int index = event.getActionIndex();
         final int id = event.getPointerId(index);
         final PointerTracker tracker = PointerTracker.getPointerTracker(id);
+        if (mPopupKeysPanel instanceof KudPeriodPanel && isShowingPopupKeysPanel() && !tracker.isShowingPopupKeysPanel()
+                && event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+            // Kud Keys: the "." panel opens on every tap, so a second finger must not be swallowed by it
+            PointerTracker.commitInstantPopupKeysPanels(event.getEventTime());
+        }
         // When a popup keys panel is showing, we should ignore other fingers' single touch events
         // other than the finger that is showing the popup keys panel.
         if (isShowingPopupKeysPanel() && !tracker.isShowingPopupKeysPanel()

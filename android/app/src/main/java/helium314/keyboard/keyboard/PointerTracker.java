@@ -16,6 +16,7 @@ import android.view.MotionEvent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import helium314.keyboard.accessibility.AccessibilityUtils;
 import helium314.keyboard.event.HapticEvent;
 import helium314.keyboard.keyboard.internal.BatchInputArbiter;
 import helium314.keyboard.keyboard.internal.BatchInputArbiter.BatchInputArbiterListener;
@@ -30,6 +31,7 @@ import helium314.keyboard.keyboard.internal.TimerProxy;
 import helium314.keyboard.keyboard.internal.TypingTimeRecorder;
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode;
 import helium314.keyboard.latin.R;
+import helium314.keyboard.kudkeys.KudPeriodPanel;
 import helium314.keyboard.latin.common.Constants;
 import helium314.keyboard.latin.common.CoordinateUtils;
 import helium314.keyboard.latin.common.InputPointers;
@@ -740,6 +742,36 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             mStartX = x;
             mStartY = y;
             mStartTime = SystemClock.elapsedRealtime();
+            if (KudPeriodPanel.isInstantKey(key, mKeyboard) && !sInGesture
+                    && !AccessibilityUtils.Companion.getInstance().isTouchExplorationEnabled()) {
+                showInstantPopupKeysPanel(key, x, y);
+            }
+        }
+    }
+
+    /** Kud Keys (SwiftKey): the "." panel opens on touch-down, with the finger already on its default "." cell. */
+    private void showInstantPopupKeysPanel(final Key key, final int x, final int y) {
+        sTimerProxy.cancelLongPressTimersOf(this);
+        setReleasedKeyGraphics(key, false);
+        final PopupKeysPanel popupKeysPanel = sDrawingProxy.showPopupKeysKeyboard(key, this);
+        if (popupKeysPanel == null) return;
+        popupKeysPanel.onDownEvent(popupKeysPanel.translateX(x), popupKeysPanel.translateY(y), mPointerId,
+                SystemClock.uptimeMillis());
+        mPopupKeysPanel = popupKeysPanel;
+    }
+
+    /**
+     * Kud Keys: another finger went down while the "." panel is open (fast two-thumb typing). Commit what the panel
+     * has selected now, so the "." lands before the next key instead of the new touch being swallowed.
+     */
+    public static void commitInstantPopupKeysPanels(final long eventTime) {
+        final int trackersSize = sTrackers.size();
+        for (int i = 0; i < trackersSize; ++i) {
+            final PointerTracker tracker = sTrackers.get(i);
+            if (tracker.mPopupKeysPanel instanceof KudPeriodPanel) {
+                tracker.onPhantomUpEvent(eventTime);
+                sPointerTrackerQueue.remove(tracker);
+            }
         }
     }
 
