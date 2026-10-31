@@ -2,8 +2,15 @@ import { GROQ_TRANSCRIPTIONS_URL } from "./providers/groq";
 import { OPENAI_REALTIME_URL } from "./providers/openai";
 import { GROQ_CHAT_URL } from "../text/groq-chat";
 
-/** The text endpoints' model (Groq chat) when KUDKEYS_TEXT_MODEL is unset. Chosen by server/scripts/eval-text.ts. */
-export const DEFAULT_TEXT_MODEL = "qwen/qwen3.8-27b";
+/**
+ * Groq chat models for /api/text/* when KUDKEYS_TEXT_MODEL is unset, chosen with
+ * server/scripts/eval-text.ts (2026-10-31): gpt-oss-120b fixes typos and follows
+ * instructions best; qwen3.8-27b tidies dictation best (names fixed, useful
+ * questions) at a third of the latency. Groq's limits are per model, so the
+ * split also doubles the free tier's tokens per minute.
+ */
+export const DEFAULT_TEXT_MODEL = "openai/gpt-oss-120b";
+export const DEFAULT_TIDY_MODEL = "qwen/qwen3.8-27b";
 
 export type ProviderName = "groq" | "openai";
 
@@ -27,7 +34,7 @@ export type Config = {
     noiseReduction?: "near_field" | "far_field";
   };
   /** Groq chat for /api/text/* (tidy, fix, instruct). Uses GROQ_API_KEY whatever the voice provider. */
-  text: { apiKey: string | null; model: string; url: string; perMinute: number };
+  text: { apiKey: string | null; model: string; tidyModel: string; url: string; perMinute: number };
   defaultLanguages: string[];
   maxSessionSeconds: number;
   idleSeconds: number;
@@ -68,7 +75,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     text: {
       apiKey: env.GROQ_API_KEY?.trim() || null,
+      // KUDKEYS_TEXT_MODEL sets all three kinds; KUDKEYS_TIDY_MODEL then overrides tidy.
       model: env.KUDKEYS_TEXT_MODEL?.trim() || DEFAULT_TEXT_MODEL,
+      tidyModel: env.KUDKEYS_TIDY_MODEL?.trim() || env.KUDKEYS_TEXT_MODEL?.trim() || DEFAULT_TIDY_MODEL,
       url: env.GROQ_CHAT_URL?.trim() || GROQ_CHAT_URL,
       perMinute: int(env.KUDKEYS_TEXT_RPM, 30),
     },

@@ -11,6 +11,7 @@ import { createAuth, lookupSession } from '../auth'
 import { parseAllowlist } from '../lib/allowlist'
 import { memoryStore } from '../lib/store'
 import { createTextEngine, placeQuestions } from '../text/engine'
+import { loadConfig } from '../voice/config'
 import { TOKEN } from './client'
 
 const EMAIL = 'hammas@kudcrafts.com'
@@ -162,6 +163,7 @@ describe('tidy', () => {
             { word: 'Darsono', options: ['Darsono', 'Darsana'], start: 999 }, // offset nonsense: found by search
             { word: 'Budi', options: ['Bodi'] }, // not in the text: dropped
             { word: 'bilang', options: [] }, // no options: dropped
+            { word: 'ke', options: ['ke.', ' ke', 'ke?'] }, // punctuation-only options: dropped
             { word: 'Fen', options: ['Fan'] }, // only inside a word: dropped
             { word: 'Feno', options: ['Fenno'], start: 5 }, // exact
           ],
@@ -301,4 +303,22 @@ test('placeQuestions never returns overlapping or mismatched spans', () => {
     [0, 4],
     [5, 9],
   ])
+})
+
+test('tidy can run on its own model; the usage row names the model used', async () => {
+  const split = createTextEngine({ apiKey: 'gsk-test', url: `http://localhost:${groq.port}/v1/chat/completions`, model: 'big/model', tidyModel: 'fast/model' })
+  expect(split.models).toEqual({ tidy: 'fast/model', fix: 'big/model', instruct: 'big/model' })
+  const splitApp = createApp({ store, allowlist, getSession, transcription: null, text: { engine: split } })
+  replies = [() => chat({ text: 'Halo.', questions: [] }), () => chat({ text: 'Halo.', changed: true })]
+  await call('/tidy', { text: 'halo' }, { target: splitApp })
+  await call('/fix', { text: 'halo' }, { target: splitApp })
+  await Bun.sleep(5)
+  expect(calls.map((c) => c.model)).toEqual(['fast/model', 'big/model'])
+  expect(store.textUsage.map((r) => r.model)).toEqual(['fast/model', 'big/model'])
+})
+
+test('config: defaults per kind; KUDKEYS_TEXT_MODEL sets all; KUDKEYS_TIDY_MODEL overrides tidy', () => {
+  expect(loadConfig({}).text).toMatchObject({ model: 'openai/gpt-oss-120b', tidyModel: 'qwen/qwen3.8-27b', perMinute: 30, apiKey: null })
+  expect(loadConfig({ KUDKEYS_TEXT_MODEL: 'a/b' }).text).toMatchObject({ model: 'a/b', tidyModel: 'a/b' })
+  expect(loadConfig({ KUDKEYS_TEXT_MODEL: 'a/b', KUDKEYS_TIDY_MODEL: 'c/d' }).text).toMatchObject({ model: 'a/b', tidyModel: 'c/d' })
 })

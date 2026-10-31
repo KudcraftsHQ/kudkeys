@@ -56,7 +56,7 @@ Never:
 
 ${CASUAL_RULES}
 
-Questions: the input may list "unsure" phrases the recogniser had low confidence in. Look hard at those phrases: a person's or place's name that is not in the name list, a brand, or a word that sounds odd in context is probably mis-heard, so ask about it. Add a question for each such word (or short name) in your output that may still be wrong. "word" is copied exactly, character for character, from your output text; "options" are 1–3 likely alternatives (different from the word, best first). At most 5 questions; none when you are confident. Do not ask about words you already corrected from the name list.
+Questions: the input may list "unsure" phrases the recogniser had low confidence in. Go through them word by word. Every person's or place's name, brand or unusual word in them that is not in the name list is a likely mis-hearing: keep it as heard in the text and ask about it. Also ask about any word elsewhere that you think may be wrong. "word" is copied exactly, character for character, from your output text (one to three words, no punctuation); "options" are 1–3 likely alternatives that sound similar (different from the word, best first). At most 5 questions. With unsure phrases there is usually at least one question; with none and nothing doubtful, return an empty list. Do not ask about words you already corrected from the name list.
 
 Reply with JSON only: {"text": "<tidied text>", "questions": [{"word": "...", "options": ["..."]}]}`
 

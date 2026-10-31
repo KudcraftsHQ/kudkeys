@@ -25,7 +25,7 @@ const auth = createAuth({ database: prismaAdapter(db, { provider: 'postgresql' }
 const store = prismaStore(db)
 const getSession = (headers: Headers) => lookupSession(auth, headers)
 const model = activeModel(cfg)
-const textEngine = cfg.text.apiKey ? createTextEngine({ apiKey: cfg.text.apiKey, url: cfg.text.url, model: cfg.text.model }) : null
+const textEngine = cfg.text.apiKey ? createTextEngine({ apiKey: cfg.text.apiKey, url: cfg.text.url, model: cfg.text.model, tidyModel: cfg.text.tidyModel }) : null
 
 const app = createApp({
   store,
@@ -45,5 +45,5 @@ const server = createServer(cfg, {
 })
 const keyVar = cfg.provider === 'groq' ? 'GROQ_API_KEY' : 'OPENAI_API_KEY'
 console.log(
-  `[kudkeys] listening on :${server.port} — transcription: ${model ?? `not configured (set ${keyVar})`} — text: ${textEngine ? `groq:${textEngine.model}` : 'not configured (set GROQ_API_KEY)'}`,
+  `[kudkeys] listening on :${server.port} — transcription: ${model ?? `not configured (set ${keyVar})`} — text: ${textEngine ? `groq:${textEngine.models.fix} (tidy: ${textEngine.models.tidy})` : 'not configured (set GROQ_API_KEY)'}`,
 )

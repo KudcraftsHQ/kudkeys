@@ -16,7 +16,8 @@ export type FixResult = { text: string; changed: boolean }
 export type InstructResult = { text: string }
 
 export interface TextEngine {
-  readonly model: string
+  /** The Groq model each kind uses. */
+  readonly models: Record<TextKind, string>
   tidy(input: { text: string; segments?: Segment[] }, ctx: PromptContext): Promise<TidyResult>
   fix(input: { text: string }, ctx: PromptContext): Promise<FixResult>
   instruct(input: { instruction: string; text: string }, ctx: PromptContext): Promise<InstructResult>
@@ -44,8 +45,15 @@ function maxTokens(chars: number): number {
   return Math.min(MAX_OUTPUT_TOKENS, 1536 + Math.ceil(chars / 2))
 }
 
-export function createTextEngine(cfg: ChatConfig, opts: { timeoutMs?: Partial<Record<TextKind, number>> } = {}): TextEngine {
+export type EngineConfig = Omit<ChatConfig, 'model'> & {
+  /** For fix and instruct, and for tidy when tidyModel is unset. */
+  model: string
+  tidyModel?: string
+}
+
+export function createTextEngine(cfg: EngineConfig, opts: { timeoutMs?: Partial<Record<TextKind, number>> } = {}): TextEngine {
   const timeouts = { ...TIMEOUT_MS, ...opts.timeoutMs }
+  const models: Record<TextKind, string> = { tidy: cfg.tidyModel ?? cfg.model, fix: cfg.model, instruct: cfg.model }
 
   /** One call, retried once when the reply isn't the JSON we asked for. All within the kind's deadline. */
   async function run<T>(
@@ -63,7 +71,7 @@ export function createTextEngine(cfg: ChatConfig, opts: { timeoutMs?: Partial<Re
       const remaining = deadline - Date.now()
       if (remaining <= 0) throw new TextModelError(503, 'timeout')
       try {
-        const raw = await chatJson(cfg, { system, user: userMsg, maxTokens: maxTokens(chars), signal: AbortSignal.timeout(remaining) })
+        const raw = await chatJson({ apiKey: cfg.apiKey, url: cfg.url, model: models[kind] }, { system, user: userMsg, maxTokens: maxTokens(chars), signal: AbortSignal.timeout(remaining) })
         const parsed = schema.safeParse(raw)
         if (!parsed.success || !accept(parsed.data)) throw new InvalidModelOutput('schema')
         return parsed.data
@@ -76,7 +84,7 @@ export function createTextEngine(cfg: ChatConfig, opts: { timeoutMs?: Partial<Re
   }
 
   return {
-    model: cfg.model,
+    models,
 
     async tidy({ text, segments }, ctx) {
       if (!text.trim()) return { text: '', questions: [] }
@@ -107,6 +115,8 @@ export function createTextEngine(cfg: ChatConfig, opts: { timeoutMs?: Partial<Re
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u
 
+const bare = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '')
+
 function isWholeWord(text: string, start: number, end: number): boolean {
   return !WORD_CHAR.test(text[start - 1] ?? '') && !WORD_CHAR.test(text[end] ?? '')
 }
@@ -128,7 +138,8 @@ export function placeQuestions(text: string, raw: Array<{ word: string; options:
     const seen = new Set<string>()
     const options = q.options
       .map((o) => o.trim())
-      .filter((o) => o && o !== word && o.length <= 60 && !seen.has(o) && seen.add(o))
+      // An option that differs only in punctuation or spacing is no alternative.
+      .filter((o) => o && bare(o) !== bare(word) && o.length <= 60 && !seen.has(o) && seen.add(o))
       .slice(0, MAX_OPTIONS)
     if (!options.length) continue
 

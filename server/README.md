@@ -147,6 +147,55 @@ Weeks start Monday 00:00 and months on the 1st, Jakarta time. `sessions` is the 
 newest first. `outcome` is `stopped`, `idle`, `limit`, `cancelled`, `client closed` or
 `error <code>`. `session` is the id the stream sent in `ready`.
 
+### Text: tidy, fix, instruct
+
+The keyboard's AI text actions (v0.3), on Groq chat completions in JSON mode with the same
+`GROQ_API_KEY` as voice. Models: **fix** and **instruct** on `openai/gpt-oss-120b`, **tidy** on
+`qwen/qwen3.8-27b` (picked with `scripts/eval-text.ts`: gpt-oss-120b fixes typos and follows
+instructions best; Qwen tidies dictation best, fixing names and asking useful questions, at a
+third of the latency). `KUDKEYS_TEXT_MODEL` sets one model for all three; `KUDKEYS_TIDY_MODEL`
+then overrides tidy. All three
+need a **session token** (`Authorization: Bearer <token>`); a legacy `KUDKEYS_TOKENS` entry is
+refused with 401. Every prompt carries the profile's `voiceKeywords` (spelling of names) and
+`languages` (the request's `languages`, when sent, win).
+
+| Call | Body | Answer |
+|---|---|---|
+| `POST /api/text/tidy` | `{"text": ≤20000 chars, "segments"?: [{"text", "confidence"?: 0–1}], "languages"?, "private"?}` | `{"text", "questions": [{"id","original","start","end","options"}]}` |
+| `POST /api/text/fix` | `{"text": ≤4000 chars, "languages"?, "private"?}` | `{"text", "changed"}` |
+| `POST /api/text/instruct` | `{"instruction": 1–2000 chars, "text": ≤20000 chars (may be ""), "languages"?, "private"?}` | `{"text"}` |
+
+- **tidy** turns raw dictation into clean text: punctuation, paragraphs, a numbered or bulleted
+  list only where the speaker clearly enumerated ("pertama… kedua…"). Slang stays slang
+  (nggak, gue, udah, banget, belom); hesitations (eh, emm) and stutters go; only obvious
+  mis-hearings change, above all keywords ("Feno" → "Fenno"). Segments with `confidence` < 0.7
+  are passed as "unsure", and the model may ask about words in them. **`questions`** are
+  checked here, not trusted: `text.slice(start, end) === original` on word boundaries, always;
+  a question whose word isn't in the text, or has no option, is dropped. At most 5, in text
+  order, never overlapping; `options` are 1–3 alternatives to `original` (offer "keep as is"
+  yourself). Empty `text` → `{"text":"","questions":[]}` with no model call.
+- **fix** corrects typos, punctuation and capitalisation only; meaning, language mix, slang and
+  chat abbreviations (yg, bgt, btw) stay. `changed` is `false` exactly when the returned text
+  equals the input (compared here, not taken from the model).
+- **instruct** applies `instruction` to `text` and returns the whole result. With empty `text`
+  it writes from the instruction ("write a polite reply saying I'll be 10 minutes late"). It
+  answers in the language of the text, or with no text in the instruction's language.
+
+Errors: `400 {"error":"invalid","issues":[…]}` bad input · `401` no or invalid session (or a
+legacy token) · `429 {"error":"rate_limited","retryAfter"}` with a `Retry-After` header (seconds):
+over **30 calls a minute** per user (`KUDKEYS_TEXT_RPM`), or Groq's own limit · `503
+{"error":"unavailable","reason"}`: Groq down or refused, a timeout (15 s fix, 45 s tidy and
+instruct), invalid JSON from the model twice, or no `GROQ_API_KEY`.
+
+Groq's free tier allows **8,000 tokens a minute per model** (tidy and fix/instruct run on
+different models, so each has its own budget), and one call costs roughly the prompt
+(~1,000 tokens) plus twice the text. Expect a 429 after a few long tidies in a row;
+retry after `Retry-After`. A paid Groq plan lifts this.
+
+**Privacy:** request and response text are never logged or stored. Each call that reaches the
+model writes one `text_usage` row: `kind`, `charsIn`, `charsOut`, `ms`, `model`, `ok`. With
+`private: true` the character counts are `null`, so the row holds only the kind and timing.
+
 ### Other endpoints
 
 | Path | What |
@@ -231,6 +280,10 @@ Close codes: 1000 normal, 1008 the keyboard broke the protocol, 1011 provider or
 | `KUDKEYS_PAUSE_MS` | `800` | Pause that ends a phrase |
 | `KUDKEYS_PARTIAL_MS` | `0` | > 0 turns on live partials (see above) |
 | `KUDKEYS_GROQ_RPM` | `20` | Your Groq requests/minute limit |
+| `KUDKEYS_TEXT_MODEL` | `openai/gpt-oss-120b` for fix and instruct, `qwen/qwen3.8-27b` for tidy | Groq chat model for `/api/text/*`; when set, used for all three. Chosen by `scripts/eval-text.ts` (see Tests) |
+| `KUDKEYS_TIDY_MODEL` | `KUDKEYS_TEXT_MODEL` | Overrides the model for tidy only |
+| `KUDKEYS_TEXT_RPM` | `30` | Text calls per user per minute |
+| `GROQ_CHAT_URL` | Groq's | Chat completions URL (tests and CI point it at a fake) |
 | `KUDKEYS_LANGUAGES` | `id,en` | Default when neither `start` nor the profile names any (legacy tokens) |
 | `OPENAI_API_KEY` | — | Only for `KUDKEYS_PROVIDER=openai` |
 | `KUDKEYS_DELAY`, `KUDKEYS_NOISE_REDUCTION` | unset | OpenAI only |
@@ -246,10 +299,17 @@ OpenAI realtime server: phrase splitting, silence never sent, Whisper's made-up 
 `test/accounts.test.ts` runs real Better Auth (memory adapter) through the whole server:
 allowlisted sign-up, bearer sign-in, `/api/me` validation, stream auth (session token, legacy
 token, none, revoked, removed from the allowlist), keyword merge into the prompt, and usage
-rows with no text. `test/auth-hardening.test.ts` covers 503 (not 401) when the database fails
+rows with no text. `test/text.test.ts` covers `/api/text/*` against a fake Groq chat server:
+session-only auth, validation, the profile in the prompt, question offsets checked in code,
+the retry on invalid JSON, 429/503 mapping, the per-user limit and usage rows without text.
+`test/auth-hardening.test.ts` covers 503 (not 401) when the database fails
 during a session lookup, the sign-in rate limit by `cf-connecting-ip` / socket address with a
 spoofed `X-Forwarded-For`, and `KUDKEYS_SIGNUP_OPEN=false`. `test/migration.test.ts` applies
 the migrations to PGlite.
+
+Picking the text model: `GROQ_API_KEY=… bun server/scripts/eval-text.ts out.md [model …]` runs
+the fixtures in `test/fixtures/text/` against real Groq models (a few cents) and writes every
+output, latency and check result side by side. Never in CI.
 
 CI: `.github/workflows/server.yaml` (typecheck, tests, SPA build; then the Docker image is
 built, run against Postgres with migrations, and smoke-tested with its runtime queries going

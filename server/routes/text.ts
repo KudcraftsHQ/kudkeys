@@ -118,7 +118,7 @@ export function textRouter(deps: TextRouterDeps) {
         charsIn: priv ? null : charsIn(body),
         charsOut: priv || !result ? null : result.text.length,
         ms,
-        model: engine.model,
+        model: engine.models[kind],
         ok: result !== null,
       })
       .catch((e) => console.error(`[kudkeys] text ${kind}: usage row not written: ${(e as Error).message}`))

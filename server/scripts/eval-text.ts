@@ -62,7 +62,8 @@ const summary: Record<string, { ms: number[]; fails: number; errors: number }> =
 // Groq's limits are per model (8k tokens/min on the free tier), so models run side by side and each paces itself.
 const perModel = await Promise.all(
   list.map(async (model) => {
-    const engine = createTextEngine({ apiKey, url: GROQ_CHAT_URL, model }, { timeoutMs: { fix: 30_000, tidy: 60_000, instruct: 60_000 } })
+    const engine = createTextEngine({ apiKey, url: GROQ_CHAT_URL, model }, // one model for every kind
+      { timeoutMs: { fix: 30_000, tidy: 60_000, instruct: 60_000 } })
     const s = { ms: [] as number[], fails: 0, errors: 0 }
     const r1: string[] = []
     const d1: string[] = []
