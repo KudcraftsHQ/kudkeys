@@ -120,7 +120,9 @@ class KudAccountScreenshotTest {
         renderScreen("account-4-profile", 2.1f, settle = { server.requestCount >= 2 }) {
             KudProfileScreen(Account(settings), {}, {}, {})
         }
-        assertEquals("Bearer tok.sig", server.takeRequest().getHeader("Authorization"))
+        // MockWebServer can also record a dropped connection (no headers): look at the /api/me call itself
+        val me = generateSequence { server.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS) }.first { it.path == "/api/me" }
+        assertEquals("Bearer tok.sig", me.getHeader("Authorization"))
     }
 
     @Test fun voiceScreen() {

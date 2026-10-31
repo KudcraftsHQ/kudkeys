@@ -147,7 +147,7 @@ cd android
 - Home = `KudMainSettingsScreen` in `J/settings/screens/KudSettingsScreens.kt`: Languages · Typing · Emoji ·
   Rich input · Layout & keys · Sound & vibration · Advanced (= `KudAdvancedScreen`: HeliBoard's Preferences,
   Appearance, Text correction, Secondary layouts, Dictionaries, Advanced, About). HeliBoard's `MainSettingsScreen`
-  is gone. Room for **Account** at the top: pref key `KudSettings.PREF_ACCOUNT` (`kudkeys_account`), not shown yet.
+  is gone. **Account** at the top (`KudAccountRow`, key `KudSettings.PREF_ACCOUNT`), see "Account" below.
 - A SwiftKey row that is exactly one HeliBoard pref reuses that `Setting` (its title/summary were renamed to
   SwiftKey's wording in the HeliBoard `create*Settings`, so search and Advanced show the same names). Rows that
   combine or translate prefs have `KudSettingKeys.*` keys in `createKudSettings`; their pref logic is
@@ -176,3 +176,19 @@ cd android
   the LXX border theme (rounded key shapes), and `MainKeyboardView.onDraw` draws `res/drawable/kud_incognito_watermark.xml`
   faintly over the keys. The normal look is unchanged (borderless).
 - `KudV02ScreenshotTest` writes every settings screen and both keyboard looks to `$TMPDIR/kudkeys-v02-shots/`.
+
+## Account (v0.2)
+
+- Screens: `J/settings/screens/KudAccountScreens.kt` — `KudAccountRow` (top of settings: "Sign in" + why, or avatar,
+  name, email), `KudAccountScreen` (`KudDestination.Account`: sign-in while signed out, profile once signed in),
+  `KudSignInScreen` (email + password, no sign-up: links to keys.kudcrafts.com), `KudProfileScreen` (name, keyword
+  chips via `J/kudkeys/KudKeywords.kt`, languages id/en/jv/su/ms/ar, Save → PATCH, usage, web link, sign out).
+- State and HTTP live in the `:voice` module (`Account`, `AccountClient`, `VoiceSettings`; see `voice/API.md`). The
+  session token is in the `kudkeys_voice` prefs, which backup already excludes. API base = the Voice server URL's
+  host (`wss://keys.kudcrafts.com/v1/stream` → `https://keys.kudcrafts.com`). `App.onCreate` sets the User-Agent
+  (`KudKeys/<version> (Android <n>; <model>)`) used on account calls and the stream upgrade.
+- Voice sends the session token when signed in, else the legacy token (Voice → Advanced). A 401 with a session token
+  marks the account signed out; the bar shows "Signed out — sign in again" and the Account row says the same.
+- Tests: `voice/src/test/.../AccountClientTest.kt` (MockWebServer), `VoiceClientTest` (session over legacy, 401 →
+  signed out), `app/src/test/.../KudAccountScreenshotTest.kt` → `$TMPDIR/kudkeys-v02-shots/account-*.png`.
+  `AccountLocalTest` is an opt-in run against a local server (`KUDKEYS_LOCAL_BASE`, `_EMAIL`, `_PASSWORD`, `_WAV`).

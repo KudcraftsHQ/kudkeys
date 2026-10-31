@@ -22,6 +22,9 @@ android {
             all {
                 // Opt-in live run against production (see VoiceLiveTest).
                 it.environment("KUDKEYS_LIVE", System.getenv("KUDKEYS_LIVE") ?: "")
+                // Opt-in run against a local server (see AccountLocalTest).
+                for (k in listOf("KUDKEYS_LOCAL_BASE", "KUDKEYS_LOCAL_EMAIL", "KUDKEYS_LOCAL_PASSWORD", "KUDKEYS_LOCAL_WAV"))
+                    it.environment(k, System.getenv(k) ?: "")
                 it.testLogging { events("passed", "skipped", "failed"); showStandardStreams = true }
             }
         }
