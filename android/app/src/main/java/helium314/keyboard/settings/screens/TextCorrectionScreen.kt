@@ -114,7 +114,7 @@ fun createCorrectionSettings(context: Context) = listOf(
         SwitchPreference(it, Defaults.PREF_BLOCK_POTENTIALLY_OFFENSIVE)
     },
     Setting(context, Settings.PREF_AUTO_CORRECTION,
-        R.string.autocorrect, R.string.auto_correction_summary
+        R.string.kud_autocorrect, R.string.kud_autocorrect_summary
     ) {
         SwitchPreference(it, Defaults.PREF_AUTO_CORRECTION)
     },
@@ -149,21 +149,21 @@ fun createCorrectionSettings(context: Context) = listOf(
             }
         )
     },
-    Setting(context, Settings.PREF_BACKSPACE_REVERTS_AUTOCORRECT, R.string.backspace_reverts_autocorrect) {
+    Setting(context, Settings.PREF_BACKSPACE_REVERTS_AUTOCORRECT, R.string.kud_undo_autocorrect, R.string.kud_undo_autocorrect_summary) {
         SwitchPreference(it, Defaults.PREF_BACKSPACE_REVERTS_AUTOCORRECT)
     },
     Setting(context, Settings.PREF_AUTO_CAP,
-        R.string.auto_cap, R.string.auto_cap_summary
+        R.string.kud_auto_capitalize, R.string.kud_auto_capitalize_summary
     ) {
         SwitchPreference(it, Defaults.PREF_AUTO_CAP)
     },
     Setting(context, Settings.PREF_KEY_USE_DOUBLE_SPACE_PERIOD,
-        R.string.use_double_space_period, R.string.use_double_space_period_summary
+        R.string.kud_quick_period, R.string.kud_quick_period_summary
     ) {
         SwitchPreference(it, Defaults.PREF_KEY_USE_DOUBLE_SPACE_PERIOD)
     },
     Setting(context, Settings.PREF_AUTOSPACE_AFTER_PUNCTUATION,
-        R.string.autospace_after_punctuation, R.string.autospace_after_punctuation_summary
+        R.string.kud_auto_space, R.string.kud_auto_space_summary
     ) {
         SwitchPreference(it, Defaults.PREF_AUTOSPACE_AFTER_PUNCTUATION)
     },
@@ -265,7 +265,7 @@ fun createCorrectionSettings(context: Context) = listOf(
         SwitchPreference(setting, Defaults.PREF_USE_APPS)
     },
     Setting(
-        context, Settings.PREF_SUGGEST_EMOJIS, R.string.suggest_emojis, R.string.suggest_emojis_summary
+        context, Settings.PREF_SUGGEST_EMOJIS, R.string.kud_emoji_predictions, R.string.kud_emoji_predictions_summary
     ) {
         SwitchPreferenceWithEmojiDictWarning(it, Defaults.PREF_SUGGEST_EMOJIS)
     },

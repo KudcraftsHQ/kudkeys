@@ -23,7 +23,17 @@ import helium314.keyboard.settings.screens.ColorsScreen
 import helium314.keyboard.settings.screens.DebugScreen
 import helium314.keyboard.settings.screens.DictionaryScreen
 import helium314.keyboard.settings.screens.LanguageScreen
-import helium314.keyboard.settings.screens.MainSettingsScreen
+import helium314.keyboard.settings.screens.KudAdvancedScreen
+import helium314.keyboard.settings.screens.KudDestination
+import helium314.keyboard.settings.screens.KudEmojiScreen
+import helium314.keyboard.settings.screens.KudLanguagesScreen
+import helium314.keyboard.settings.screens.KudLayoutKeysScreen
+import helium314.keyboard.settings.screens.KudMainSettingsScreen
+import helium314.keyboard.settings.screens.KudPhysicalKeyboardScreen
+import helium314.keyboard.settings.screens.KudResizeScreen
+import helium314.keyboard.settings.screens.KudRichInputScreen
+import helium314.keyboard.settings.screens.KudSoundScreen
+import helium314.keyboard.settings.screens.KudTypingScreen
 import helium314.keyboard.settings.screens.PersonalDictionariesScreen
 import helium314.keyboard.settings.screens.PersonalDictionaryScreen
 import helium314.keyboard.settings.screens.PreferencesScreen
@@ -31,6 +41,7 @@ import helium314.keyboard.settings.screens.SecondaryLayoutScreen
 import helium314.keyboard.settings.screens.SubtypeScreen
 import helium314.keyboard.settings.screens.TextCorrectionScreen
 import helium314.keyboard.settings.screens.VoiceScreen
+import helium314.keyboard.settings.screens.KudAccountScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -63,19 +74,42 @@ fun SettingsNavHost(
         popExitTransition = { slideOutHorizontally(targetOffsetX = { +it * dir }, animationSpec = animation) }
     ) {
         composable(SettingsDestination.Settings) {
-            MainSettingsScreen(
-                onClickAbout = { navController.navigate(SettingsDestination.About) },
-                onClickTextCorrection = { navController.navigate(SettingsDestination.TextCorrection) },
+            // Kud Keys: SwiftKey's sections; HeliBoard's own screens are under Advanced
+            KudMainSettingsScreen(
+                onClickLanguages = { navController.navigate(KudDestination.Languages) },
+                onClickTyping = { navController.navigate(KudDestination.Typing) },
+                onClickEmoji = { navController.navigate(KudDestination.Emoji) },
+                onClickRichInput = { navController.navigate(KudDestination.RichInput) },
+                onClickLayoutKeys = { navController.navigate(KudDestination.LayoutKeys) },
+                onClickSound = { navController.navigate(KudDestination.Sound) },
+                onClickAdvanced = { navController.navigate(KudDestination.More) },
+                onClickBack = ::goBack,
+                onClickAccount = { navController.navigate(KudDestination.Account) },
+            )
+        }
+        composable(KudDestination.More) {
+            KudAdvancedScreen(
                 onClickPreferences = { navController.navigate(SettingsDestination.Preferences) },
-                onClickVoice = { navController.navigate(SettingsDestination.Voice) },
-                onClickAdvanced = { navController.navigate(SettingsDestination.Advanced) },
                 onClickAppearance = { navController.navigate(SettingsDestination.Appearance) },
-                onClickLanguage = { navController.navigate(SettingsDestination.Languages) },
+                onClickTextCorrection = { navController.navigate(SettingsDestination.TextCorrection) },
                 onClickLayouts = { navController.navigate(SettingsDestination.Layouts) },
                 onClickDictionaries = { navController.navigate(SettingsDestination.Dictionaries) },
+                onClickAdvanced = { navController.navigate(SettingsDestination.Advanced) },
+                onClickAbout = { navController.navigate(SettingsDestination.About) },
                 onClickBack = ::goBack,
             )
         }
+        composable(KudDestination.Languages) {
+            KudLanguagesScreen(onClickAddLanguages = { navController.navigate(SettingsDestination.Languages) }, onClickBack = ::goBack)
+        }
+        composable(KudDestination.Typing) { KudTypingScreen(onClickBack = ::goBack) }
+        composable(KudDestination.PhysicalKeyboard) { KudPhysicalKeyboardScreen(onClickBack = ::goBack) }
+        composable(KudDestination.Emoji) { KudEmojiScreen(onClickBack = ::goBack) }
+        composable(KudDestination.RichInput) { KudRichInputScreen(onClickBack = ::goBack) }
+        composable(KudDestination.LayoutKeys) { KudLayoutKeysScreen(onClickBack = ::goBack) }
+        composable(KudDestination.Resize) { KudResizeScreen(onClickBack = ::goBack) }
+        composable(KudDestination.Account) { KudAccountScreen(onClickBack = ::goBack) }
+        composable(KudDestination.Sound) { KudSoundScreen(onClickBack = ::goBack) }
         composable(SettingsDestination.About) {
             AboutScreen(onClickBack = ::goBack)
         }
@@ -86,7 +120,7 @@ fun SettingsNavHost(
             PreferencesScreen(onClickBack = ::goBack)
         }
         composable(SettingsDestination.Voice) {
-            VoiceScreen(onClickBack = ::goBack)
+            VoiceScreen(onClickBack = ::goBack, onClickAccount = { navController.navigate(KudDestination.Account) })
         }
         composable(SettingsDestination.Advanced) {
             AdvancedSettingsScreen(onClickBack = ::goBack)

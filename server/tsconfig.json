@@ -1,13 +1,19 @@
 {
   "compilerOptions": {
+    "lib": ["ESNext"],
     "target": "ESNext",
-    "module": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "strict": true,
-    "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "types": ["bun"],
-    "noEmit": true
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "types": ["bun"]
   },
-  "include": ["src", "test", "scripts"]
+  "include": ["**/*.ts"],
+  "exclude": ["public", "node_modules"]
 }

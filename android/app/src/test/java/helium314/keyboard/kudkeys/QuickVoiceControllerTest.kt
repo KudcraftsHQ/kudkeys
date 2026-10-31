@@ -141,9 +141,9 @@ class QuickVoiceControllerTest {
         host.token = false
         holdToRecord()
         assertEquals(emptyList(), engine.calls)
-        assertEquals(VoiceBarState.Message("Set your voice token in settings"), host.last)
+        assertEquals(VoiceBarState.Message("Voice: sign in from settings"), host.last)
         controller.onMicUp()
-        assertEquals(VoiceBarState.Message("Set your voice token in settings"), host.last) // no "Hold to talk" on top
+        assertEquals(VoiceBarState.Message("Voice: sign in from settings"), host.last) // no "Hold to talk" on top
     }
 
     @Test fun missingPermissionOpensActivity() {
@@ -328,7 +328,7 @@ class QuickVoiceControllerTest {
         host.token = false
         controller.startLocked()
         assertEquals(emptyList(), engine.calls)
-        assertEquals(VoiceBarState.Message("Set your voice token in settings"), host.last)
+        assertEquals(VoiceBarState.Message("Voice: sign in from settings"), host.last)
     }
 
     @Test fun leadingSpace() {

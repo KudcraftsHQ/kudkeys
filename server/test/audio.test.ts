@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Resampler, SampleAligner } from "../src/audio";
+import { Resampler, SampleAligner } from "../voice/audio";
 
 describe("SampleAligner", () => {
   test("carries an odd byte into the next chunk", () => {

@@ -12,10 +12,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** Settings → Voice → Test connection: open a session with silence, send `stop` once the server is ready. */
 object VoiceConnectionTest {
-    const val OK = "Connected. The token works."
+    const val OK = "Connected. Voice works."
 
-    suspend fun run(endpoint: VoiceEndpoint): String {
-        val client = VoiceClient(endpoint = { endpoint }, audioSource = { SilentAudioSource() })
+    /** [onSessionRejected]: the account's session got a 401 (mark it signed out). */
+    suspend fun run(endpoint: VoiceEndpoint, onSessionRejected: () -> Unit = {}): String {
+        val client = VoiceClient(endpoint = { endpoint }, audioSource = { SilentAudioSource() }, onSessionRejected = onSessionRejected)
         try {
             if (!client.start(VoiceStart())) return message(client.state.value)
             val ready = withTimeoutOrNull(15_000) {

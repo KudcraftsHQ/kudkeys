@@ -21,16 +21,21 @@ import helium314.keyboard.latin.R
 import helium314.keyboard.settings.SearchSettingsScreen
 import helium314.keyboard.settings.dialogs.TextInputDialog
 import helium314.keyboard.settings.dialogs.ThreeButtonAlertDialog
+import helium314.keyboard.latin.utils.NextScreenIcon
 import helium314.keyboard.settings.preferences.Preference
+import helium314.keyboard.settings.preferences.PreferenceCategory
 import kotlinx.coroutines.launch
 
-/** kudkeys: Settings → Voice. Server URL, token (never in the APK) and a connection test. */
+/**
+ * kudkeys: Settings → Voice. The account voice uses, server URL, a connection test, and under Advanced the legacy
+ * token (never in the APK; only used when signed out).
+ */
 @Composable
-fun VoiceScreen(onClickBack: () -> Unit) {
+fun VoiceScreen(onClickBack: () -> Unit, onClickAccount: () -> Unit = {}) {
     val ctx = LocalContext.current
     val settings = remember { VoiceSettings(ctx) }
     var url by remember { mutableStateOf(settings.serverUrl) }
-    var hasToken by remember { mutableStateOf(settings.hasToken) }
+    var hasToken by remember { mutableStateOf(settings.token.isNotEmpty()) }
     var editUrl by remember { mutableStateOf(false) }
     var editToken by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
@@ -39,12 +44,13 @@ fun VoiceScreen(onClickBack: () -> Unit) {
 
     SearchSettingsScreen(onClickBack = onClickBack, title = stringResource(R.string.kud_settings_voice), settings = emptyList()) {
         Column {
-            Preference(name = stringResource(R.string.kud_voice_server_url), description = url, onClick = { editUrl = true })
             Preference(
-                name = stringResource(R.string.kud_voice_token),
-                description = stringResource(if (hasToken) R.string.kud_voice_token_set else R.string.kud_voice_token_unset),
-                onClick = { editToken = true },
-            )
+                name = stringResource(R.string.kud_account_title),
+                description = if (settings.isSignedIn) settings.accountEmail else stringResource(R.string.kud_voice_account_none),
+                icon = R.drawable.kud_ic_account,
+                onClick = onClickAccount,
+            ) { NextScreenIcon() }
+            Preference(name = stringResource(R.string.kud_voice_server_url), description = url, onClick = { editUrl = true })
             Preference(
                 name = stringResource(R.string.kud_voice_test),
                 description = if (testing) stringResource(R.string.kud_voice_test_running) else testResult,
@@ -53,10 +59,17 @@ fun VoiceScreen(onClickBack: () -> Unit) {
                     testing = true
                     testResult = null
                     scope.launch {
-                        testResult = VoiceConnectionTest.run(settings.endpoint())
+                        testResult = VoiceConnectionTest.run(settings.endpoint(), settings::markSignedOut)
                         testing = false
                     }
                 },
+            )
+            PreferenceCategory(stringResource(R.string.kud_voice_advanced))
+            Preference(
+                name = stringResource(R.string.kud_voice_token_legacy),
+                description = stringResource(if (hasToken) R.string.kud_voice_token_set else R.string.kud_voice_token_unset) +
+                    " · " + stringResource(R.string.kud_voice_token_legacy_summary),
+                onClick = { editToken = true },
             )
         }
     }
@@ -73,11 +86,11 @@ fun VoiceScreen(onClickBack: () -> Unit) {
         val state = rememberTextFieldState("")
         ThreeButtonAlertDialog(
             onDismissRequest = { editToken = false },
-            onConfirmed = { settings.token = state.text.toString(); hasToken = settings.hasToken; testResult = null },
+            onConfirmed = { settings.token = state.text.toString(); hasToken = settings.token.isNotEmpty(); testResult = null },
             checkOk = { state.text.isNotBlank() },
             neutralButtonText = if (hasToken) stringResource(R.string.delete) else null,
             onNeutral = { editToken = false; settings.token = ""; hasToken = false; testResult = null },
-            title = { Text(stringResource(R.string.kud_voice_token)) },
+            title = { Text(stringResource(R.string.kud_voice_token_legacy)) },
             content = { OutlinedSecureTextField(state = state, modifier = Modifier.fillMaxWidth()) },
         )
     }

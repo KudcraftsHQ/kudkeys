@@ -20,7 +20,7 @@ internal object Protocol {
     fun start(options: VoiceStart): String = buildJsonObject {
         put("type", "start")
         put("sampleRate", SAMPLE_RATE)
-        putJsonArray("languages") { options.languages.forEach { add(it) } }
+        options.languages?.let { langs -> putJsonArray("languages") { langs.forEach { add(it) } } }
         if (options.keywords.isNotEmpty()) putJsonArray("keywords") { options.keywords.forEach { add(it) } }
         put("private", options.private)
     }.toString()

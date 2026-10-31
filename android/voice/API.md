@@ -14,11 +14,15 @@ Package `com.kudcrafts.kudkeys.voice`.
 | `client.cancel()` | Sends `cancel`, releases the mic, state → `Idle` at once. No text. |
 | `client.reset()` | `Done`/`Error` → `Idle` after the caller used the result. |
 | `client.close()` | Cancel and stop background work (IME `onDestroy`). |
-| `VoiceSettings(context)` | `serverUrl` (default `wss://keys.kudcrafts.com/v1/stream`), `token`, `hasToken`. The settings screen writes these; the client reads them at every `start`. |
+| `VoiceSettings(context)` | `serverUrl` (default `wss://keys.kudcrafts.com/v1/stream`), `apiBase` (`https://host` from it), the account (`sessionToken`, `accountName`, `accountEmail`, `isSignedIn`, `wasSignedOut`, `signedIn`, `signOut`, `markSignedOut`), the legacy `token`, `hasToken` (either). `endpoint()` sends the session token when signed in, else the legacy one. The client reads it at every `start`. |
+| `Account(context)` | The account API (server/README.md "API for the app") with the stored token: `signIn` (stores `set-auth-token`), `me`, `save(name, voiceKeywords, languages)` (PATCH, only given fields), `usage`, `signOut`. Results are `AccountResult` (`Ok`, `WrongPassword`, `SignedOut`, `NotAllowed`, `NoNetwork`, `Unreachable`, `Failed(message)`); a `SignedOut` marks the account signed out. `AccountClient` is the stateless HTTP part. |
 | `hasMicPermission(context)` | True when `RECORD_AUDIO` is granted. |
 | `AudioSource` | Mic interface (`open`, blocking `read` of one 100 ms frame, thread-safe `close`). For tests or other inputs: `VoiceClient(endpoint = { … }, audioSource = { … })`. |
 
 All methods are non-blocking and safe on the main thread.
+
+`VoiceStart` sends no `languages` or `keywords` by default: with a session token the server uses the profile's
+(keywords merged into Whisper's prompt), with a legacy token its default (id, en).
 
 ## State
 
@@ -36,14 +40,16 @@ cancel() from anywhere → Idle
 
 | `VoiceErrorKind` | When | `userMessage` |
 |---|---|---|
-| `NoToken` | no token in settings (mic never opened) | Set your voice token in settings |
-| `TokenRejected` | HTTP 401 on upgrade | Voice: token rejected |
+| `NoToken` | not signed in and no legacy token (mic never opened) | Voice: sign in from settings |
+| `TokenRejected` | HTTP 401 on upgrade with the legacy token | Voice: token rejected |
+| `SignedOut` | HTTP 401 on upgrade with a session token (also calls `onSessionRejected`, which `create` wires to `markSignedOut`) | Signed out — sign in again |
 | `NoConnection` | DNS/connect/TLS failure, dropped connection | Voice: no connection |
 | `Mic` | `AudioRecord` failed to start | Voice: microphone unavailable |
 | `BadConfig` | server URL not `ws://`/`wss://` | Voice: check the server URL in settings |
 | `BadRequest`, `NotStarted` | server `bad_request`/`not_started`, close 1008 | Voice: request rejected |
 | `Provider` | server `provider` | Voice: transcription failed |
 | `Limit` | server `limit` | Voice: limit reached |
+| `Unavailable` | HTTP 5xx on upgrade (503: the server could not check the session). The token is kept | Voice: server unavailable, try again |
 | `Server` | server `internal`, close 1011, other HTTP codes | Voice: server error |
 
 ## Hold-to-talk (quick voice mode)

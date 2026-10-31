@@ -5,6 +5,7 @@
  */
 package helium314.keyboard.latin.suggestions
 
+import helium314.keyboard.kudkeys.KudSettings
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
@@ -247,6 +248,8 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     override fun onSharedPreferenceChanged(prefs: SharedPreferences, key: String?) {
         if (key == Settings.PREF_ALWAYS_INCOGNITO_MODE)
             GlobalScope.launch { delay(10); withContext(Dispatchers.Main) { updateKeys() } }
+        if (key == KudSettings.PREF_VOICE_TYPING)
+            updateMicVisibility(prefs.getBoolean(key, KudSettings.DEFAULT_VOICE_TYPING))
     }
 
     override fun onVisibilityChanged(view: View, visibility: Int) {
@@ -419,11 +422,20 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
 
     private fun updateKeys() {
         isPrivateField = Settings.getValues().mIncognitoModeEnabled
+        updateMicVisibility(Settings.getValues().mKudVoiceTyping)
         isExternalSuggestionVisible = false
         updateMiddle()
     }
 
     // ---- kudkeys: quick voice and the Private pill ----
+
+    /** Rich input → Voice typing off hides the Mic; its slot stays, so Instruct never moves. */
+    private fun updateMicVisibility(voiceTyping: Boolean) {
+        micKey.visibility = if (voiceTyping) VISIBLE else INVISIBLE
+    }
+
+    /** Whether the Mic is on the bar (for tests). */
+    val isMicShown get() = micKey.visibility == VISIBLE
 
     fun setQuickVoice(controller: QuickVoiceController?) {
         quickVoice = controller

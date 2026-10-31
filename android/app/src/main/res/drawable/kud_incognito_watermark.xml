@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Kud Keys: incognito watermark (hat and glasses, like SwiftKey's), drawn faintly over the keys in private fields -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="110dp"
+    android:viewportWidth="120"
+    android:viewportHeight="110">
+    <!-- hat: crown -->
+    <path
+        android:pathData="M31,43 L36,11 Q37,4 44,4 L76,4 Q83,4 84,11 L89,43"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- hat: brim -->
+    <path
+        android:pathData="M5,45 L115,45"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+    <!-- glasses -->
+    <path
+        android:pathData="M5,82 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8" />
+    <path
+        android:pathData="M71,82 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8" />
+    <path
+        android:pathData="M49,80 Q60,73 71,80"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+</vector>

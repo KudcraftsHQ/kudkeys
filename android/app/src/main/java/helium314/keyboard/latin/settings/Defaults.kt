@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
-import android.util.TypedValue
 import android.view.Gravity
 import helium314.keyboard.keyboard.KeyboardActionListener
 import helium314.keyboard.keyboard.KeyboardTheme
@@ -20,9 +19,7 @@ import helium314.keyboard.latin.utils.defaultToolbarPref
 object Defaults {
     fun initDynamicDefaults(context: Context) {
         PREF_GESTURE_DYNAMIC_PREVIEW_FOLLOW_SYSTEM = getTransitionAnimationScale(context) != 0.0f
-        val dm = context.resources.displayMetrics
-        val px600 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 600f, dm)
-        PREF_POPUP_ON = dm.widthPixels >= px600 || dm.heightPixels >= px600
+        PREF_POPUP_ON = true // Kud Keys: SwiftKey's Key pop-ups are on (upstream: only on big screens)
     }
 
     // must correspond to a file name
@@ -57,7 +54,7 @@ object Defaults {
     const val PREF_VIBRATE_ON = true // Kud Keys: SwiftKey ticks on every key press (system haptic, see PREF_VIBRATION_DURATION_SETTINGS)
     const val PREF_VIBRATE_IN_DND_MODE = false
     const val PREF_SOUND_ON = false
-    const val PREF_SUGGEST_EMOJIS = true
+    const val PREF_SUGGEST_EMOJIS = false // Kud Keys: SwiftKey's Emoji predictions are off
     const val PREF_INLINE_EMOJI_SEARCH = true
     const val PREF_SHOW_EMOJI_DESCRIPTIONS = true
     @JvmField
@@ -66,7 +63,7 @@ object Defaults {
     const val PREF_MORE_AUTO_CORRECTION = false
     const val PREF_AUTO_CORRECT_CONFIDENCE = 0.24f
     const val PREF_AUTOCORRECT_SHORTCUTS = true
-    const val PREF_BACKSPACE_REVERTS_AUTOCORRECT = true
+    const val PREF_BACKSPACE_REVERTS_AUTOCORRECT = false // Kud Keys: SwiftKey's Undo autocorrect on backspace is off
     const val PREF_AUTOCORRECT_CAPITALIZED_SUGGESTION = true
     const val PREF_CENTER_SUGGESTION_TEXT_TO_ENTER = false
     const val PREF_SHOW_SUGGESTIONS = true
@@ -77,8 +74,8 @@ object Defaults {
     const val PREF_BLOCK_POTENTIALLY_OFFENSIVE = true
     const val PREF_SHOW_LANGUAGE_SWITCH_KEY = false
     const val PREF_LANGUAGE_SWITCH_KEY = "internal"
-    const val PREF_SHOW_EMOJI_KEY = false
-    const val PREF_SHOW_DPAD_KEY = true
+    const val PREF_SHOW_EMOJI_KEY = true // Kud Keys: SwiftKey's Dedicated emoji key (bottom row)
+    const val PREF_SHOW_DPAD_KEY = false // Kud Keys: SwiftKey's Arrow keys are off
     const val PREF_VARIABLE_TOOLBAR_DIRECTION = true
     /** kudkeys: English (US) with Indonesian as secondary locale, so both are typed together (multilingual typing) */
     const val KUDKEYS_DEFAULT_SUBTYPE = "en-US${Separators.SET}${ExtraValue.SECONDARY_LOCALES}=id," +
@@ -111,7 +108,7 @@ object Defaults {
     @JvmField
     val PREF_SPACE_VERTICAL_SWIPE = KeyboardActionListener.SwipeAction.NONE.name
     const val PREF_DELETE_SWIPE = true
-    const val PREF_AUTOSPACE_AFTER_PUNCTUATION = false
+    const val PREF_AUTOSPACE_AFTER_PUNCTUATION = true // Kud Keys: SwiftKey's Auto space is on
     const val PREF_AUTOSPACE_AFTER_SUGGESTION = true
     const val PREF_AUTOSPACE_AFTER_GESTURE_TYPING = true
     const val PREF_AUTOSPACE_BEFORE_GESTURE_TYPING = true
@@ -122,7 +119,7 @@ object Defaults {
     const val PREF_SUGGEST_CLIPBOARD_CONTENT = true
     const val PREF_VIBRATION_DURATION_SETTINGS = -1
     const val PREF_KEYPRESS_SOUND_VOLUME = -0.01f
-    const val PREF_KEY_LONGPRESS_TIMEOUT = 300
+    const val PREF_KEY_LONGPRESS_TIMEOUT = 450 // Kud Keys: SwiftKey's Long-press duration
     const val PREF_ENABLE_EMOJI_ALT_PHYSICAL_KEY = true
     // supporting hardware keyboard still has a bunch of issues
     // crash https://github.com/HeliBorg/HeliBoard/issues/2047 (possibly fixed with b7cb95fc9da213c99d82e8833fb5f950f39d232e)

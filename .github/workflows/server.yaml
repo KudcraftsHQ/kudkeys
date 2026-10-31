@@ -1,0 +1,86 @@
+# Kud Keys server + web app CI: typecheck and tests on every change outside
+# android/, then the Docker image is built and smoke-tested against a real
+# Postgres (migrations, sign-up, /api/me, a /v1/stream session with the bearer
+# token against a fake Groq, and its usage row). Runtime queries go through
+# pgbouncer in transaction mode with ?pgbouncer=true, as in production.
+name: server
+
+on:
+  pull_request:
+    paths-ignore: ['android/**', 'docs/**', '.github/workflows/android.yaml', '.github/workflows/release.yaml']
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+    paths-ignore: ['android/**', 'docs/**', '.github/workflows/android.yaml', '.github/workflows/release.yaml']
+  workflow_dispatch:
+
+concurrency:
+  group: server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Typecheck (server + app)
+        run: bun run typecheck
+      - name: Tests
+        run: bun run test
+      - name: Web app builds
+        run: cd app && bun run build
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kudkeys
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+      pgbouncer:
+        image: edoburu/pgbouncer:latest
+        env:
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/kudkeys
+          POOL_MODE: transaction
+          AUTH_TYPE: scram-sha-256
+          LISTEN_PORT: '6432'
+        ports: ['6432:6432']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - name: Build image
+        run: docker build -t kudkeys .
+      - name: Run image (migrations at start) against Postgres and a fake Groq
+        run: |
+          bun server/scripts/fake-groq.ts 18099 &
+          docker run -d --name kudkeys --network host \
+            -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/kudkeys \
+            -e "DATABASE_URL_POOLING=postgresql://postgres:postgres@localhost:6432/kudkeys?pgbouncer=true" \
+            -e BETTER_AUTH_SECRET=ci-secret-ci-secret-ci-secret-1234 \
+            -e BETTER_AUTH_URL=http://localhost:8080 \
+            -e KUDKEYS_ALLOWED_EMAILS=smoke@example.com \
+            -e KUDKEYS_TOKENS=ci-static-token-ci-static-token-1234 \
+            -e GROQ_API_KEY=gsk-fake \
+            -e GROQ_TRANSCRIPTIONS_URL=http://localhost:18099/openai/v1/audio/transcriptions \
+            kudkeys
+          for i in $(seq 1 60); do curl -fsS localhost:8080/api/health && break; sleep 1; done
+          curl -fsS localhost:8080/health
+          curl -fsS localhost:8080/ | grep -q '<div id="root">'
+      - name: Smoke test
+        run: bun server/scripts/smoke.ts http://localhost:8080 smoke@example.com
+      - name: Container log
+        if: always()
+        run: docker logs kudkeys

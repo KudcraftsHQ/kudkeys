@@ -87,7 +87,7 @@ fun createPreferencesSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_SAVE_SUBTYPE_PER_APP, R.string.save_subtype_per_app) {
         SwitchPreference(it, Defaults.PREF_SAVE_SUBTYPE_PER_APP)
     },
-    Setting(context, Settings.PREF_SHOW_HINTS, R.string.show_hints, R.string.show_hints_summary) {
+    Setting(context, Settings.PREF_SHOW_HINTS, R.string.kud_long_press_symbols, R.string.kud_long_press_symbols_summary) {
         SwitchPreference(it, Defaults.PREF_SHOW_HINTS) { KeyboardSwitcher.getInstance().reloadKeyboard() }
     },
     Setting(context, Settings.PREF_POPUP_KEYS_HINT_ORDER, R.string.hint_source) {
@@ -105,7 +105,7 @@ fun createPreferencesSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_SHOW_POPUP_HINTS, R.string.show_popup_hints, R.string.show_popup_hints_summary) {
         SwitchPreference(it, Defaults.PREF_SHOW_POPUP_HINTS) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
-    Setting(context, Settings.PREF_POPUP_ON, R.string.popup_on_keypress) {
+    Setting(context, Settings.PREF_POPUP_ON, R.string.kud_key_popups, R.string.kud_key_popups_summary) {
         SwitchPreference(it, Defaults.PREF_POPUP_ON) { KeyboardSwitcher.getInstance().reloadKeyboard() }
     },
     Setting(context, Settings.PREF_VIBRATE_ON, R.string.vibrate_on_keypress) {
@@ -120,7 +120,7 @@ fun createPreferencesSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_SHOW_EMOJI_DESCRIPTIONS, R.string.show_emoji_descriptions) {
         SwitchPreferenceWithEmojiDictWarning(it, Defaults.PREF_SHOW_EMOJI_DESCRIPTIONS)
     },
-    Setting(context, Settings.PREF_SHOW_NUMBER_ROW, R.string.number_row, R.string.number_row_summary) {
+    Setting(context, Settings.PREF_SHOW_NUMBER_ROW, R.string.kud_number_row, R.string.kud_number_row_summary) {
         SwitchPreference(it, Defaults.PREF_SHOW_NUMBER_ROW) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
     Setting(context, Settings.PREF_SHOW_NUMBER_ROW_IN_SYMBOLS, R.string.number_row_in_symbols) {
@@ -149,11 +149,11 @@ fun createPreferencesSettings(context: Context) = listOf(
             Defaults.PREF_LANGUAGE_SWITCH_KEY
         ) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
-    Setting(context, Settings.PREF_SHOW_EMOJI_KEY, R.string.show_emoji_key) {
-        SwitchPreference(it, Defaults.PREF_SHOW_EMOJI_KEY) { KeyboardSwitcher.getInstance().reloadKeyboard() }
+    Setting(context, Settings.PREF_SHOW_EMOJI_KEY, R.string.kud_emoji_key, R.string.kud_emoji_key_summary) {
+        SwitchPreference(it, Defaults.PREF_SHOW_EMOJI_KEY) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
-    Setting(context, Settings.PREF_SHOW_DPAD_KEY, R.string.show_dpad_key) {
-        SwitchPreference(it, Defaults.PREF_SHOW_DPAD_KEY) { KeyboardSwitcher.getInstance().reloadKeyboard() }
+    Setting(context, Settings.PREF_SHOW_DPAD_KEY, R.string.kud_arrow_keys, R.string.kud_arrow_keys_summary) {
+        SwitchPreference(it, Defaults.PREF_SHOW_DPAD_KEY) { KeyboardSwitcher.getInstance().setThemeNeedsReload() }
     },
     Setting(context, Settings.PREF_REMOVE_REDUNDANT_POPUPS,
         R.string.remove_redundant_popups, R.string.remove_redundant_popups_summary)

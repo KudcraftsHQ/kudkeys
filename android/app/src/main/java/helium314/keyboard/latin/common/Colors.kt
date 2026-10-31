@@ -381,6 +381,8 @@ class DefaultColors (
     private val spaceBarText: Int = keyHintText,
     private val gesture: Int = accent,
     private var keyboardBackground: Drawable? = null,
+    /** Kud Keys (incognito look): key shapes for letters, but functional keys only show [functionalKey] while pressed */
+    private val kudBorderlessFunctionalKeys: Boolean = false,
 ) : Colors {
     private val navBar: Int
     /** brightened or darkened variant of [background], to be used if exact background color would be
@@ -452,7 +454,8 @@ class DefaultColors (
             backgroundStateList = pressedStateList(brightenOrDarken(background, true), background)
             keyStateList = if (themeStyle == STYLE_HOLO) pressedStateList(keyBackground, keyBackground)
                 else pressedStateList(brightenOrDarken(keyBackground, true), keyBackground)
-            functionalKeyStateList = pressedStateList(brightenOrDarken(functionalKey, true), functionalKey)
+            functionalKeyStateList = if (kudBorderlessFunctionalKeys) pressedStateList(functionalKey, Color.TRANSPARENT)
+                else pressedStateList(brightenOrDarken(functionalKey, true), functionalKey)
             actionKeyStateList = if (themeStyle == STYLE_HOLO) functionalKeyStateList
                 else pressedStateList(brightenOrDarken(accent, true), accent)
             spaceBarStateList = if (themeStyle == STYLE_HOLO) pressedStateList(spaceBar, spaceBar)

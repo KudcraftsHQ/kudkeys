@@ -1,0 +1,28 @@
+{
+  "name": "kudkeys",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "app",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n app,server -c blue,cyan \"bun run dev:app\" \"bun run dev:server\"",
+    "dev:app": "cd app && bun run dev",
+    "dev:server": "cd server && bun run dev",
+    "build": "bunx prisma generate && cd app && bun run build",
+    "typecheck": "bunx prisma generate && cd app && bunx tsc -b && cd ../server && bunx tsc --noEmit",
+    "test": "bun test server",
+    "start": "bun run server/index.ts",
+    "stream": "bun server/scripts/stream-wav.ts"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/bun": "latest",
+    "concurrently": "^9.2.1",
+    "prisma": "6"
+  },
+  "dependencies": {
+    "@prisma/client": "6"
+  }
+}

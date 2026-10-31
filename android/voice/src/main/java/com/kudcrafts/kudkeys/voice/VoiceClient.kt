@@ -26,9 +26,10 @@ import okio.ByteString.Companion.toByteString
 data class VoiceStart(
     /** Private field (incognito, password, URL, search): sent as `"private": true`. */
     val private: Boolean = false,
-    /** Names to nudge spelling (Fenno, TypeMap). */
+    /** Names to nudge spelling (Fenno, TypeMap). The app sends none: the server adds the profile's. */
     val keywords: List<String> = emptyList(),
-    val languages: List<String> = listOf("id", "en"),
+    /** Null lets the server choose: the account's languages, else its default (id, en). */
+    val languages: List<String>? = null,
 )
 
 /**
@@ -49,6 +50,8 @@ class VoiceClient(
     private val http: OkHttpClient = defaultHttp,
     /** How long [stop] waits for `done` before finishing with what it has. */
     private val doneTimeoutMs: Long = 5_000,
+    /** A session token got HTTP 401 on the upgrade: the account is signed out (sign in again). */
+    private val onSessionRejected: () -> Unit = {},
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Any()
@@ -67,7 +70,8 @@ class VoiceClient(
         if (ep.token.isBlank()) return fail(VoiceErrorKind.NoToken, "no token set")
         val request = try {
             require(ep.url.startsWith("ws://", true) || ep.url.startsWith("wss://", true))
-            Request.Builder().url(ep.url).header("Authorization", "Bearer ${ep.token}").build()
+            Request.Builder().url(ep.url).header("Authorization", "Bearer ${ep.token}")
+                .apply { if (ep.userAgent != null) header("User-Agent", ep.userAgent) }.build()
         } catch (_: IllegalArgumentException) {
             return fail(VoiceErrorKind.BadConfig, "server URL must be ws:// or wss://")
         }
@@ -78,7 +82,7 @@ class VoiceClient(
             runCatching { source.close() }
             return fail(VoiceErrorKind.Mic, e.javaClass.simpleName)
         }
-        val s = Session(source)
+        val s = Session(source, ep.isSession)
         current = s
         _state.value = VoiceState.Connecting(0, 0f)
         // OkHttp queues these until the socket opens; the server queues audio until `ready`.
@@ -144,7 +148,7 @@ class VoiceClient(
 
     private enum class Phase { Connecting, Listening, Finishing, Ended }
 
-    private inner class Session(val source: AudioSource) {
+    private inner class Session(val source: AudioSource, val isSession: Boolean) {
         val startedNs = System.nanoTime()
         val transcript = Transcript()
         lateinit var ws: WebSocket
@@ -258,7 +262,13 @@ class VoiceClient(
             synchronized(lock) {
                 if (current !== s) return
                 when {
+                    response?.code == 401 && s.isSession -> {
+                        runCatching { onSessionRejected() }
+                        endWithError(s, VoiceErrorKind.SignedOut, "HTTP 401")
+                    }
                     response?.code == 401 -> endWithError(s, VoiceErrorKind.TokenRejected, "HTTP 401")
+                    // only a 401 signs out; a 5xx (database blip, redeploy) keeps the token
+                    response != null && response.code >= 500 -> endWithError(s, VoiceErrorKind.Unavailable, "HTTP ${response.code}")
                     response != null -> endWithError(s, VoiceErrorKind.Server, "HTTP ${response.code}")
                     t is IOException -> endWithError(s, VoiceErrorKind.NoConnection, t.javaClass.simpleName)
                     else -> endWithError(s, VoiceErrorKind.Server, t.javaClass.simpleName)
@@ -278,7 +288,11 @@ class VoiceClient(
         /** The keyboard's client: settings from [VoiceSettings], audio from the mic. */
         fun create(context: Context): VoiceClient {
             val settings = VoiceSettings(context.applicationContext)
-            return VoiceClient(endpoint = settings::endpoint, audioSource = ::MicAudioSource)
+            return VoiceClient(
+                endpoint = settings::endpoint,
+                audioSource = ::MicAudioSource,
+                onSessionRejected = settings::markSignedOut,
+            )
         }
     }
 }

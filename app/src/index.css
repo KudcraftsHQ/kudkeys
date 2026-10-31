@@ -1,0 +1,132 @@
+@import 'tailwindcss';
+
+/* Kud Keys — board's design language (warm canvas, white cards on hairlines,
+   near-black primary, one indigo accent), with a dark scheme that follows the
+   system. Token names match board's so the copied ui/ components fit. */
+
+@layer base {
+  :root {
+    --cream: #f7f7f5;
+    --cream-deep: #f1f1ee;
+    --paper: #ffffff;
+    --ink: #1d1d1b;
+    --ink-soft: #5f5f5a;
+    --muted: #8f8f89;
+    --line: #ebebe8;
+    --line-strong: #e0e0dc;
+    --mint: #e8f5ee;
+    --olive: #177a4b;
+    --pink: #fcebea;
+    --rose: #c2392f;
+    --butter: #fbf3e2;
+    --warn: #9a6a0e;
+    --blue: #5266eb;
+    --blue-subtle: #eef0fd;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --cream: #141413;
+      --cream-deep: #1f1f1d;
+      --paper: #1b1b1a;
+      --ink: #ecece8;
+      --ink-soft: #b3b3ad;
+      --muted: #85857f;
+      --line: #2b2b29;
+      --line-strong: #393936;
+      --mint: #15301f;
+      --olive: #5ccf8f;
+      --pink: #3a1d1b;
+      --rose: #f0857a;
+      --butter: #332a14;
+      --warn: #e2b553;
+      --blue: #8b97f1;
+      --blue-subtle: #23264a;
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+      color-scheme: dark;
+    }
+  }
+
+  @theme inline {
+    --color-cream: var(--cream);
+    --color-cream-deep: var(--cream-deep);
+    --color-paper: var(--paper);
+    --color-ink: var(--ink);
+    --color-ink-soft: var(--ink-soft);
+    --color-muted: var(--muted);
+    --color-line: var(--line);
+    --color-line-strong: var(--line-strong);
+    --color-mint: var(--mint);
+    --color-olive: var(--olive);
+    --color-pink: var(--pink);
+    --color-rose: var(--rose);
+    --color-butter: var(--butter);
+    --color-warn: var(--warn);
+    --color-blue: var(--blue);
+    --color-blue-subtle: var(--blue-subtle);
+    --font-sans: var(--font-sans);
+    --font-display: var(--font-sans);
+  }
+
+  html,
+  body,
+  #root {
+    background: var(--cream);
+    color: var(--ink);
+    min-height: 100svh;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer utilities {
+  .font-sans-ui {
+    font-family: var(--font-sans);
+  }
+  .tabular {
+    font-feature-settings: 'tnum';
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-card);
+  }
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 6px 0 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--cream-deep);
+    color: var(--ink);
+  }
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--cream-deep) 0, var(--line) 50%, var(--cream-deep) 100%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+}

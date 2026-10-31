@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- kudkeys: settings organised like SwiftKey's (names, order and wording). SPDX-License-Identifier: GPL-3.0-only -->
+<resources>
+    <!-- home -->
+    <string name="kud_section_account" translatable="false">Account</string>
+    <string name="kud_section_languages" translatable="false">Languages</string>
+    <string name="kud_section_typing" translatable="false">Typing</string>
+    <string name="kud_section_emoji" translatable="false">Emoji</string>
+    <string name="kud_section_rich_input" translatable="false">Rich input</string>
+    <string name="kud_section_layout_keys" translatable="false">Layout &amp; keys</string>
+    <string name="kud_section_sound" translatable="false">Sound &amp; vibration</string>
+    <string name="kud_section_advanced" translatable="false">Advanced</string>
+    <string name="kud_section_advanced_summary" translatable="false">Everything else from HeliBoard: appearance, text correction, dictionaries, about</string>
+    <string name="kud_section_typing_summary" translatable="false">Autocorrect, quick period, cursor control</string>
+    <string name="kud_section_emoji_summary" translatable="false">Emoji key, predictions, font</string>
+    <string name="kud_section_rich_input_summary" translatable="false">Voice typing</string>
+    <string name="kud_section_layout_keys_summary" translatable="false">Resize, number row, key pop-ups</string>
+    <string name="kud_section_sound_summary" translatable="false">Keypress sound and vibration</string>
+
+    <!-- Languages -->
+    <string name="kud_languages_layout" translatable="false">Layout: %s</string>
+    <string name="kud_languages_add" translatable="false">Add languages</string>
+    <string name="kud_languages_settings" translatable="false">Language settings</string>
+    <string name="kud_languages_changing_title" translatable="false">Changing layouts:</string>
+    <string name="kud_languages_changing_text" translatable="false">You can change the layout you are using by swiping left or right on your keyboard spacebar (when Cursor control is off).</string>
+    <string name="kud_languages_multilingual_title" translatable="false">Multilingual:</string>
+    <string name="kud_languages_multilingual_text" translatable="false">You can type in any installed language that is supported by your current keyboard layout without the need to switch keyboards.</string>
+
+    <!-- Typing -->
+    <string name="kud_autocorrect" translatable="false">Autocorrect</string>
+    <string name="kud_autocorrect_summary" translatable="false">Words will be corrected to the middle prediction as you type</string>
+    <string name="kud_undo_autocorrect" translatable="false">Undo autocorrect on backspace</string>
+    <string name="kud_undo_autocorrect_summary" translatable="false">Backspacing after an autocorrection will return original text</string>
+    <string name="kud_quick_prediction" translatable="false">Quick prediction insert</string>
+    <string name="kud_quick_prediction_summary" translatable="false">Tapping the spacebar will insert the middle prediction, even when you haven’t started the next word</string>
+    <string name="kud_quick_period" translatable="false">Quick period</string>
+    <string name="kud_quick_period_summary" translatable="false">Double tapping the spacebar will insert a period</string>
+    <string name="kud_auto_capitalize" translatable="false">Auto capitalize</string>
+    <string name="kud_auto_capitalize_summary" translatable="false">Automatically capitalize after punctuation</string>
+    <string name="kud_auto_space" translatable="false">Auto space</string>
+    <string name="kud_auto_space_summary" translatable="false">Automatically insert spaces with punctuation</string>
+    <string name="kud_cursor_control" translatable="false">Cursor control</string>
+    <string name="kud_cursor_control_summary" translatable="false">Slide your finger along the spacebar to move the cursor</string>
+    <string name="kud_quick_delete" translatable="false">Quick delete</string>
+    <string name="kud_quick_delete_summary" translatable="false">Slide from the delete key to select and delete text</string>
+    <string name="kud_physical_keyboard" translatable="false">Physical keyboard</string>
+    <string name="kud_physical_keyboard_summary" translatable="false">Adjust the settings for your physical keyboard. These settings do not affect your on-screen keyboard.</string>
+    <string name="kud_clear_typing_data" translatable="false">Clear typing data</string>
+    <string name="kud_clear_typing_data_summary" translatable="false">Forget the words and phrases Kud Keys learned from your typing</string>
+    <string name="kud_clear_typing_data_confirm" translatable="false">Clear typing data? The words, phrases and next-word predictions Kud Keys learned from your typing will be deleted. This cannot be undone. Your Android personal dictionary (Settings → Personal dictionary) is not touched.</string>
+    <string name="kud_clear_typing_data_button" translatable="false">Clear</string>
+    <string name="kud_clear_typing_data_done" translatable="false">Typing data cleared</string>
+
+    <!-- Emoji -->
+    <string name="kud_emoji_predictions" translatable="false">Emoji predictions</string>
+    <string name="kud_emoji_predictions_summary" translatable="false">Emoji will be suggested on the prediction bar</string>
+    <string name="kud_emoji_key" translatable="false">Dedicated emoji key</string>
+    <string name="kud_emoji_key_summary" translatable="false">Show a dedicated emoji key on the keyboard</string>
+    <string name="kud_emoji_on_enter" translatable="false">Emoji access on enter key</string>
+    <string name="kud_emoji_on_enter_summary" translatable="false">Long-press the enter key for emoji when there is no emoji key</string>
+    <string name="kud_emoji_font" translatable="false">Emoji font</string>
+
+    <!-- Rich input -->
+    <string name="kud_voice_typing" translatable="false">Voice typing</string>
+    <string name="kud_voice_typing_summary" translatable="false">Enable voice typing key</string>
+
+    <!-- Layout & keys -->
+    <string name="kud_resize" translatable="false">Resize</string>
+    <string name="kud_resize_summary" translatable="false">Adjust the size of your keyboard</string>
+    <string name="kud_number_row" translatable="false">Number row</string>
+    <string name="kud_number_row_summary" translatable="false">Always show number row at the top of your keyboard</string>
+    <string name="kud_number_position" translatable="false">Number position in number &amp; symbols layout</string>
+    <string name="kud_number_position_top" translatable="false">Top (Number row)</string>
+    <string name="kud_number_position_numpad" translatable="false">Numpad only (the 1234 key)</string>
+    <string name="kud_long_press_symbols" translatable="false">Long-press symbols</string>
+    <string name="kud_long_press_symbols_summary" translatable="false">Always show long-press symbols on the keyboard</string>
+    <string name="kud_accented" translatable="false">Accented characters</string>
+    <string name="kud_accented_summary" translatable="false">Long-press to see all available accents</string>
+    <string name="kud_arrow_keys" translatable="false">Arrow keys</string>
+    <string name="kud_arrow_keys_summary" translatable="false">Show an arrow keys key in the symbols layout</string>
+    <string name="kud_key_popups" translatable="false">Key pop-ups</string>
+    <string name="kud_key_popups_summary" translatable="false">Show pop-ups when tapping keys on the keyboard</string>
+    <string name="kud_large_key_text" translatable="false">Large key text</string>
+    <string name="kud_large_key_text_summary" translatable="false">Show larger text on keyboard keys</string>
+    <string name="kud_long_press_duration" translatable="false">Long-press duration</string>
+
+    <!-- Resize -->
+    <string name="kud_resize_title" translatable="false">Select your size</string>
+    <string name="kud_resize_hint" translatable="false">Drag the handles to resize, or the centre to move</string>
+    <string name="kud_resize_reset" translatable="false">Reset</string>
+    <string name="kud_resize_ok" translatable="false">OK</string>
+
+    <!-- Sound & vibration -->
+    <string name="kud_sound_volume" translatable="false">Keypress sound volume</string>
+    <string name="kud_sound_profile" translatable="false">Keypress sound profile</string>
+    <string name="kud_sound_profile_modern" translatable="false">Modern</string>
+    <string name="kud_sound_profile_classic" translatable="false">Classic</string>
+    <string name="kud_android_vibration" translatable="false">Use the Android default vibration</string>
+    <string name="kud_keypress_vibration" translatable="false">Keypress vibration</string>
+    <string name="kud_value_default" translatable="false">Default</string>
+</resources>

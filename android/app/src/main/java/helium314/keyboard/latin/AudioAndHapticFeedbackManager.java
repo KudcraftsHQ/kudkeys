@@ -89,7 +89,8 @@ public final class AudioAndHapticFeedbackManager {
         if (hapticEvent != HapticEvent.KEY_PRESS) {
             return;
         }
-        final int sound = switch (code) {
+        // Kud Keys: the "classic" sound profile is one click for every key
+        final int sound = mSettingsValues.mKudClassicSound ? AudioManager.FX_KEYPRESS_STANDARD : switch (code) {
             case KeyCode.DELETE -> AudioManager.FX_KEYPRESS_DELETE;
             case Constants.CODE_ENTER -> AudioManager.FX_KEYPRESS_RETURN;
             case Constants.CODE_SPACE -> AudioManager.FX_KEYPRESS_SPACEBAR;
