@@ -351,17 +351,20 @@ class KudVoiceEditorView @JvmOverloads constructor(
         if (scroll.height == 0) return
         pendingScroll = null
         val line = body.lineHeight.coerceAtLeast(1)
+        // Whole lines only: the most lines that can be skipped is how many don't fit. Never scroll into the spacing
+        // under the last line (a few pixels of scroll switched the top fade on and made the first line look cut).
+        val visibleLines = (scroll.height / line).coerceAtLeast(1)
+        val maxLines = (layout.lineCount - visibleLines).coerceAtLeast(0)
         val q = p as? com.kudcrafts.kudkeys.voice.TidyQuestion
-        val target = if (q != null && q.start <= layout.text.length) {
+        val targetLines = if (q != null && q.start <= layout.text.length) {
             val l = layout.getLineForOffset(q.start)
             val top = layout.getLineTop(l)
             // already fully visible: stay
             if (top >= scroll.scrollY && layout.getLineBottom(l) <= scroll.scrollY + scroll.height) return
             // one line of context above it when there is room
-            (top - line).coerceAtLeast(0)
-        } else body.height - scroll.height
-        val max = (body.height - scroll.height).coerceAtLeast(0)
-        scroll.scrollTo(0, ((target.coerceIn(0, max) + line - 1) / line * line).coerceAtMost(max))
+            (l - 1).coerceAtLeast(0)
+        } else maxLines
+        scroll.scrollTo(0, targetLines.coerceIn(0, maxLines) * line)
     }
 
     private fun idleLabel(): String {
@@ -477,7 +480,15 @@ class KudVoiceEditorView @JvmOverloads constructor(
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             super.onLayout(changed, l, t, r, b)
             applyPendingScroll()
+            // ScrollView clamps its scroll when the text gets shorter (a partial replaced by a shorter final), which
+            // can leave it a few pixels down; snap back to whole lines
+            val line = body.lineHeight
+            if (line > 0 && scrollY % line != 0) scrollTo(0, scrollY / line * line)
         }
+
+        // fade the top only when a whole line is hidden above, never over a line that is still there
+        override fun getTopFadingEdgeStrength(): Float =
+            if (scrollY < body.lineHeight.coerceAtLeast(1)) 0f else super.getTopFadingEdgeStrength()
     }
 
     /** For tests: the views a screenshot test taps. */
