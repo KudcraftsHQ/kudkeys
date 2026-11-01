@@ -408,13 +408,14 @@ def keymap(km, override):
     pos[","] = (left + km.get("comma_f", 0.25) * kw * 10, km["r4"])
     pos["."] = (left + km.get("period_f", 0.80) * kw * 10, km["r4"])
     pitch = km["r2"] - km["r1"]
-    strip = km.get("strip", int(km["r1"] - pitch * 0.5 - 60))
+    strip_bottom = int(km["r1"] - pitch * 0.5)
+    strip = km.get("strip_y", (km["top"] + strip_bottom) // 2)
     slots = km.get("slots_f", (0.2, 0.5, 0.8))
     pos["<l>"] = (W * slots[0], strip)
     pos["<c>"] = (W * slots[1], strip)
     pos["<r>"] = (W * slots[2], strip)
     km["strip"] = strip
-    km["strip_box"] = km.get("strip_box", (0, int(strip - pitch * 0.5), W, int(km["r1"] - pitch * 0.5)))
+    km["strip_box"] = km.get("strip_box", (0, km["top"], W, strip_bottom))
     return pos, km
 
 
@@ -551,7 +552,16 @@ def main():
         m = re.search(r"versionName=(\S+)", sh(f"dumpsys package {pkg}"))
         results["versions"][pkg] = m.group(1) if m else None
     log("versions", results["versions"])
-    sk_ime = ime_id(SK_PKG)
+    sk_ime = None
+    if results["versions"].get(SK_PKG):
+        sh(f"monkey -p {SK_PKG} -c android.intent.category.LAUNCHER 1")
+        for _ in range(20):
+            time.sleep(3)
+            sk_ime = ime_id(SK_PKG)
+            if sk_ime:
+                break
+        log("swiftkey ime", sk_ime, "| ime list:", sh("ime list -a -s"))
+        sk_ime = sk_ime or SK_PKG + "/com.touchtype.KeyboardService"
     kbs = []
     if sk_ime:
         setup_swiftkey(sk_ime)
