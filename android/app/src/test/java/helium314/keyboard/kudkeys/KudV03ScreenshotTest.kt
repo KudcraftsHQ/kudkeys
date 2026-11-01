@@ -117,6 +117,27 @@ class KudV03ScreenshotTest {
         assertEquals(latinIME.getString(R.string.kud_stop), strip.findViewById<View>(R.id.kud_mic_key).contentDescription)
     }
 
+    /** While dictating, text that fits is never scrolled (a few pixels of scroll faded the first line half away). */
+    @Test fun editorRecordingShortTextNeverScrolls() {
+        keyboard()
+        showEditor(EditorUi(open = true, mode = EditorMode.Recording, text = "Can you check and plan", elapsedMs = 3_000, hasDraft = true))
+        shot("12-editor-recording-grows-1")
+        showEditor(EditorUi(open = true, mode = EditorMode.Recording, text = "Can you check and plan what can we improve from the",
+            partial = " system", elapsedMs = 11_000, hasDraft = true))
+        shot("12-editor-recording-grows-2")
+        assertEquals(0, editor.textScroll.scrollY, "two lines fit: no scroll")
+        // longer than the area: scrolled by whole lines, the newest line fully in view
+        showEditor(EditorUi(open = true, mode = EditorMode.Recording, text = raw + " " + raw, partial = " dan satu lagi", elapsedMs = 40_000, hasDraft = true))
+        shot("12-editor-recording-grows-3")
+        val scroll = editor.textScroll
+        val body = editor.textBody
+        val line = body.lineHeight
+        assertTrue(scroll.scrollY > 0)
+        assertEquals(0, scroll.scrollY % line, "scrolled by whole lines")
+        val last = body.layout.lineCount - 1
+        assertTrue(body.layout.getLineBottom(last) <= scroll.scrollY + scroll.height, "the newest line is in view")
+    }
+
     private val longTidied = tidied + "\n\nTerus soal shooting, kita butuh lokasi yang terang, jadi mungkin di studio " +
         "yang biasa aja. Kalo studio penuh, kita pindah ke rumah aja, nggak apa-apa.\n\nBudget Meta Ads naik dikit " +
         "minggu depan, soalnya iklan yang kemaren performanya bagus banget. Nanti aku kabarin angkanya.\n\n" +
