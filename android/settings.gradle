@@ -1,3 +1,4 @@
 include ':app'
 include ':voice'
 include ':tools:make-emoji-keys'
+include ':tools:typetest'
