@@ -21,6 +21,7 @@ import helium314.keyboard.latin.dictionary.Dictionary
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsValuesForSuggestion
 import helium314.keyboard.latin.suggestions.SuggestionStripView
+import helium314.keyboard.kudkeys.KudApostrophes
 import helium314.keyboard.latin.utils.AutoCorrectionUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.SuggestionResults
@@ -96,9 +97,21 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         val typedWordFirstOccurrenceWordInfo = suggestionsContainer.firstOrNull { it.mWord == capitalizedTypedWord }
         val firstOccurrenceOfTypedWordInSuggestions = SuggestedWordInfo.removeDupsAndTypedWord(capitalizedTypedWord, suggestionsContainer)
         makeFirstTwoSuggestionsNonEmoji(suggestionsContainer)
+        // Kud Keys: "dont" → "don't", "im" → "I'm" on space, with autocorrect on and English active (KudApostrophes)
+        val apostropheFix = if (isCorrectionEnabled && !resultsArePredictions && !wordComposer.isResumed
+                && trailingSingleQuotesCount == 0 && Settings.getValues().mInputAttributes.mIsKudEverydayText
+                && mDictionaryFacilitator.hasLanguage(Locale.ENGLISH.language))
+            KudApostrophes.fixFor(capitalizedTypedWord) else null
+        if (apostropheFix != null) {
+            val existing = suggestionsContainer.firstOrNull { it.mWord == apostropheFix }
+            suggestionsContainer.removeAll { it.mWord == apostropheFix }
+            suggestionsContainer.add(0, SuggestedWordInfo(apostropheFix, "", SuggestedWordInfo.MAX_SCORE,
+                SuggestedWordInfo.KIND_WHITELIST, existing?.mSourceDict ?: DICTIONARY_APOSTROPHE,
+                SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE))
+        }
         val bestSuggestion = suggestionsContainer.firstOrNull() // the centre of the strip while typing, see below
 
-        val (allowsToBeAutoCorrected, hasAutoCorrection) = shouldBeAutoCorrected(
+        var (allowsToBeAutoCorrected, hasAutoCorrection) = shouldBeAutoCorrected(
             trailingSingleQuotesCount,
             capitalizedTypedWord,
             suggestionsContainer.firstOrNull(),
@@ -115,6 +128,13 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             firstOccurrenceOfTypedWordInSuggestions,
             typedWordFirstOccurrenceWordInfo
         )
+        if (apostropheFix != null) {
+            allowsToBeAutoCorrected = true
+            hasAutoCorrection = true
+        } else if (hasAutoCorrection && bestSuggestion != null && KudApostrophes.blocksAutoCorrection(capitalizedTypedWord,
+                bestSuggestion) { mDictionaryFacilitator.isValidSpellingWord(it) }) {
+            hasAutoCorrection = false // "id" stays "id", "lets" stays "lets"
+        }
         val typedWordInfo = SuggestedWordInfo(typedWordString, "", SuggestedWordInfo.MAX_SCORE,
             SuggestedWordInfo.KIND_TYPED, typedWordFirstOccurrenceWordInfo?.mSourceDict ?: Dictionary.DICTIONARY_USER_TYPED,
             SuggestedWordInfo.NOT_AN_INDEX , SuggestedWordInfo.NOT_A_CONFIDENCE)
@@ -437,6 +457,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
         /** Kud Keys: the source of predictions that fill an otherwise short strip (history top words, starters) */
         @JvmField val DICTIONARY_FALLBACK = Dictionary.PhonyDictionary("kud_fallback")
+        /** Kud Keys: the source of an apostrophe fix no dictionary offered (KudApostrophes). */
+        @JvmField val DICTIONARY_APOSTROPHE = Dictionary.PhonyDictionary("kud_apostrophe")
         private const val FALLBACK_PREDICTION_TARGET = 3
 
         /** Kud Keys: "Xxxx" → "xxxx"; null for anything else (single letters, "I'm", "MA", "McDonald", emoji). */

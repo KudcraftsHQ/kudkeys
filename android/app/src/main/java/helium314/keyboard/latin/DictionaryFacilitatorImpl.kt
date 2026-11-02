@@ -596,6 +596,8 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
             cap != Dictionary.NOT_A_PROBABILITY && cap > freq(lowercase)
         }
 
+    override fun hasLanguage(language: String): Boolean = dictionaryGroups.any { it.locale.language == language }
+
     override fun isValidWordWithoutAddOns(word: String): Boolean = dictionaryGroups.any { isValidWordWithoutAddOns(word, it) }
 
     // this is unused, so leave it for now (redirecting to isValidWord seems to defeat the purpose...)

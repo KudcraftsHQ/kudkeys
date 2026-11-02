@@ -343,6 +343,7 @@ class ShadowKudFacilitator {
         var prefersCapitalized = emptySet<String>()
         /** Valid only through an add-on (a SwiftKey import): not a word for [isValidWordWithoutAddOns]. */
         var addOnOnly = emptySet<String>()
+        var languages = setOf("en")
         val removed = mutableListOf<String>()
         var lastIncludeHistory: Boolean? = null
         val learned = mutableListOf<Pair<String, NgramContext>>()
@@ -354,6 +355,7 @@ class ShadowKudFacilitator {
             fallback = emptyList()
             prefersCapitalized = emptySet()
             addOnOnly = emptySet()
+            languages = setOf("en")
             removed.clear()
             lastIncludeHistory = null
             learned.clear()
@@ -365,6 +367,7 @@ class ShadowKudFacilitator {
     @Implementation fun hasAtLeastOneInitializedMainDictionary() = true
     @Implementation fun isValidSpellingWord(word: String) = word in valid
     @Implementation fun isValidWordWithoutAddOns(word: String) = word in valid && word !in addOnOnly
+    @Implementation fun hasLanguage(language: String) = language in languages
     @Implementation fun removeWord(word: String) { removed += word }
     @Implementation fun getFallbackPredictions(includeHistory: Boolean): List<String> {
         lastIncludeHistory = includeHistory

@@ -1350,7 +1350,9 @@ public final class InputLogic {
             updateInlineEmojiSearch();
             inputTransaction.setRequiresUpdateSuggestions();
         } else {
-            if (mLastComposedWord.canRevertCommit() && inputTransaction.getSettingsValues().mBackspaceRevertsAutocorrect) {
+            // Kud Keys: an apostrophe fix ("dont" → "don't") always reverts, even with Undo autocorrect off
+            if (mLastComposedWord.canRevertCommit() && (inputTransaction.getSettingsValues().mBackspaceRevertsAutocorrect
+                    || helium314.keyboard.kudkeys.KudApostrophes.isFix(mLastComposedWord.mTypedWord, mLastComposedWord.mCommittedWord))) {
                 final String lastComposedWord = mLastComposedWord.mTypedWord;
                 revertCommit(inputTransaction);
                 StatsUtils.onRevertAutoCorrect();
