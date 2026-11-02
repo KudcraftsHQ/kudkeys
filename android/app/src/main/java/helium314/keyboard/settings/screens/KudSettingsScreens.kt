@@ -232,6 +232,7 @@ fun KudTypingScreen(onClickBack: () -> Unit) = SearchSettingsScreen(
     settings = listOf(
         Settings.PREF_AUTO_CORRECTION,
         Settings.PREF_BACKSPACE_REVERTS_AUTOCORRECT,
+        KudSettings.PREF_FIX_APOSTROPHES,
         KudSettings.PREF_QUICK_PREDICTION_INSERT,
         Settings.PREF_KEY_USE_DOUBLE_SPACE_PERIOD,
         Settings.PREF_AUTO_CAP,
@@ -302,6 +303,9 @@ fun KudSoundScreen(onClickBack: () -> Unit) = SearchSettingsScreen(
 // ---- the rows that are new or combine prefs ----
 
 fun createKudSettings(context: Context) = listOf(
+    Setting(context, KudSettings.PREF_FIX_APOSTROPHES, R.string.kud_fix_apostrophes, R.string.kud_fix_apostrophes_summary) {
+        SwitchPreference(it, KudSettings.DEFAULT_FIX_APOSTROPHES)
+    },
     Setting(context, KudSettings.PREF_QUICK_PREDICTION_INSERT, R.string.kud_quick_prediction, R.string.kud_quick_prediction_summary) {
         SwitchPreference(it, KudSettings.DEFAULT_QUICK_PREDICTION_INSERT)
     },

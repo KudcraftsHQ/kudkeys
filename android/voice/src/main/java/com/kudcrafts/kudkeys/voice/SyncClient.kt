@@ -41,6 +41,8 @@ data class SyncWord(
 
     companion object {
         const val SOURCE_TYPED = "typed"
+        /** Imported from SwiftKey (the server keeps the source per word). */
+        const val SOURCE_SWIFTKEY = "swiftkey"
     }
 }
 
@@ -90,6 +92,21 @@ class SyncClient(
             val o = parse(r) as? JsonObject ?: return@call bad()
             val words = (o["words"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::parseWord) }
             SyncResult.Ok(WordsPage(words, o["now"]?.str() ?: ""))
+        }
+    }
+
+    /**
+     * `POST /api/sync/words/import`: adds [words] (at most [MAX_IMPORT_WORDS]) for [locale] with [source], count 1.
+     * A word the server already has, removed ones included, is left as it is. Returns how many were added.
+     */
+    suspend fun importWords(token: String, locale: String, source: String, words: Collection<String>): SyncResult<Int> {
+        require(words.size <= MAX_IMPORT_WORDS) { "at most $MAX_IMPORT_WORDS words per import" }
+        val body = buildJsonObject {
+            put("locale", locale); put("source", source)
+            putJsonArray("words") { words.forEach { add(JsonPrimitive(it)) } }
+        }
+        return call("POST", "/api/sync/words/import", token, body.toString().toRequestBody(JSON)) { r ->
+            SyncResult.Ok(((parse(r) as? JsonObject)?.get("added") as? JsonPrimitive)?.intOrNull ?: 0)
         }
     }
 
@@ -186,6 +203,8 @@ class SyncClient(
 
     companion object {
         const val MAX_WORDS_PER_CALL = 5000
+        /** The server takes up to 50,000 per import; smaller batches keep each request well under its 8 MB limit. */
+        const val MAX_IMPORT_WORDS = 10_000
         private val JSON = "application/json".toMediaType()
         private val ZIP = "application/zip".toMediaType()
 

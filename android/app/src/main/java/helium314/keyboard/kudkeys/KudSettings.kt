@@ -17,6 +17,10 @@ object KudSettings {
     const val PREF_QUICK_PREDICTION_INSERT = "kudkeys_quick_prediction_insert"
     const val DEFAULT_QUICK_PREDICTION_INSERT = false
 
+    /** Typing → Fix apostrophes: "dont" → "don't", "im" → "I'm" on space, also with Autocorrect off (KudApostrophes). */
+    const val PREF_FIX_APOSTROPHES = "kudkeys_fix_apostrophes"
+    const val DEFAULT_FIX_APOSTROPHES = true
+
     /** Emoji → Emoji access on enter key: long-press enter opens emoji, only while the emoji key is hidden. */
     const val PREF_EMOJI_ON_ENTER = "kudkeys_emoji_on_enter"
     const val DEFAULT_EMOJI_ON_ENTER = false

@@ -53,6 +53,39 @@ object KudPrivacy {
         }
     }
 
+    /**
+     * A field for everyday words: not a password, URL, email address, search or filter field, nor a launcher's
+     * search box. Only here does the strip fill up with most-used and starter words, and only here do the apostrophe
+     * fixes apply ("dont" → "don't"). An incognito chat field is still one.
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun isForEverydayText(
+        editorInfo: EditorInfo?,
+        packageName: String? = editorInfo?.packageName,
+        launchers: Set<String> = launcherPackages(),
+    ): Boolean {
+        if (packageName != null && packageName in launchers) return false
+        if (editorInfo == null) return true
+        if (editorInfo.imeOptions and EditorInfo.IME_MASK_ACTION == EditorInfo.IME_ACTION_SEARCH) return false
+        val type = editorInfo.inputType
+        return when (type and InputType.TYPE_MASK_CLASS) {
+            InputType.TYPE_CLASS_TEXT -> (type and InputType.TYPE_MASK_VARIATION) !in NOT_EVERYDAY_TEXT_VARIATIONS
+            InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE, InputType.TYPE_CLASS_DATETIME -> false
+            else -> true // TYPE_NULL and unknown: no reason to hold anything back
+        }
+    }
+
+    private val NOT_EVERYDAY_TEXT_VARIATIONS = setOf(
+        InputType.TYPE_TEXT_VARIATION_PASSWORD,
+        InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+        InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
+        InputType.TYPE_TEXT_VARIATION_URI,
+        InputType.TYPE_TEXT_VARIATION_FILTER,
+        InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+        InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
+    )
+
     private val PRIVATE_TEXT_VARIATIONS = setOf(
         InputType.TYPE_TEXT_VARIATION_PASSWORD,
         InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,

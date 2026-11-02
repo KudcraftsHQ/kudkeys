@@ -41,6 +41,7 @@ import helium314.keyboard.accessibility.AccessibilityUtils;
 import helium314.keyboard.keyboard.KeyboardTypeface;
 import helium314.keyboard.latin.PunctuationSuggestions;
 import helium314.keyboard.latin.R;
+import helium314.keyboard.latin.Suggest;
 import helium314.keyboard.latin.SuggestedWords;
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo;
 import helium314.keyboard.latin.common.ColorType;
@@ -236,12 +237,14 @@ final class SuggestionStripLayoutHelper {
     /**
      * Kud Keys (SwiftKey): with nothing about to auto-correct, the centre slot is the best guess and is drawn in the
      * full text colour at medium weight, while the side slots stay muted. With autocorrect on, the auto-correction
-     * keeps its own style.
+     * keeps its own style. A filler (history or starter word, {@code Suggest.DICTIONARY_FALLBACK}) is never the best
+     * guess: space never inserts it, so it stays muted like the side slots.
      */
     private boolean isBestGuess(final SuggestedWords suggestedWords, final int positionInStrip,
             final int indexInSuggestedWords) {
         if (positionInStrip != mCenterPositionInStrip || suggestedWords.mWillAutoCorrect) return false;
-        return !suggestedWords.getInfo(indexInSuggestedWords).isKindOf(SuggestedWordInfo.KIND_TYPED);
+        final SuggestedWordInfo info = suggestedWords.getInfo(indexInSuggestedWords);
+        return !info.isKindOf(SuggestedWordInfo.KIND_TYPED) && info.mSourceDict != Suggest.DICTIONARY_FALLBACK;
     }
 
     private int applyObsoleteAlpha(final SuggestedWords suggestedWords, final int color) {

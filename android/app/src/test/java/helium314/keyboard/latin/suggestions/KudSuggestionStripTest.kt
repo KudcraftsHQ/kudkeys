@@ -12,6 +12,8 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.InputAttributes
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.ShadowKudFacilitator
+import helium314.keyboard.latin.Suggest
 import helium314.keyboard.latin.SuggestedWords
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
 import helium314.keyboard.latin.common.ColorType
@@ -40,7 +42,7 @@ import kotlin.test.assertTrue
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(shadows = [ShadowInputMethodManager2::class], qualifiers = "w411dp-h891dp-port-xxhdpi")
+@Config(shadows = [ShadowInputMethodManager2::class, ShadowKudFacilitator::class], qualifiers = "w411dp-h891dp-port-xxhdpi")
 class KudSuggestionStripTest {
     private val latinIME = Robolectric.setupService(LatinIME::class.java)
     private val switcher = KeyboardSwitcher.getInstance()
@@ -217,6 +219,44 @@ class KudSuggestionStripTest {
         val slots = show(typing("plimp", false, true, "plimo", "plimko"))
         assertEquals(Settings.getValues().mColors.get(ColorType.SUGGESTION_AUTO_CORRECT), slots[1].currentTextColor)
         assertTrue(slots[1].typeface.weight < SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT, "bold span instead of medium")
+    }
+
+    @Test fun aFillerInTheCentreIsNotTheBestGuess() {
+        // space never inserts a filler (most-used or starter word), so the centre doesn't promise it
+        val muted = Settings.getValues().mColors.get(ColorType.SUGGESTED_WORD)
+        val fillers = SuggestedWords(ArrayList(listOf("aku", "ya", "udah").map {
+            SuggestedWordInfo(it, "", 0, SuggestedWordInfo.KIND_PREDICTION, Suggest.DICTIONARY_FALLBACK, 0, 0)
+        }), null, null, false, false, false, SuggestedWords.INPUT_STYLE_PREDICTION, 0)
+        val slots = show(fillers)
+        assertEquals("aku", slots[1].text.toString())
+        assertEquals(muted, slots[1].currentTextColor)
+        assertTrue(slots[1].typeface.weight < SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT)
+    }
+
+    private fun remove(slot: TextView) {
+        SuggestionStripView::class.java.getDeclaredMethod("removeSuggestion", TextView::class.java)
+            .apply { isAccessible = true }.invoke(strip, slot)
+    }
+
+    private val shownWords: SuggestedWords
+        get() = SuggestionStripView::class.java.getDeclaredField("suggestedWords").apply { isAccessible = true }.get(strip) as SuggestedWords
+
+    @Test fun removingALowercasedSuggestionAlsoRemovesItsStoredForm() {
+        ShadowKudFacilitator.reset()
+        val words = predictions("vorn", "zorbo", "tesk")
+        words.getInfo(1).mKudStoredWord = "Zorbo" // stored capitalised, shown lowercase mid-sentence
+        words.mKudContextCorrection = "plimo"
+        remove(show(words).first { it.text.toString() == "zorbo" })
+        assertEquals(listOf("zorbo", "Zorbo"), ShadowKudFacilitator.removed)
+        assertEquals(listOf("vorn", "tesk"), (0 until shownWords.size()).map { shownWords.getWord(it) })
+        assertEquals("plimo", shownWords.mKudContextCorrection, "kept on the rebuilt strip")
+    }
+
+    @Test fun removingAWordShownAsStoredRemovesOnlyThatForm() {
+        // never every case of a word: removing "Varnel" must not also remove "varnel" (names like "Mark")
+        ShadowKudFacilitator.reset()
+        remove(show(predictions("vorn", "Varnel", "tesk")).first { it.text.toString() == "Varnel" })
+        assertEquals(listOf("Varnel"), ShadowKudFacilitator.removed)
     }
 
     @Test fun oneSuggestionKeepsThreeSlots() {

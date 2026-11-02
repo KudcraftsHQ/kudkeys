@@ -148,6 +148,19 @@ public interface DictionaryFacilitator {
         return false;
     }
 
+    /** Kud Keys: whether one of the active dictionary groups is for {@code language} ("en"), main or secondary. */
+    default boolean hasLanguage(@NonNull final String language) {
+        return language.equals(getMainLocale().getLanguage());
+    }
+
+    /**
+     * Kud Keys: {@link #isValidSpellingWord} without the main dictionary's add-ons (a SwiftKey import, the synced
+     * words): the main dictionary, history, personal words and contacts.
+     */
+    default boolean isValidWordWithoutAddOns(final String word) {
+        return isValidSpellingWord(word);
+    }
+
     /**
      * Kud Keys: words to fill a prediction strip that has fewer than three predictions, best first: the most used
      * words in user history for the active languages, then a short starter list per language. May be empty.

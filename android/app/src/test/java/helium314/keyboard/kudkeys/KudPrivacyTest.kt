@@ -56,4 +56,20 @@ class KudPrivacyTest {
         assertFalse(private(field(TYPE_CLASS_TEXT, pkg = "com.google.android.apps.nexuslauncher")))
         assertTrue(private(field(TYPE_CLASS_TEXT, pkg = "com.google.android.apps.nexuslauncher"), home = "com.google.android.apps.nexuslauncher"))
     }
+
+    private fun everyday(ei: EditorInfo) = KudPrivacy.isForEverydayText(ei, ei.packageName, setOf("com.teslacoilsw.launcher"))
+
+    @Test fun everydayTextFields() {
+        assertTrue(everyday(field(TYPE_CLASS_TEXT)))
+        assertTrue(everyday(field(TYPE_CLASS_TEXT or TYPE_TEXT_FLAG_MULTI_LINE)))
+        assertTrue(everyday(field(TYPE_CLASS_TEXT, EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING)), "an incognito chat is still chat")
+        assertTrue(everyday(field(TYPE_NULL)))
+        for (v in listOf(TYPE_TEXT_VARIATION_URI, TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+                TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS, TYPE_TEXT_VARIATION_PASSWORD,
+                TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, TYPE_TEXT_VARIATION_FILTER))
+            assertFalse(everyday(field(TYPE_CLASS_TEXT or v)), "variation $v")
+        assertFalse(everyday(field(TYPE_CLASS_TEXT, EditorInfo.IME_ACTION_SEARCH)))
+        assertFalse(everyday(field(TYPE_CLASS_NUMBER)))
+        assertFalse(everyday(field(TYPE_CLASS_TEXT, pkg = "com.teslacoilsw.launcher")))
+    }
 }

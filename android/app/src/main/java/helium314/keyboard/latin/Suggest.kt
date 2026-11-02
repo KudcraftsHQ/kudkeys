@@ -21,6 +21,7 @@ import helium314.keyboard.latin.dictionary.Dictionary
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsValuesForSuggestion
 import helium314.keyboard.latin.suggestions.SuggestionStripView
+import helium314.keyboard.kudkeys.KudApostrophes
 import helium314.keyboard.latin.utils.AutoCorrectionUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.SuggestionResults
@@ -96,9 +97,21 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         val typedWordFirstOccurrenceWordInfo = suggestionsContainer.firstOrNull { it.mWord == capitalizedTypedWord }
         val firstOccurrenceOfTypedWordInSuggestions = SuggestedWordInfo.removeDupsAndTypedWord(capitalizedTypedWord, suggestionsContainer)
         makeFirstTwoSuggestionsNonEmoji(suggestionsContainer)
+        // Kud Keys: "dont" → "don't", "im" → "I'm" on space, with autocorrect or Fix apostrophes on and English active
+        val apostropheFix = if ((isCorrectionEnabled || Settings.getValues().mKudFixApostrophes) && !resultsArePredictions && !wordComposer.isResumed
+                && trailingSingleQuotesCount == 0 && Settings.getValues().mInputAttributes.mIsKudEverydayText
+                && mDictionaryFacilitator.hasLanguage(Locale.ENGLISH.language))
+            KudApostrophes.fixFor(capitalizedTypedWord) else null
+        if (apostropheFix != null) {
+            val existing = suggestionsContainer.firstOrNull { it.mWord == apostropheFix }
+            suggestionsContainer.removeAll { it.mWord == apostropheFix }
+            suggestionsContainer.add(0, SuggestedWordInfo(apostropheFix, "", SuggestedWordInfo.MAX_SCORE,
+                SuggestedWordInfo.KIND_WHITELIST, existing?.mSourceDict ?: DICTIONARY_APOSTROPHE,
+                SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE))
+        }
         val bestSuggestion = suggestionsContainer.firstOrNull() // the centre of the strip while typing, see below
 
-        val (allowsToBeAutoCorrected, hasAutoCorrection) = shouldBeAutoCorrected(
+        var (allowsToBeAutoCorrected, hasAutoCorrection) = shouldBeAutoCorrected(
             trailingSingleQuotesCount,
             capitalizedTypedWord,
             suggestionsContainer.firstOrNull(),
@@ -115,6 +128,13 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             firstOccurrenceOfTypedWordInSuggestions,
             typedWordFirstOccurrenceWordInfo
         )
+        if (apostropheFix != null) {
+            allowsToBeAutoCorrected = true
+            hasAutoCorrection = true
+        } else if (hasAutoCorrection && bestSuggestion != null && KudApostrophes.blocksAutoCorrection(capitalizedTypedWord,
+                bestSuggestion) { mDictionaryFacilitator.isValidSpellingWord(it) }) {
+            hasAutoCorrection = false // "id" stays "id", "lets" stays "lets"
+        }
         val typedWordInfo = SuggestedWordInfo(typedWordString, "", SuggestedWordInfo.MAX_SCORE,
             SuggestedWordInfo.KIND_TYPED, typedWordFirstOccurrenceWordInfo?.mSourceDict ?: Dictionary.DICTIONARY_USER_TYPED,
             SuggestedWordInfo.NOT_AN_INDEX , SuggestedWordInfo.NOT_A_CONFIDENCE)
@@ -182,7 +202,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
     /**
      * Kud Keys: while not shifted and not at a sentence start, "Xxxx" becomes "xxxx" when "xxxx" is a word in any
-     * active dictionary (the score stays). A word that only exists capitalised (a name, a city) keeps its capital,
+     * active dictionary other than an add-on (the score stays). A word that only exists capitalised (a name, a city) keeps its capital,
      * and so does one the main dictionary uses more often capitalised ("God", "English"), or one from contacts.
      * Single letters and "I'm"-style words are left alone ("I" stays "I").
      */
@@ -192,16 +212,20 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             if (info.isKindOf(SuggestedWordInfo.KIND_SHORTCUT) || info.isKindOf(SuggestedWordInfo.KIND_WHITELIST)) continue
             if (info.mSourceDict.mDictType == Dictionary.TYPE_CONTACTS) continue
             val lower = lowercasedFormOrNull(info.mWord, info.mSourceDict.mLocale ?: mDictionaryFacilitator.mainLocale) ?: continue
-            if (!mDictionaryFacilitator.isValidSpellingWord(lower)) continue
+            // judged without the add-ons: "flimbor" in a SwiftKey import doesn't lowercase the name "Flimbor"
+            if (!mDictionaryFacilitator.isValidWordWithoutAddOns(lower)) continue
             if (mDictionaryFacilitator.mainDictPrefersCapitalized(info.mWord, lower)) continue
             suggestions[i] = SuggestedWordInfo(lower, info.mPrevWordsContext, info.mScore, info.mKindAndFlags,
                 info.mSourceDict, info.mIndexOfTouchPointOfSecondWord, info.mAutoCommitFirstWordConfidence)
+                .also { it.mKudStoredWord = info.mKudStoredWord ?: info.mWord }
         }
     }
 
     /** Kud Keys: fills up to three predictions from the most used history words, then a short per-language list. */
     private fun addFallbackPredictions(suggestions: ArrayList<SuggestedWordInfo>) {
         if (suggestions.size >= FALLBACK_PREDICTION_TARGET) return
+        // no "aku ya udah" in a URL bar, an email address, a search or a password field
+        if (!Settings.getValues().mInputAttributes.mIsKudEverydayText) return
         val seen = suggestions.mapTo(HashSet()) { it.mWord.lowercase(Locale.ROOT) }
         // incognito and no-learning fields never show the user's own most used words
         for (word in mDictionaryFacilitator.getFallbackPredictions(!Settings.getValues().mIncognitoModeEnabled)) {
@@ -433,6 +457,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
         /** Kud Keys: the source of predictions that fill an otherwise short strip (history top words, starters) */
         @JvmField val DICTIONARY_FALLBACK = Dictionary.PhonyDictionary("kud_fallback")
+        /** Kud Keys: the source of an apostrophe fix no dictionary offered (KudApostrophes). */
+        @JvmField val DICTIONARY_APOSTROPHE = Dictionary.PhonyDictionary("kud_apostrophe")
         private const val FALLBACK_PREDICTION_TARGET = 3
 
         /** Kud Keys: "Xxxx" → "xxxx"; null for anything else (single letters, "I'm", "MA", "McDonald", emoji). */

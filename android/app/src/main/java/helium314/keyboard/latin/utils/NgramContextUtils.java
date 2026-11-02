@@ -101,7 +101,7 @@ public final class NgramContextUtils {
                 }
                 word = word.substring(0, end);
                 if (word.isEmpty() || !Character.isLetterOrDigit(word.charAt(word.length() - 1))) {
-                    break; // only punctuation, or something like "ok)," : the context is unclear
+                    break; // only punctuation ("),"): the context is unclear. "ok)," keeps "ok", like "ok,"
                 }
             }
             // If ends in a word connector, the context is unclear.

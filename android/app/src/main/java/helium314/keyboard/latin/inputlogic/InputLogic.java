@@ -97,10 +97,17 @@ public final class InputLogic {
     private int mSpaceState;
     // Never null
     public SuggestedWords mSuggestedWords = SuggestedWords.getEmptyInstance();
-    // Kud Keys: the last word committed as typed while unknown, and the correction autocorrect would have made.
-    // The correction is the context for the next prediction; the typo is never learned as part of a word pair.
-    @Nullable private String mTypoForContext;
-    @Nullable private String mTypoCorrectionForContext;
+    // Kud Keys: words committed as typed while unknown, with the correction autocorrect would have made, newest
+    // first, for as long as they are within the n-gram window (the 3 previous words). The correction is the context
+    // for predictions; the typo is never learned as part of an n-gram.
+    private final java.util.ArrayList<KudTypo> mTyposInContext = new java.util.ArrayList<>();
+
+    private static final class KudTypo {
+        final String typo;
+        final String correction;
+        int wordsSince; // words committed after the typo: its position in the next word's context
+        KudTypo(final String typo, final String correction) { this.typo = typo; this.correction = correction; }
+    }
     public Suggest mSuggest; // non-final for active gesture data gathering, revert when data gathering phase is done (end of 2026 latest)
     public DictionaryFacilitator mDictionaryFacilitator; // non-final for active gesture data gathering, revert when data gathering phase is done (end of 2026 latest)
     private SingleDictionaryFacilitator mEmojiDictionaryFacilitator;
@@ -167,8 +174,7 @@ public final class InputLogic {
     public void startInput(final String combiningSpec, final SettingsValues settingsValues) {
         mEnteredText = null;
         mWordBeingCorrectedByCursor = null;
-        mTypoForContext = null;
-        mTypoCorrectionForContext = null;
+        mTyposInContext.clear();
         mConnection.onStartInput();
         if (!mWordComposer.getTypedWord().isEmpty()) {
             // For messaging apps that offer send button, the IME does not get the opportunity
@@ -1193,7 +1199,11 @@ public final class InputLogic {
         }
         // isComposingWord() may have changed since we stored wasComposing
         if (mWordComposer.isComposingWord()) {
-            if (settingsValues.mAutoCorrectEnabled && ! isInlineEmojiSearchAction()) {
+            // Kud Keys: a possible apostrophe fix goes through commitCurrentAutoCorrection, which first applies a
+            // pending suggestion update (the stored correction is cleared on every keypress) and then checks again
+            if ((settingsValues.mAutoCorrectEnabled || (settingsValues.mKudFixApostrophes
+                    && helium314.keyboard.kudkeys.KudApostrophes.fixFor(mWordComposer.getTypedWord()) != null))
+                    && ! isInlineEmojiSearchAction()) {
                 final String separator = shouldAvoidSendingCode ? LastComposedWord.NOT_A_SEPARATOR
                         : StringUtils.newSingleCodePointString(codePoint);
                 commitCurrentAutoCorrection(settingsValues, separator, handler);
@@ -1344,7 +1354,9 @@ public final class InputLogic {
             updateInlineEmojiSearch();
             inputTransaction.setRequiresUpdateSuggestions();
         } else {
-            if (mLastComposedWord.canRevertCommit() && inputTransaction.getSettingsValues().mBackspaceRevertsAutocorrect) {
+            // Kud Keys: an apostrophe fix ("dont" → "don't") always reverts, even with Undo autocorrect off
+            if (mLastComposedWord.canRevertCommit() && (inputTransaction.getSettingsValues().mBackspaceRevertsAutocorrect
+                    || helium314.keyboard.kudkeys.KudApostrophes.isFix(mLastComposedWord.mTypedWord, mLastComposedWord.mCommittedWord))) {
                 final String lastComposedWord = mLastComposedWord.mTypedWord;
                 revertCommit(inputTransaction);
                 StatsUtils.onRevertAutoCorrect();
@@ -2484,10 +2496,17 @@ public final class InputLogic {
             performUpdateSuggestionStripSync(settingsValues, SuggestedWords.INPUT_STYLE_TYPING);
         }
         // Kud Keys: with Autocorrect off (the default) a separator never swaps the typed word for a suggestion
+        // ... except an apostrophe fix ("dont" → "don't") when Fix apostrophes is on
         final SuggestedWordInfo autoCorrectionOrNull = settingsValues.mAutoCorrectEnabled || mWordComposer.isBatchMode()
-                ? mWordComposer.getAutoCorrectionOrNull() : null;
+                || isKudApostropheFix(settingsValues) ? mWordComposer.getAutoCorrectionOrNull() : null;
         final String typedWord = mWordComposer.getTypedWord();
-        final String stringToCommit = (autoCorrectionOrNull != null) ? autoCorrectionOrNull.mWord : typedWord;
+        String stringToCommit = (autoCorrectionOrNull != null) ? autoCorrectionOrNull.mWord : typedWord;
+        if (autoCorrectionOrNull == null && !settingsValues.mAutoCorrectEnabled && typedWord != null) {
+            // Kud Keys: no correction computed (yet), e.g. space right after the last letter: an apostrophe fix
+            // doesn't depend on the suggestions, so how fast space is pressed never changes what gets committed
+            final String fix = kudApostropheFixNow(settingsValues);
+            if (fix != null) stringToCommit = fix;
+        }
         if (stringToCommit != null) {
             final boolean isBatchMode = mWordComposer.isBatchMode();
             commitChosenWord(settingsValues, stringToCommit, LastComposedWord.COMMIT_TYPE_DECIDED_WORD, separator);
@@ -2549,11 +2568,15 @@ public final class InputLogic {
                 && mWordComposer.isComposingWord() && chosenWord.equals(mWordComposer.getTypedWord())
                 && mSuggestedWords.mTypedWordInfo != null && chosenWord.equals(mSuggestedWords.mTypedWordInfo.mWord)
                 ? mSuggestedWords.mKudContextCorrection : null;
-        // Never learn a typo as part of a word pair, neither "previous typo" nor "typo next": learn the word alone.
-        final NgramContext ngramContext = contextCorrection != null || isTypoInContext(textNgramContext)
-                ? NgramContext.EMPTY_PREV_WORDS_INFO : textNgramContext;
-        mTypoForContext = contextCorrection != null ? chosenWord : null;
-        mTypoCorrectionForContext = contextCorrection;
+        // Never learn a typo as part of an n-gram, neither "previous typo" nor "typo next": the typo is learned alone,
+        // and a word after it only with the words between them ("teh cat sat" learns "cat sat", never "teh cat sat").
+        final NgramContext ngramContext = contextCorrection != null
+                ? NgramContext.EMPTY_PREV_WORDS_INFO : withoutTypos(textNgramContext);
+        for (int i = mTyposInContext.size() - 1; i >= 0; i--) {
+            final KudTypo typo = mTyposInContext.get(i);
+            if (++typo.wordsSince >= helium314.keyboard.latin.define.DecoderSpecificConstants.MAX_PREV_WORD_COUNT_FOR_N_GRAM) mTyposInContext.remove(i);
+        }
+        if (contextCorrection != null) mTyposInContext.add(0, new KudTypo(chosenWord, contextCorrection));
         if (DebugFlags.DEBUG_ENABLED) {
             long runTimeMillis = SystemClock.elapsedRealtime() - startTimeMillis;
             Log.d(TAG, "commitChosenWord() : " + runTimeMillis + " ms to run "
@@ -2642,15 +2665,20 @@ public final class InputLogic {
     /** Kud Keys: the context with the last typo kept as typed replaced by its confident correction (text unchanged). */
     @NonNull
     public NgramContext withTypoCorrected(@NonNull final NgramContext ngramContext) {
-        final String typo = mTypoForContext;
-        final String correction = mTypoCorrectionForContext;
-        if (typo == null || correction == null) return ngramContext;
-        return ngramContext.withWordReplaced(typo, correction);
+        NgramContext corrected = ngramContext;
+        for (final KudTypo typo : mTyposInContext) corrected = corrected.withWordReplaced(typo.typo, typo.correction);
+        return corrected;
     }
 
-    private boolean isTypoInContext(@NonNull final NgramContext ngramContext) {
-        final String typo = mTypoForContext;
-        return typo != null && ngramContext.containsWord(typo);
+    /** Kud Keys: {@code ngramContext} cut off before the nearest typo still in the window (empty when it is the last word). */
+    @NonNull
+    private NgramContext withoutTypos(@NonNull final NgramContext ngramContext) {
+        int cut = Integer.MAX_VALUE;
+        for (final KudTypo typo : mTyposInContext) {
+            final int index = ngramContext.indexOfWord(typo.typo);
+            if (index >= 0) cut = Math.min(cut, index);
+        }
+        return cut == Integer.MAX_VALUE ? ngramContext : ngramContext.withFirstWords(cut);
     }
 
     // we used to provide keyboard, settingsValues and keyboardShiftMode, but every time read it from current instance anyway
@@ -2936,4 +2964,21 @@ public final class InputLogic {
             mEmojiDictionaryFacilitator = null;
         }
     }
+
+    /** Kud Keys: whether the pending autocorrection is an apostrophe fix that Fix apostrophes allows with Autocorrect off. */
+    private boolean isKudApostropheFix(final SettingsValues settingsValues) {
+        if (!settingsValues.mKudFixApostrophes) return false;
+        final SuggestedWordInfo correction = mWordComposer.getAutoCorrectionOrNull();
+        return correction != null && helium314.keyboard.kudkeys.KudApostrophes.isFix(mWordComposer.getTypedWord(), correction.mWord);
+    }
+
+
+    /** Kud Keys: the apostrophe fix for the word being typed, under the conditions Suggest applies; null if none. */
+    private String kudApostropheFixNow(final SettingsValues settingsValues) {
+        if (!settingsValues.mKudFixApostrophes || mWordComposer.isResumed() || mWordComposer.isBatchMode()
+                || !settingsValues.mInputAttributes.mIsKudEverydayText
+                || !mDictionaryFacilitator.hasLanguage(java.util.Locale.ENGLISH.getLanguage())) return null;
+        return helium314.keyboard.kudkeys.KudApostrophes.fixFor(mWordComposer.getTypedWord());
+    }
+
 }
