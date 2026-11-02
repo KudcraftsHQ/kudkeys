@@ -15,7 +15,7 @@ import java.util.Locale
  * - The fix can lose against a typed word the user history learned while autocorrect was off ("dont" typed many
  *   times), or against Indonesian when that language dominates. [fixFor] makes the listed contractions win.
  *
- * Only with autocorrect on, English among the active languages, and in a field for everyday words (see
+ * With Autocorrect or Fix apostrophes (KudSettings, on by default) on, English among the active languages, and in a field for everyday words (see
  * [KudPrivacy.isForEverydayText]); Suggest checks all three. Backspace right after reverts the fix (InputLogic).
  */
 object KudApostrophes {

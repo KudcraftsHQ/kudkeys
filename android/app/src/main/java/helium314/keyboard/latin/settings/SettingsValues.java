@@ -69,6 +69,8 @@ public class SettingsValues {
     public final boolean mShowsVoiceInputKey;
     // kudkeys: SwiftKey settings without a HeliBoard pref (see KudSettings)
     public final boolean mKudQuickPredictionInsert;
+    /** kudkeys: apostrophe fixes on space ("dont" → "don't") in fields that allow correction, autocorrect on or off */
+    public final boolean mKudFixApostrophes;
     public final boolean mKudDeleteWordsWhenHeld;
     public final boolean mKudEmojiOnEnter;
     public final boolean mKudVoiceTyping;
@@ -239,6 +241,9 @@ public class SettingsValues {
         mAutoCorrectEnabled = mAutoCorrectionEnabledPerUserSettings
                 && (mInputAttributes.mInputTypeShouldAutoCorrect || prefs.getBoolean(Settings.PREF_MORE_AUTO_CORRECTION, Defaults.PREF_MORE_AUTO_CORRECTION))
                 && (mUrlDetectionEnabled || !InputTypeUtils.isUriOrEmailType(mInputAttributes.mInputType));
+        mKudFixApostrophes = prefs.getBoolean(KudSettings.PREF_FIX_APOSTROPHES, KudSettings.DEFAULT_FIX_APOSTROPHES)
+                && (mInputAttributes.mInputTypeShouldAutoCorrect || prefs.getBoolean(Settings.PREF_MORE_AUTO_CORRECTION, Defaults.PREF_MORE_AUTO_CORRECTION))
+                && !InputTypeUtils.isUriOrEmailType(mInputAttributes.mInputType);
         mCenterSuggestionTextToEnter = prefs.getBoolean(Settings.PREF_CENTER_SUGGESTION_TEXT_TO_ENTER, Defaults.PREF_CENTER_SUGGESTION_TEXT_TO_ENTER);
         float autoCorrectConfidence = prefs.getFloat(Settings.PREF_AUTO_CORRECT_CONFIDENCE, Defaults.PREF_AUTO_CORRECT_CONFIDENCE);
         // confidence -> threshold and score limit are just some formulas that give something similar to the old values, so that confidence can be in a nice 0-1 range

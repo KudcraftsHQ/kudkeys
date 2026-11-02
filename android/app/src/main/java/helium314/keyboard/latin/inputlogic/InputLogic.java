@@ -1199,7 +1199,7 @@ public final class InputLogic {
         }
         // isComposingWord() may have changed since we stored wasComposing
         if (mWordComposer.isComposingWord()) {
-            if (settingsValues.mAutoCorrectEnabled && ! isInlineEmojiSearchAction()) {
+            if ((settingsValues.mAutoCorrectEnabled || isKudApostropheFix(settingsValues)) && ! isInlineEmojiSearchAction()) {
                 final String separator = shouldAvoidSendingCode ? LastComposedWord.NOT_A_SEPARATOR
                         : StringUtils.newSingleCodePointString(codePoint);
                 commitCurrentAutoCorrection(settingsValues, separator, handler);
@@ -2492,8 +2492,9 @@ public final class InputLogic {
             performUpdateSuggestionStripSync(settingsValues, SuggestedWords.INPUT_STYLE_TYPING);
         }
         // Kud Keys: with Autocorrect off (the default) a separator never swaps the typed word for a suggestion
+        // ... except an apostrophe fix ("dont" → "don't") when Fix apostrophes is on
         final SuggestedWordInfo autoCorrectionOrNull = settingsValues.mAutoCorrectEnabled || mWordComposer.isBatchMode()
-                ? mWordComposer.getAutoCorrectionOrNull() : null;
+                || isKudApostropheFix(settingsValues) ? mWordComposer.getAutoCorrectionOrNull() : null;
         final String typedWord = mWordComposer.getTypedWord();
         final String stringToCommit = (autoCorrectionOrNull != null) ? autoCorrectionOrNull.mWord : typedWord;
         if (stringToCommit != null) {
@@ -2953,4 +2954,12 @@ public final class InputLogic {
             mEmojiDictionaryFacilitator = null;
         }
     }
+
+    /** Kud Keys: whether the pending autocorrection is an apostrophe fix that Fix apostrophes allows with Autocorrect off. */
+    private boolean isKudApostropheFix(final SettingsValues settingsValues) {
+        if (!settingsValues.mKudFixApostrophes) return false;
+        final SuggestedWordInfo correction = mWordComposer.getAutoCorrectionOrNull();
+        return correction != null && helium314.keyboard.kudkeys.KudApostrophes.isFix(mWordComposer.getTypedWord(), correction.mWord);
+    }
+
 }

@@ -33,8 +33,8 @@ import kotlin.test.assertTrue
 
 /**
  * Apostrophe fixes on space, like SwiftKey ("dont" → "don't", "im" → "I'm"), through the real typing flow: the strip
- * is computed by Suggest from what the fake facilitator offers, then space commits. Only with autocorrect on and
- * English active; real words like "well", "were", "id" are never touched.
+ * is computed by Suggest from what the fake facilitator offers, then space commits. With autocorrect or Fix
+ * apostrophes on, and English active; real words like "well", "were", "id" are never touched.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(shadows = [
@@ -190,8 +190,41 @@ class KudApostropheInputTest {
         assertEquals("plim dont ", text)
     }
 
-    @Test fun notWithAutocorrectOff() {
+    @Test fun withAutocorrectOffOnlyTheApostropheFixApplies() {
+        // Autocorrect is off by default; Fix apostrophes (on by default) still fixes the contractions
+        for ((typed, fixed) in listOf("im" to "I'm", "dont" to "don't", "Dont" to "Don't", "ill" to "I'll")) {
+            reset()
+            latinIME.prefs().edit { putBoolean(Settings.PREF_AUTO_CORRECTION, false) }
+            start()
+            typeWordAndSpace(typed)
+            assertEquals("plim $fixed ", text, "typed $typed")
+        }
+        // ... but nothing else: a typo stays as typed, and so do real words
+        reset()
         latinIME.prefs().edit { putBoolean(Settings.PREF_AUTO_CORRECTION, false) }
+        start()
+        typeWordAndSpace("alot", listOf(suggestion("a lot", Int.MAX_VALUE)))
+        assertEquals("plim alot ", text)
+        reset()
+        latinIME.prefs().edit { putBoolean(Settings.PREF_AUTO_CORRECTION, false) }
+        start()
+        ShadowKudFacilitator.valid = setOf("well")
+        typeWordAndSpace("well", listOf(suggestion("we'll", 1_000_000)))
+        assertEquals("plim well ", text)
+        // and backspace still reverts the fix
+        reset()
+        latinIME.prefs().edit { putBoolean(Settings.PREF_AUTO_CORRECTION, false) }
+        start()
+        typeWordAndSpace("dont")
+        backspace()
+        assertEquals("plim dont", text)
+    }
+
+    @Test fun notWithAutocorrectAndFixApostrophesOff() {
+        latinIME.prefs().edit {
+            putBoolean(Settings.PREF_AUTO_CORRECTION, false)
+            putBoolean(helium314.keyboard.kudkeys.KudSettings.PREF_FIX_APOSTROPHES, false)
+        }
         start()
         typeWordAndSpace("dont")
         assertEquals("plim dont ", text)

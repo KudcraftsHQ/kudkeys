@@ -97,8 +97,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         val typedWordFirstOccurrenceWordInfo = suggestionsContainer.firstOrNull { it.mWord == capitalizedTypedWord }
         val firstOccurrenceOfTypedWordInSuggestions = SuggestedWordInfo.removeDupsAndTypedWord(capitalizedTypedWord, suggestionsContainer)
         makeFirstTwoSuggestionsNonEmoji(suggestionsContainer)
-        // Kud Keys: "dont" → "don't", "im" → "I'm" on space, with autocorrect on and English active (KudApostrophes)
-        val apostropheFix = if (isCorrectionEnabled && !resultsArePredictions && !wordComposer.isResumed
+        // Kud Keys: "dont" → "don't", "im" → "I'm" on space, with autocorrect or Fix apostrophes on and English active
+        val apostropheFix = if ((isCorrectionEnabled || Settings.getValues().mKudFixApostrophes) && !resultsArePredictions && !wordComposer.isResumed
                 && trailingSingleQuotesCount == 0 && Settings.getValues().mInputAttributes.mIsKudEverydayText
                 && mDictionaryFacilitator.hasLanguage(Locale.ENGLISH.language))
             KudApostrophes.fixFor(capitalizedTypedWord) else null
