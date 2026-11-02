@@ -1029,6 +1029,12 @@ public class LatinIME extends InputMethodService implements
         if (!mHandler.hasPendingResumeSuggestions()) {
             mHandler.cancelUpdateSuggestionStrip();
             setNeutralSuggestionStrip();
+            // Kud Keys: an empty field gets sentence-start predictions instead of a blank strip
+            // (a clipboard suggestion still wins, see InputLogic.performUpdateSuggestionStripSync)
+            if (currentSettingsValues.needsToLookupSuggestions() && currentSettingsValues.mBigramPredictionEnabled
+                    && isFieldEmptyBeforeCursor()) { // startInput already reset any composing word
+                mHandler.postUpdateSuggestionStrip(SuggestedWords.INPUT_STYLE_TYPING);
+            }
         }
 
         mainKeyboardView.setMainDictionaryAvailability(mDictionaryFacilitator.hasAtLeastOneInitializedMainDictionary());
@@ -1634,6 +1640,11 @@ public class LatinIME extends InputMethodService implements
         return false;
     }
 
+    private boolean isFieldEmptyBeforeCursor() {
+        final CharSequence before = mInputLogic.mConnection.getTextBeforeCursor(1, 0);
+        return before != null && before.length() == 0;
+    }
+
     // This will first try showing a clipboard suggestion. On success, the toolbar will be hidden
     // if the "Auto hide toolbar" is enabled. Otherwise, an empty suggestion strip (if prediction
     // is enabled) or punctuation suggestions (if it's disabled) will be set.
@@ -1655,6 +1666,7 @@ public class LatinIME extends InputMethodService implements
     @Override
     public void removeSuggestion(final String word) {
         mDictionaryFacilitator.removeWord(word);
+        mInputLogic.mSuggest.clearNextWordSuggestionsCache();
         // kudkeys: the server gets a tombstone and the word leaves the synced dictionaries (v0.4)
         final android.content.Context appContext = getApplicationContext();
         helium314.keyboard.latin.utils.ExecutorUtils.getBackgroundExecutor(helium314.keyboard.latin.utils.ExecutorUtils.KEYBOARD).execute(() ->

@@ -140,6 +140,15 @@ public interface DictionaryFacilitator {
 
     boolean isValidSpellingWord(final String word);
 
+    /**
+     * Kud Keys: words to fill a prediction strip that has fewer than three predictions, best first: the most used
+     * words in user history for the active languages, then a short starter list per language. May be empty.
+     */
+    @NonNull
+    default List<String> getFallbackPredictions() {
+        return java.util.Collections.emptyList();
+    }
+
     boolean isValidSuggestionWord(final String word);
 
     void clearUserHistoryDictionary(final Context context);

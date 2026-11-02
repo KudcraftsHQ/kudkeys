@@ -69,7 +69,8 @@ public class NgramContext {
 
         @Override
         public int hashCode() {
-            return Arrays.hashCode(new Object[] { mWord, mIsBeginningOfSentence } );
+            // Kud Keys: hash the text, since equals() compares the text (a String and a Spannable can be equal)
+            return Arrays.hashCode(new Object[] { mWord == null ? null : mWord.toString(), mIsBeginningOfSentence } );
         }
 
         @Override
@@ -118,6 +119,31 @@ public class NgramContext {
             beginning = info.mIsBeginningOfSentence;
         }
         return false;
+    }
+
+    /**
+     * Kud Keys: this context with every previous word equal to {@code from} replaced by {@code to}, or this context
+     * when there is none.
+     */
+    /** Kud Keys: whether {@code word} is one of the previous words. */
+    public boolean containsWord(@NonNull final String word) {
+        for (int i = 0; i < mPrevWordsCount; i++) {
+            final WordInfo info = mPrevWordsInfo[i];
+            if (info != null && !info.mIsBeginningOfSentence && TextUtils.equals(info.mWord, word)) return true;
+        }
+        return false;
+    }
+
+    @NonNull
+    public NgramContext withWordReplaced(@NonNull final String from, @NonNull final String to) {
+        WordInfo[] replaced = null;
+        for (int i = 0; i < mPrevWordsCount; i++) {
+            final WordInfo info = mPrevWordsInfo[i];
+            if (info == null || info.mIsBeginningOfSentence || !TextUtils.equals(info.mWord, from)) continue;
+            if (replaced == null) replaced = Arrays.copyOf(mPrevWordsInfo, mPrevWordsCount);
+            replaced[i] = new WordInfo(to);
+        }
+        return replaced == null ? this : new NgramContext(mMaxPrevWordCount, replaced);
     }
 
     /**
@@ -224,12 +250,16 @@ public class NgramContext {
 
     @Override
     public int hashCode() {
+        // Kud Keys: hash every word up to the first empty one (this used to stop at the first non-empty word, so
+        // every real context hashed to 0 and the prediction cache became one long list). Trailing empty words
+        // don't count, matching equals().
         int hashValue = 0;
-        for (final WordInfo wordInfo : mPrevWordsInfo) {
-            if (!WordInfo.EMPTY_WORD_INFO.equals(wordInfo)) {
+        for (int i = 0; i < mPrevWordsCount; i++) {
+            final WordInfo wordInfo = mPrevWordsInfo[i];
+            if (wordInfo == null || WordInfo.EMPTY_WORD_INFO.equals(wordInfo)) {
                 break;
             }
-            hashValue ^= wordInfo.hashCode();
+            hashValue = 31 * hashValue + wordInfo.hashCode();
         }
         return hashValue;
     }

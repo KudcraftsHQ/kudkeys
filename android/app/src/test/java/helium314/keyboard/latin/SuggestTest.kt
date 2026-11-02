@@ -323,7 +323,9 @@ class SuggestTest {
             suggestion("next", 123, currentTypingLocale),
         ))
         val results = getSuggestedWords(false, "", CapsMode.OFF)
-        assertEquals(listOf("next", "another"), results.mSuggestedWordInfoList.map { it.mWord })
+        // Kud Keys: fewer than three predictions are topped up with fillers (history top words, starter words)
+        assertEquals(listOf("next", "another"), results.mSuggestedWordInfoList.take(2).map { it.mWord })
+        assert(results.mSuggestedWordInfoList.drop(2).all { it.mSourceDict === Suggest.DICTIONARY_FALLBACK })
     }
 
     @Test fun `single letter suggestions are suppressed dependent on score of other suggestions`() {

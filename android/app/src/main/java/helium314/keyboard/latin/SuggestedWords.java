@@ -66,6 +66,12 @@ public class SuggestedWords {
     protected final ArrayList<SuggestedWordInfo> mSuggestedWordInfoList;
     @Nullable
     public final ArrayList<SuggestedWordInfo> mRawSuggestions;
+    /**
+     * Kud Keys: with autocorrect off, the correction autocorrect would have made for the (unknown) typed word, or
+     * null. Space still commits the typed word; this is only used as the context for the next prediction.
+     */
+    @Nullable
+    public String mKudContextCorrection;
 
     public SuggestedWords(@NonNull final ArrayList<SuggestedWordInfo> suggestedWordInfoList,
             @Nullable final ArrayList<SuggestedWordInfo> rawSuggestions,

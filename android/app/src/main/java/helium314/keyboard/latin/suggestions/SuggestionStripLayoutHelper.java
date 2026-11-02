@@ -195,16 +195,15 @@ final class SuggestionStripLayoutHelper {
         // this is brittle
         final boolean isAutoCorrection = suggestedWords.mWillAutoCorrect
                 && indexInSuggestedWords == SuggestedWords.INDEX_OF_AUTO_CORRECTION;
-        final boolean isTypedWordValid = suggestedWords.mTypedWordValid
-                && indexInSuggestedWords == SuggestedWords.INDEX_OF_TYPED_WORD;
-        if (!isAutoCorrection && !isTypedWordValid) {
+        // Kud Keys: the typed word on the left is never bold (VALID_TYPED_WORD_BOLD is ignored); emphasis belongs
+        // to the best guess in the centre, see isBestGuess
+        if (!isAutoCorrection) {
             return word;
         }
 
         final Spannable spannedWord = new SpannableString(word);
         final int options = mSuggestionStripOptions;
-        if ((isAutoCorrection && (options & AUTO_CORRECT_BOLD) != 0)
-                || (isTypedWordValid && (options & VALID_TYPED_WORD_BOLD) != 0)) {
+        if ((options & AUTO_CORRECT_BOLD) != 0) {
             addStyleSpan(spannedWord, BOLD_SPAN);
         }
         if (isAutoCorrection && (options & AUTO_CORRECT_UNDERLINE) != 0) {
@@ -233,6 +232,30 @@ final class SuggestionStripLayoutHelper {
         }
         return color;
     }
+
+    /**
+     * Kud Keys (SwiftKey): with nothing about to auto-correct, the centre slot is the best guess and is drawn in the
+     * full text colour at medium weight, while the side slots stay muted. With autocorrect on, the auto-correction
+     * keeps its own style.
+     */
+    private boolean isBestGuess(final SuggestedWords suggestedWords, final int positionInStrip,
+            final int indexInSuggestedWords) {
+        if (positionInStrip != mCenterPositionInStrip || suggestedWords.mWillAutoCorrect) return false;
+        return !suggestedWords.getInfo(indexInSuggestedWords).isKindOf(SuggestedWordInfo.KIND_TYPED);
+    }
+
+    private int applyObsoleteAlpha(final SuggestedWords suggestedWords, final int color) {
+        return suggestedWords.mIsObsoleteSuggestions ? applyAlpha(color, mAlphaObsoleted) : color;
+    }
+
+    /** Medium (500) weight of the slot's typeface, where the platform has weights (API 28); emoji are left alone. */
+    static Typeface getBestGuessTypeface(@Nullable final Typeface typeface, @Nullable final CharSequence text) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) return typeface;
+        if (text != null && helium314.keyboard.latin.common.StringUtilsKt.isEmoji(text)) return typeface;
+        return Typeface.create(typeface != null ? typeface : Typeface.DEFAULT, BEST_GUESS_WEIGHT, false);
+    }
+
+    static final int BEST_GUESS_WEIGHT = 500;
 
     private static int applyAlpha(final int color, final float alpha) {
         final int newAlpha = (int)(Color.alpha(color) * alpha);
@@ -372,7 +395,8 @@ final class SuggestionStripLayoutHelper {
      * ({@code -1} = empty), in strip order (left, centre, right for LTR). While a word is being typed the left slot
      * is the typed word exactly as typed, the centre the best other suggestion and the right the next one. With
      * nothing typed (predictions) the centre is the best, left and right the 2nd and 3rd. The typed word never
-     * shows twice.
+     * shows twice, and neither does a word in another case ({@code ma} never shows {@code MA} beside it), except
+     * the typed word's capitalised form ({@code andi} → {@code Andi}), which is a real suggestion.
      *
      * @param words the suggestions' words in rank order
      * @param typing whether index 0 is the word being typed
@@ -385,11 +409,29 @@ final class SuggestionStripLayoutHelper {
         if (typing && typed != null) {
             slots[0] = 0;
         }
+        final ArrayList<String> shown = new ArrayList<>(3);
         for (int i = typing ? 1 : 0; i < words.size() && next < order.length; i++) {
-            if (typed != null && typed.equals(words.get(i))) continue;
+            final String word = words.get(i);
+            if (typed != null && typed.equals(word)) continue;
+            if (typed != null && typed.equalsIgnoreCase(word) && !isCapitalisedFormOf(word, typed)) continue;
+            if (containsIgnoreCase(shown, word)) continue;
+            shown.add(word);
             slots[order[next++]] = i;
         }
         return slots;
+    }
+
+    private static boolean containsIgnoreCase(final java.util.List<String> words, final String word) {
+        for (final String w : words) if (w.equalsIgnoreCase(word)) return true;
+        return false;
+    }
+
+    /** Whether {@code word} is {@code typed} (all lower case) with only its first letter capitalised. */
+    private static boolean isCapitalisedFormOf(final String word, final String typed) {
+        if (word.isEmpty() || !Character.isUpperCase(word.charAt(0))) return false;
+        for (int i = 0; i < typed.length(); i++) if (Character.isUpperCase(typed.charAt(i))) return false;
+        for (int i = 1; i < word.length(); i++) if (Character.isUpperCase(word.charAt(i))) return false;
+        return true;
     }
 
     static boolean isTyping(final SuggestedWords suggestedWords) {
@@ -422,9 +464,14 @@ final class SuggestionStripLayoutHelper {
             // {@link TextView#getTag()} is used to get the index in suggestedWords at
             // {@link SuggestionStripView#onClick(View)}.
             wordView.setTag(indexInSuggestedWords);
-            wordView.setText(getStyledSuggestedWord(suggestedWords, indexInSuggestedWords));
-            wordView.setTextColor(getSuggestionTextColor(suggestedWords, indexInSuggestedWords));
+            final CharSequence styled = getStyledSuggestedWord(suggestedWords, indexInSuggestedWords);
+            wordView.setText(styled);
+            final boolean bestGuess = isBestGuess(suggestedWords, positionInStrip, indexInSuggestedWords);
+            wordView.setTextColor(bestGuess
+                    ? applyObsoleteAlpha(suggestedWords, mColorAutoCorrect)
+                    : getSuggestionTextColor(suggestedWords, indexInSuggestedWords));
             KeyboardTypeface.applyToTextView(wordView);
+            if (bestGuess) wordView.setTypeface(getBestGuessTypeface(wordView.getTypeface(), styled));
             if (SuggestionStripView.DEBUG_SUGGESTIONS) {
                 mDebugInfoViews.get(positionInStrip).setText(suggestedWords.getDebugString(indexInSuggestedWords));
             }
@@ -516,7 +563,7 @@ final class SuggestionStripLayoutHelper {
         final int count;
         final Typeface savedTypeface = paint.getTypeface();
         try {
-            paint.setTypeface(getTextTypeface(text));
+            paint.setTypeface(getTextTypeface(text, savedTypeface));
             count = paint.getTextWidths(text, 0, length, widths);
         } finally {
             paint.setTypeface(savedTypeface);
@@ -528,7 +575,9 @@ final class SuggestionStripLayoutHelper {
         return width;
     }
 
-    private static Typeface getTextTypeface(@Nullable final CharSequence text) {
-        return hasStyleSpan(text, BOLD_SPAN) ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT;
+    // Kud Keys: measure with the view's own typeface (custom font, the best guess's medium weight), bold if spanned
+    private static Typeface getTextTypeface(@Nullable final CharSequence text, @Nullable final Typeface typeface) {
+        final Typeface base = typeface != null ? typeface : Typeface.DEFAULT;
+        return hasStyleSpan(text, BOLD_SPAN) ? Typeface.create(base, Typeface.BOLD) : base;
     }
 }

@@ -25,6 +25,7 @@ import helium314.keyboard.latin.utils.AutoCorrectionUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.SuggestionResults
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
 
@@ -35,9 +36,10 @@ import kotlin.math.min
 class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
     private var mAutoCorrectionThreshold = 0f
     private val mPlausibilityThreshold = 0f
-    private val nextWordSuggestionsCache = HashMap<NgramContext, SuggestionResults>()
+    private val nextWordSuggestionsCache = ConcurrentHashMap<NgramContext, SuggestionResults>()
 
-    // cache cleared whenever LatinIME.loadSettings is called, notably on changing layout and switching input fields
+    // cache cleared whenever LatinIME.loadSettings is called, notably on changing layout and switching input fields,
+    // and (Kud Keys) whenever user history changes, so a word pair learned in this text field shows up next time
     fun clearNextWordSuggestionsCache() = nextWordSuggestionsCache.clear()
 
     /**
@@ -79,6 +81,12 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         val trailingSingleQuotesCount = StringUtils.getTrailingSingleQuotesCount(typedWordString)
         val capsMode = getCapsModeForTyping(wordComposer, keyboard)
         val suggestionsContainer = ArrayList(suggestionResults)
+        // Kud Keys: mid-sentence, "Aku" from an add-on or history is shown as "aku" when that is a word too
+        if (capsMode == CapsMode.OFF && !ngramContext.isBeginningOfSentenceContext)
+            lowercaseMidSentenceCapitals(suggestionsContainer)
+        removeCaseInsensitiveDuplicates(suggestionsContainer)
+        // Kud Keys: never an empty strip after a space, punctuation or in an empty field
+        if (typedWordString.isEmpty()) addFallbackPredictions(suggestionsContainer)
         capitalizeAndAddTrailingSingleQuotes(suggestionsContainer, capsMode, trailingSingleQuotesCount, mDictionaryFacilitator.mainLocale)
         val capitalizedTypedWord = capitalize(typedWordString, capsMode, mDictionaryFacilitator.mainLocale)
 
@@ -88,6 +96,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         val typedWordFirstOccurrenceWordInfo = suggestionsContainer.firstOrNull { it.mWord == capitalizedTypedWord }
         val firstOccurrenceOfTypedWordInSuggestions = SuggestedWordInfo.removeDupsAndTypedWord(capitalizedTypedWord, suggestionsContainer)
         makeFirstTwoSuggestionsNonEmoji(suggestionsContainer)
+        val bestSuggestion = suggestionsContainer.firstOrNull() // the centre of the strip while typing, see below
 
         val (allowsToBeAutoCorrected, hasAutoCorrection) = shouldBeAutoCorrected(
             trailingSingleQuotesCount,
@@ -147,8 +156,56 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             }
         }
         val isTypedWordValid = firstOccurrenceOfTypedWordInSuggestions > -1 || (!resultsArePredictions && !allowsToBeAutoCorrected)
-        return SuggestedWords(suggestionsList, suggestionResults.mRawSuggestions, typedWordInfo,
+        val suggestedWords = SuggestedWords(suggestionsList, suggestionResults.mRawSuggestions, typedWordInfo,
             isTypedWordValid, hasAutoCorrection || correctToCapitalizedWord, false, inputStyle, sequenceNumber)
+        // Kud Keys: with autocorrect off, remember the correction autocorrect would have made for an unknown word,
+        // so the next prediction can use it as context (the text stays as typed)
+        val bestIsInTheCentre = !typedWordWasCapitalized && !(Settings.getValues().mCenterSuggestionTextToEnter && !wordComposer.isResumed)
+        if (!isCorrectionEnabled && !resultsArePredictions && typedWordFirstOccurrenceWordInfo == null && bestIsInTheCentre) {
+            val first = bestSuggestion
+            if (first != null && !first.isEmoji && !first.mWord.equals(typedWordString, ignoreCase = true)
+                && !mDictionaryFacilitator.isValidSpellingWord(typedWordString)
+                && !mDictionaryFacilitator.isValidSpellingWord(typedWordString.lowercase(mDictionaryFacilitator.mainLocale))
+                && shouldBeAutoCorrected(trailingSingleQuotesCount, capitalizedTypedWord, first,
+                    {
+                        val suggestions = getNextWordSuggestions(ngramContext, keyboard, inputStyleIfNotPrediction, settingsValuesForSuggestion)
+                        suggestions.firstOrNull { it.mWord == first.word } to suggestions.firstOrNull { it.mWord == capitalizedTypedWord }
+                    },
+                    true, wordComposer, suggestionResults, firstOccurrenceOfTypedWordInSuggestions,
+                    typedWordFirstOccurrenceWordInfo, Settings.getValues().mAutoCorrectionThresholdIfEnabled).second
+            ) {
+                suggestedWords.mKudContextCorrection = first.mWord
+            }
+        }
+        return suggestedWords
+    }
+
+    /**
+     * Kud Keys: while not shifted and not at a sentence start, "Xxxx" becomes "xxxx" when "xxxx" is a word in any
+     * active dictionary (the score stays). A word that only exists capitalised (a name, a city) keeps its capital.
+     * Single letters and "I'm"-style words are left alone ("I" stays "I").
+     */
+    private fun lowercaseMidSentenceCapitals(suggestions: ArrayList<SuggestedWordInfo>) {
+        for (i in suggestions.indices) {
+            val info = suggestions[i]
+            if (info.isKindOf(SuggestedWordInfo.KIND_SHORTCUT) || info.isKindOf(SuggestedWordInfo.KIND_WHITELIST)) continue
+            val lower = lowercasedFormOrNull(info.mWord, info.mSourceDict.mLocale ?: mDictionaryFacilitator.mainLocale) ?: continue
+            if (!mDictionaryFacilitator.isValidSpellingWord(lower)) continue
+            suggestions[i] = SuggestedWordInfo(lower, info.mPrevWordsContext, info.mScore, info.mKindAndFlags,
+                info.mSourceDict, info.mIndexOfTouchPointOfSecondWord, info.mAutoCommitFirstWordConfidence)
+        }
+    }
+
+    /** Kud Keys: fills up to three predictions from the most used history words, then a short per-language list. */
+    private fun addFallbackPredictions(suggestions: ArrayList<SuggestedWordInfo>) {
+        if (suggestions.size >= FALLBACK_PREDICTION_TARGET) return
+        val seen = suggestions.mapTo(HashSet()) { it.mWord.lowercase(Locale.ROOT) }
+        for (word in mDictionaryFacilitator.fallbackPredictions) {
+            if (suggestions.size >= FALLBACK_PREDICTION_TARGET) break
+            if (!seen.add(word.lowercase(Locale.ROOT))) continue
+            suggestions.add(SuggestedWordInfo(word, "", 0, SuggestedWordInfo.KIND_PREDICTION, DICTIONARY_FALLBACK,
+                SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE))
+        }
     }
 
     // returns [allowsToBeAutoCorrected, hasAutoCorrection]
@@ -163,7 +220,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         wordComposer: WordComposer,
         suggestionResults: SuggestionResults,
         firstOccurrenceOfTypedWordInSuggestions: Int,
-        typedWordInfo: SuggestedWordInfo?
+        typedWordInfo: SuggestedWordInfo?,
+        autoCorrectionThreshold: Float = mAutoCorrectionThreshold
     ): Pair<Boolean, Boolean> {
         val consideredWord = typedWordString.dropLast(trailingSingleQuotesCount)
         val firstAndTypedEmptyInfos by lazy { getEmptyWordSuggestions() }
@@ -222,7 +280,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
                 // mFirstSuggestionExceedsConfidenceThreshold is always set to false, so currently this branch is useless
                 return true to true
             }
-            if (!AutoCorrectionUtils.suggestionExceedsThreshold(firstSuggestion, consideredWord, mAutoCorrectionThreshold)) {
+            if (!AutoCorrectionUtils.suggestionExceedsThreshold(firstSuggestion, consideredWord, autoCorrectionThreshold)) {
                 // Score is too low for autocorrect
                 // todo: maybe also do something here depending on ngram context?
                 return true to false
@@ -368,6 +426,29 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         private const val MAXIMUM_AUTO_CORRECT_LENGTH_FOR_GERMAN = 12
         // TODO: should we add Finnish here?
         private val sLanguageToMaximumAutoCorrectionWithSpaceLength = hashMapOf(Locale.GERMAN.language to MAXIMUM_AUTO_CORRECT_LENGTH_FOR_GERMAN)
+
+        /** Kud Keys: the source of predictions that fill an otherwise short strip (history top words, starters) */
+        @JvmField val DICTIONARY_FALLBACK = Dictionary.PhonyDictionary("kud_fallback")
+        private const val FALLBACK_PREDICTION_TARGET = 3
+
+        /** Kud Keys: "Xxxx" → "xxxx"; null for anything else (single letters, "I'm", "MA", "McDonald", emoji). */
+        @JvmStatic
+        fun lowercasedFormOrNull(word: String, locale: Locale): String? {
+            if (word.length < 2 || !word[0].isUpperCase() || word[1] == '\'') return null
+            if (word.drop(1).any { it.isUpperCase() } || word.drop(1).none { it.isLowerCase() }) return null
+            return word.lowercase(locale)
+        }
+
+        /** Kud Keys: drops later suggestions that differ from an earlier one only in case (the earlier scores higher). */
+        @JvmStatic
+        fun removeCaseInsensitiveDuplicates(suggestions: ArrayList<SuggestedWordInfo>) {
+            val seen = HashSet<String>()
+            val it = suggestions.iterator()
+            while (it.hasNext()) {
+                val info = it.next()
+                if (!seen.add(info.mWord.lowercase(Locale.ROOT))) it.remove()
+            }
+        }
 
         private fun capitalizeAndAddTrailingSingleQuotes(
             suggestions: ArrayList<SuggestedWordInfo>, capsMode: CapsMode, trailingSingleQuotesCount: Int, defaultLocale: Locale

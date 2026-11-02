@@ -174,6 +174,8 @@ public class SettingsValues {
     public final boolean mSuggestionStripHiddenPerUserSettings;
     public final boolean mAutoCorrectEnabled;
     public final float mAutoCorrectionThreshold;
+    // Kud Keys: the threshold autocorrect would use if it were on (to judge a confident correction while it is off)
+    public final float mAutoCorrectionThresholdIfEnabled;
     public final int mScoreLimitForAutocorrect;
     public final SettingsValuesForSuggestion mSettingsValuesForSuggestion;
     public final boolean mIsLocked;
@@ -240,9 +242,8 @@ public class SettingsValues {
         mCenterSuggestionTextToEnter = prefs.getBoolean(Settings.PREF_CENTER_SUGGESTION_TEXT_TO_ENTER, Defaults.PREF_CENTER_SUGGESTION_TEXT_TO_ENTER);
         float autoCorrectConfidence = prefs.getFloat(Settings.PREF_AUTO_CORRECT_CONFIDENCE, Defaults.PREF_AUTO_CORRECT_CONFIDENCE);
         // confidence -> threshold and score limit are just some formulas that give something similar to the old values, so that confidence can be in a nice 0-1 range
-        mAutoCorrectionThreshold = mAutoCorrectEnabled
-                ? 0.5f - 0.5f * (float)Math.pow(autoCorrectConfidence, 0.33)
-                : Float.MAX_VALUE;
+        mAutoCorrectionThresholdIfEnabled = 0.5f - 0.5f * (float)Math.pow(autoCorrectConfidence, 0.33);
+        mAutoCorrectionThreshold = mAutoCorrectEnabled ? mAutoCorrectionThresholdIfEnabled : Float.MAX_VALUE;
         mScoreLimitForAutocorrect = (int)((1.14 - 0.2 * Math.pow(autoCorrectConfidence + 0.47, 3.5)) * 900000);
         mAutoCorrectCapitalizedSuggestion = prefs.getBoolean(Settings.PREF_AUTOCORRECT_CAPITALIZED_SUGGESTION, Defaults.PREF_AUTOCORRECT_CAPITALIZED_SUGGESTION);
         mAutoCorrectShortcuts = prefs.getBoolean(Settings.PREF_AUTOCORRECT_SHORTCUTS, Defaults.PREF_AUTOCORRECT_SHORTCUTS);

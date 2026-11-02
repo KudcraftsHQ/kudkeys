@@ -7,10 +7,12 @@ package helium314.keyboard.latin
 
 import android.Manifest
 import android.content.Context
+import android.os.SystemClock
 import android.provider.UserDictionary
 import android.util.LruCache
 import helium314.keyboard.keyboard.Keyboard
 import helium314.keyboard.keyboard.emoji.SupportedEmojis
+import helium314.keyboard.kudkeys.KudStarterWords
 import helium314.keyboard.latin.DictionaryFacilitator.DictionaryInitializationListener
 import helium314.keyboard.latin.NgramContext.WordInfo
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
@@ -23,10 +25,12 @@ import helium314.keyboard.latin.common.splitOnWhitespace
 import helium314.keyboard.latin.dictionary.AppsBinaryDictionary
 import helium314.keyboard.latin.dictionary.ContactsBinaryDictionary
 import helium314.keyboard.latin.dictionary.Dictionary
+import helium314.keyboard.latin.dictionary.DictionaryCollection
 import helium314.keyboard.latin.dictionary.DictionaryFactory
 import helium314.keyboard.latin.dictionary.DictionaryStats
 import helium314.keyboard.latin.dictionary.ExpandableBinaryDictionary
 import helium314.keyboard.latin.dictionary.UserBinaryDictionary
+import helium314.keyboard.latin.makedict.WordProperty
 import helium314.keyboard.latin.permissions.PermissionsUtil
 import helium314.keyboard.latin.personalization.UserHistoryDictionary
 import helium314.keyboard.latin.settings.Settings
@@ -46,6 +50,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Facilitates interaction with different kinds of dictionaries. Provides APIs
@@ -77,6 +82,13 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
     //  see https://github.com/HeliBorg/HeliBoard/issues/307
     private var mValidSpellingWordReadCache: LruCache<String, Boolean>? = null
     private var mValidSpellingWordWriteCache: LruCache<String, Boolean>? = null
+
+    // Kud Keys: the most used history words per locale, for predictions that would otherwise leave the strip short.
+    // Read in the background (a full history scan), at most every FREQUENT_HISTORY_WORDS_MIN_INTERVAL_MS while stale.
+    @Volatile private var frequentHistoryWords: Map<Locale, List<String>> = emptyMap()
+    @Volatile private var frequentHistoryWordsStale = true
+    @Volatile private var frequentHistoryWordsReadAt = 0L
+    private val frequentHistoryWordsLoading = AtomicBoolean(false)
 
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -172,6 +184,8 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
 
         mValidSpellingWordWriteCache?.evictAll()
         mValidSpellingWordReadCache?.evictAll()
+        frequentHistoryWordsStale = true
+        frequentHistoryWordsReadAt = 0L
     }
 
     /** creates dictionaryGroups for [newLocales] with given [newSubDictTypes], trying to re-use existing dictionaries.
@@ -296,6 +310,7 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
         // Update the spelling cache before learning. Words that are not yet added to user history
         // and appear in no other language model are not considered valid.
         putWordIntoValidSpellingWordCache("addToUserHistory", suggestion)
+        frequentHistoryWordsStale = true
 
         val words = suggestion.splitOnWhitespace().dropLastWhile { it.isEmpty() }
 
@@ -350,8 +365,10 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
         // Even if the user capitalizes manually, they most likely don't want the capitalized form suggested.
         if (wasAutoCapitalized || ngramContext.isBeginningOfSentenceContext) {
             val decapitalizedWord = word.decapitalize(dictionaryGroup.locale) // try undoing auto-capitalization
-            if (isValidWord(word, DictionaryFacilitator.ALL_DICTIONARY_TYPES, dictionaryGroup)
-                && !isValidWord(decapitalizedWord, DictionaryFacilitator.ALL_DICTIONARY_TYPES, dictionaryGroup)
+            // Kud Keys: judged without the add-on dictionaries (a SwiftKey import full of sentence-start "Aku"
+            // would otherwise make "Aku" look like a name and get it learned capitalised)
+            if (isValidWordWithoutAddOns(word, dictionaryGroup)
+                && !isValidWordWithoutAddOns(decapitalizedWord, dictionaryGroup)
             ) {
                 // If the word was auto-capitalized and exists only as a capitalized word in the
                 // dictionary, then we must not downcase it before registering it. For example,
@@ -474,6 +491,7 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
         // TODO: Decide whether or not to remove the word on BACKSPACE.
         if (event != DictionaryFacilitator.UnlearnEvent.BACKSPACE) {
             currentlyPreferredDictionaryGroup.getSubDict(Dictionary.TYPE_USER_HISTORY)?.removeUnigramEntryDynamically(word)
+            frequentHistoryWordsStale = true
         }
 
         // Update the spelling cache after unlearning. Words that are removed from user history
@@ -580,18 +598,68 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
         return dictionariesToCheck.any { dictionaryGroup.getDict(it)?.isValidWord(word) == true }
     }
 
+    /** Kud Keys: [isValidWord] over all dictionary types, but only the main dictionary itself, not its add-ons. */
+    private fun isValidWordWithoutAddOns(word: String, dictionaryGroup: DictionaryGroup): Boolean {
+        if (word.isEmpty() || dictionaryGroup.isBlacklisted(word)) return false
+        return DictionaryFacilitator.ALL_DICTIONARY_TYPES.any { type ->
+            val dict = dictionaryGroup.getDict(type) ?: return@any false
+            if (type == Dictionary.TYPE_MAIN && dict is DictionaryCollection)
+                dict.isValidWordInDictsOfType(word, Dictionary.TYPE_MAIN)
+            else dict.isValidWord(word)
+        }
+    }
+
     private fun isBlacklisted(word: String): Boolean = dictionaryGroups.any { it.isBlacklisted(word) }
+
+    override fun getFallbackPredictions(): List<String> {
+        refreshFrequentHistoryWordsIfStale()
+        // the language being typed first; sortedByDescending is stable, so ties keep the subtype order
+        val groups = dictionaryGroups.sortedByDescending { it.confidence }
+        val history = frequentHistoryWords
+        val words = ArrayList<String>()
+        groups.forEach { history[it.locale]?.let(words::addAll) }
+        groups.forEach { words.addAll(KudStarterWords.forLocale(it.locale)) }
+        return words.filterNot(::isBlacklisted)
+    }
+
+    private fun refreshFrequentHistoryWordsIfStale() {
+        if (!frequentHistoryWordsStale) return
+        val now = SystemClock.uptimeMillis()
+        if (frequentHistoryWordsReadAt != 0L && now - frequentHistoryWordsReadAt < FREQUENT_HISTORY_WORDS_MIN_INTERVAL_MS) return
+        if (!frequentHistoryWordsLoading.compareAndSet(false, true)) return
+        frequentHistoryWordsStale = false // a change while reading marks it stale again
+        frequentHistoryWordsReadAt = now
+        val groups = dictionaryGroups
+        scope.launch {
+            try {
+                val words = HashMap<Locale, List<String>>()
+                for (group in groups) {
+                    val history = group.getSubDict(Dictionary.TYPE_USER_HISTORY) ?: continue
+                    val properties = history.readAllWordProperties(FREQUENT_HISTORY_WORDS_READ_TIMEOUT_MS) ?: continue
+                    words[group.locale] = mostUsedWords(properties, FREQUENT_HISTORY_WORDS_PER_LOCALE)
+                }
+                frequentHistoryWords = words
+            } catch (e: Throwable) { // also UnsatisfiedLinkError without the native library
+                Log.w(TAG, "couldn't read frequent history words: ${e.javaClass.simpleName}")
+            } finally {
+                frequentHistoryWordsLoading.set(false)
+            }
+        }
+    }
 
     override fun removeWord(word: String) {
         for (dictionaryGroup in dictionaryGroups) {
             dictionaryGroup.removeWord(word)
         }
+        frequentHistoryWordsStale = true
     }
 
     override fun clearUserHistoryDictionary(context: Context) {
         for (dictionaryGroup in dictionaryGroups) {
             dictionaryGroup.getSubDict(Dictionary.TYPE_USER_HISTORY)?.clear()
         }
+        frequentHistoryWords = emptyMap()
+        frequentHistoryWordsStale = true
     }
 
     override fun localesAndConfidences(): String? {
@@ -620,6 +688,28 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
 
         // HACK: This threshold is being used when adding a capitalized entry in the User History dictionary.
         private const val CAPITALIZED_FORM_MAX_PROBABILITY_FOR_INSERT = 140
+
+        // Kud Keys: fallback predictions from user history
+        private const val FREQUENT_HISTORY_WORDS_PER_LOCALE = 8
+        private const val FREQUENT_HISTORY_WORDS_MIN_INTERVAL_MS = 10_000L
+        private const val FREQUENT_HISTORY_WORDS_READ_TIMEOUT_MS = 3_000L
+        // a word used once may be a typo kept as typed (autocorrect is off by default), so it needs two uses
+        private const val FREQUENT_HISTORY_WORDS_MIN_COUNT = 2
+
+        /** Kud Keys: the [limit] most used real words in [properties], most used (then most recent) first. */
+        @JvmStatic
+        fun mostUsedWords(properties: Array<out WordProperty>, limit: Int): List<String> = properties.asSequence()
+            .filter { p ->
+                !p.mIsNotAWord && !p.mIsBeginningOfSentence && !p.mIsPossiblyOffensive
+                    && !p.mWord.isNullOrBlank() && p.mWord.none(Char::isWhitespace)
+                    && (p.mProbabilityInfo?.mCount ?: 0) >= FREQUENT_HISTORY_WORDS_MIN_COUNT
+            }
+            .sortedWith(compareByDescending<WordProperty> { it.mProbabilityInfo.mCount }
+                .thenByDescending { it.mProbabilityInfo.mTimestamp })
+            .map { it.mWord }
+            .distinct()
+            .take(limit)
+            .toList()
 
         private fun createSubDict(
             dictType: String, context: Context, locale: Locale, dictFile: File?, dictNamePrefix: String
