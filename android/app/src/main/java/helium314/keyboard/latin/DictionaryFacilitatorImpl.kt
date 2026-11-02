@@ -620,13 +620,15 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
 
     private fun isBlacklisted(word: String): Boolean = dictionaryGroups.any { it.isBlacklisted(word) }
 
-    override fun getFallbackPredictions(): List<String> {
-        refreshFrequentHistoryWordsIfStale()
+    override fun getFallbackPredictions(includeHistory: Boolean): List<String> {
         // the language being typed first; sortedByDescending is stable, so ties keep the subtype order
         val groups = dictionaryGroups.sortedByDescending { it.confidence }
-        val history = frequentHistoryWords
         val words = ArrayList<String>()
-        groups.forEach { history[it.locale]?.let(words::addAll) }
+        if (includeHistory) {
+            refreshFrequentHistoryWordsIfStale()
+            val history = frequentHistoryWords
+            groups.forEach { history[it.locale]?.let(words::addAll) }
+        }
         groups.forEach { words.addAll(KudStarterWords.forLocale(it.locale)) }
         return words.filterNot(::isBlacklisted)
     }
@@ -700,7 +702,7 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
 
         // Kud Keys: fallback predictions from user history
         private const val FREQUENT_HISTORY_WORDS_PER_LOCALE = 8
-        private const val FREQUENT_HISTORY_WORDS_MIN_INTERVAL_MS = 10_000L
+        private const val FREQUENT_HISTORY_WORDS_MIN_INTERVAL_MS = 10 * 60_000L // a full history scan, on the thread that also writes history
         private const val FREQUENT_HISTORY_WORDS_READ_TIMEOUT_MS = 3_000L
         // a word used once may be a typo kept as typed (autocorrect is off by default), so it needs two uses
         private const val FREQUENT_HISTORY_WORDS_MIN_COUNT = 2

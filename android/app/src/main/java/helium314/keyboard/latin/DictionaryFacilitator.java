@@ -153,7 +153,7 @@ public interface DictionaryFacilitator {
      * words in user history for the active languages, then a short starter list per language. May be empty.
      */
     @NonNull
-    default List<String> getFallbackPredictions() {
+    default List<String> getFallbackPredictions(final boolean includeHistory) {
         return java.util.Collections.emptyList();
     }
 

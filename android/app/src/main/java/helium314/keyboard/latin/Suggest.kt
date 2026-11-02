@@ -84,7 +84,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         // Kud Keys: mid-sentence, "Aku" from an add-on or history is shown as "aku" when that is a word too
         if (capsMode == CapsMode.OFF && !ngramContext.isBeginningOfSentenceContext)
             lowercaseMidSentenceCapitals(suggestionsContainer)
-        removeCaseInsensitiveDuplicates(suggestionsContainer)
+        removeCaseInsensitiveDuplicates(suggestionsContainer, typedWordString)
         // Kud Keys: never an empty strip after a space, punctuation or in an empty field
         if (typedWordString.isEmpty()) addFallbackPredictions(suggestionsContainer)
         capitalizeAndAddTrailingSingleQuotes(suggestionsContainer, capsMode, trailingSingleQuotesCount, mDictionaryFacilitator.mainLocale)
@@ -203,7 +203,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
     private fun addFallbackPredictions(suggestions: ArrayList<SuggestedWordInfo>) {
         if (suggestions.size >= FALLBACK_PREDICTION_TARGET) return
         val seen = suggestions.mapTo(HashSet()) { it.mWord.lowercase(Locale.ROOT) }
-        for (word in mDictionaryFacilitator.fallbackPredictions) {
+        // incognito and no-learning fields never show the user's own most used words
+        for (word in mDictionaryFacilitator.getFallbackPredictions(!Settings.getValues().mIncognitoModeEnabled)) {
             if (suggestions.size >= FALLBACK_PREDICTION_TARGET) break
             if (!seen.add(word.lowercase(Locale.ROOT))) continue
             suggestions.add(SuggestedWordInfo(word, "", 0, SuggestedWordInfo.KIND_PREDICTION, DICTIONARY_FALLBACK,
@@ -442,14 +443,20 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             return word.lowercase(locale)
         }
 
-        /** Kud Keys: drops later suggestions that differ from an earlier one only in case (the earlier scores higher). */
+        /**
+         * Kud Keys: drops later suggestions that differ from an earlier one only in case (the earlier scores higher).
+         * The word being typed itself is never dropped: without it, a valid word looks unknown and autocorrect
+         * would "fix" `turkey` into `Turkey`.
+         */
         @JvmStatic
-        fun removeCaseInsensitiveDuplicates(suggestions: ArrayList<SuggestedWordInfo>) {
+        @JvmOverloads
+        fun removeCaseInsensitiveDuplicates(suggestions: ArrayList<SuggestedWordInfo>, typedWord: String = "") {
             val seen = HashSet<String>()
             val it = suggestions.iterator()
             while (it.hasNext()) {
                 val info = it.next()
-                if (!seen.add(info.mWord.lowercase(Locale.ROOT))) it.remove()
+                val isNew = seen.add(info.mWord.lowercase(Locale.ROOT))
+                if (!isNew && (typedWord.isEmpty() || info.mWord != typedWord)) it.remove()
             }
         }
 

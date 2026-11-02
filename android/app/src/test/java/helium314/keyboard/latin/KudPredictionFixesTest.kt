@@ -203,6 +203,28 @@ class KudPredictionFixesTest {
         assertEquals(listOf("Plimo", "vorn"), words(get("", sentenceStart)).take(2))
     }
 
+    @Test fun theTypedWordSurvivesTheCaseDedupe() {
+        // "turkey" vs "Turkey": the capital scores higher and is kept, but the typed word must stay so it counts as valid
+        ShadowKudFacilitator.valid = setOf("Varnel", "varnel")
+        ShadowKudFacilitator.prefersCapitalized = setOf("Varnel")
+        ShadowKudFacilitator.typing = suggestionResults(listOf(suggestion("Varnel", 1_500_000), suggestion("varnel", 1_400_000)))
+        val result = get("varnel", midSentence)
+        assertTrue(result.mTypedWordValid, "the typed word is still known")
+        assertEquals("varnel", result.mSuggestedWordInfoList[0].mWord)
+    }
+
+    @Test fun incognitoFillersSkipHistory() {
+        ShadowKudFacilitator.fallback = listOf("zarn")
+        get("", midSentence)
+        assertEquals(true, ShadowKudFacilitator.lastIncludeHistory, "a normal field may show history words")
+        latinIME.prefs().edit { putBoolean(Settings.PREF_ALWAYS_INCOGNITO_MODE, true) }
+        Settings.getInstance().loadSettings(latinIME, Locale.ENGLISH,
+            InputAttributes(android.view.inputmethod.EditorInfo(), false, latinIME.packageName))
+        suggest.clearNextWordSuggestionsCache()
+        get("", midSentence)
+        assertEquals(false, ShadowKudFacilitator.lastIncludeHistory, "incognito shows starter words only")
+    }
+
     @Test fun onATieLowercaseComesFirst() {
         val results = suggestionResults(listOf(suggestion("Zorbo", 100), suggestion("zorbo", 100), suggestion("Vorn", 100), suggestion("aaaaa", 100)))
         assertEquals(listOf("Vorn", "aaaaa", "zorbo", "Zorbo"), results.map { it.mWord }) // shorter first, as before
@@ -278,6 +300,7 @@ class ShadowKudFacilitator {
         var valid = emptySet<String>()
         var fallback = emptyList<String>()
         var prefersCapitalized = emptySet<String>()
+        var lastIncludeHistory: Boolean? = null
         val learned = mutableListOf<Pair<String, NgramContext>>()
 
         fun reset() {
@@ -286,6 +309,7 @@ class ShadowKudFacilitator {
             valid = emptySet()
             fallback = emptyList()
             prefersCapitalized = emptySet()
+            lastIncludeHistory = null
             learned.clear()
         }
     }
@@ -294,7 +318,10 @@ class ShadowKudFacilitator {
     @Implementation fun getMainLocale(): Locale = Locale.ENGLISH
     @Implementation fun hasAtLeastOneInitializedMainDictionary() = true
     @Implementation fun isValidSpellingWord(word: String) = word in valid
-    @Implementation fun getFallbackPredictions(): List<String> = fallback
+    @Implementation fun getFallbackPredictions(includeHistory: Boolean): List<String> {
+        lastIncludeHistory = includeHistory
+        return fallback
+    }
     @Implementation fun mainDictPrefersCapitalized(capitalized: String, lowercase: String) = capitalized in prefersCapitalized
     @Implementation
     fun getSuggestionResults(composedData: ComposedData, ngramContext: NgramContext, keyboard: Keyboard,
