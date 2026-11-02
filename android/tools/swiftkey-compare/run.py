@@ -233,6 +233,7 @@ def explore(tag, steps, accept, stop=None, max_steps=25):
     os.makedirs(d, exist_ok=True)
     ns = []
     idle = 0
+    last = []
     for i in range(max_steps):
         time.sleep(2)
         xml = dump(os.path.join(d, f"{tag}_{steps[0]:02d}.xml"))
@@ -255,7 +256,12 @@ def explore(tag, steps, accept, stop=None, max_steps=25):
                 return ns
             continue
         idle = 0
-        log(tag, "tap", repr(hit["text"] or hit["desc"]))
+        label = hit["text"] or hit["desc"]
+        last.append(label)
+        if last[-3:] == [label] * 3:
+            log(tag, "same tap three times; stopping:", label)
+            return ns
+        log(tag, "tap", repr(label))
         tap_node(hit)
     return ns
 
@@ -267,6 +273,7 @@ ACCEPT = [r"^let.s set up", r"^not now$", r"^skip$", r"^no,? thanks$", r"^maybe 
 
 def setup_swiftkey(ime):
     step = [0]
+    select_ime(ime)  # enabled and selected first, so onboarding skips its "enable" steps
     sh(f"monkey -p {SK_PKG} -c android.intent.category.LAUNCHER 1")
     time.sleep(5)
     explore("sk_onboard", step, ACCEPT, stop=r"^languages$")
@@ -291,6 +298,11 @@ def setup_swiftkey(ime):
 
 
 def languages():
+    ns = nodes(dump(os.path.join(OUT, "setup", "sk_lang_main.xml")))
+    add = find(ns, r"^add languages?$")
+    if add:
+        tap_node(add)
+        time.sleep(4)
     for i in range(70):
         xml = dump(os.path.join(OUT, "setup", f"sk_lang_{i:02d}.xml"))
         ns = nodes(xml)
