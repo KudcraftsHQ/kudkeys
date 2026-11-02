@@ -103,6 +103,8 @@ public final class DictionaryPackInstallBroadcastReceiver extends BroadcastRecei
                 return;
             }
             mService.resetSuggestMainDict();
+            // kudkeys: a new main dictionary changes what the synced dictionary leaves out (a no-op otherwise)
+            helium314.keyboard.kudkeys.sync.KudSync.maintainSoon(context);
         }
     }
 }

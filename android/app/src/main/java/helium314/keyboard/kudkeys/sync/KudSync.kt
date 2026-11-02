@@ -11,7 +11,11 @@ import com.kudcrafts.kudkeys.voice.SyncClient
 import com.kudcrafts.kudkeys.voice.SyncResult
 import com.kudcrafts.kudkeys.voice.SyncWord
 import com.kudcrafts.kudkeys.voice.VoiceSettings
+import helium314.keyboard.latin.dictionary.Dictionary
+import helium314.keyboard.latin.dictionary.DictionaryFactory
+import helium314.keyboard.latin.makedict.DictIO
 import helium314.keyboard.latin.personalization.PersonalizationHelper
+import helium314.keyboard.latin.utils.DictionaryInfoUtils
 import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.SubtypeSettings
 import helium314.keyboard.latin.utils.getSecondaryLocales
@@ -29,9 +33,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.time.Instant
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -63,7 +69,65 @@ fun interface KudLearnedWords {
 
 /** Where the synced add-on dictionaries go: one per enabled locale of each lang. */
 fun interface KudSyncedDicts {
-    fun rebuild(langs: Set<String>, mirror: Map<String, Map<String, Int>>)
+    fun rebuild(langs: Set<String>, words: KudSyncedWords)
+
+    /**
+     * Langs whose dictionary was built with another filter or main dictionary than the current one (an upgrade,
+     * a main dictionary added or replaced) and so needs one rebuild. Only langs that have [words] at all.
+     */
+    fun stale(words: KudSyncedWords): Set<String> = emptySet()
+}
+
+/**
+ * The SwiftKey import HeliBoard once added as a user dictionary, `swiftkey_user.dict` in a locale's dictionary
+ * folder, every word at one flat weight. Its words now go to the account (source `swiftkey`) and the synced
+ * dictionary, and the file goes away.
+ */
+interface KudLegacyImport {
+    /** By lang: the words of each enabled locale's file. A file that can't be read is left out (and left alone). */
+    fun read(): Map<String, Set<String>>
+
+    /** Deletes the files of [langs]; whether any was there. */
+    fun delete(langs: Set<String>): Boolean
+
+    object None : KudLegacyImport {
+        override fun read() = emptyMap<String, Set<String>>()
+        override fun delete(langs: Set<String>) = false
+    }
+}
+
+class SwiftKeyDictFiles(private val context: Context) : KudLegacyImport {
+    private fun files() = KudSyncLocales.enabled().mapNotNull { locale ->
+        DictionaryInfoUtils.getCacheDirectoryForLocale(locale, context)
+            ?.let { File(it, FILE_NAME) }?.takeIf { it.isFile }?.let { KudSyncLocales.lang(locale) to it }
+    }
+
+    override fun read(): Map<String, Set<String>> {
+        val out = mutableMapOf<String, MutableSet<String>>()
+        for ((lang, file) in files()) {
+            val words = try {
+                DictIO.readBinaryDictionary(file.absolutePath).mapNotNull { p ->
+                    p.mWord.takeIf { !p.mIsNotAWord && it.isNotBlank() && it.length <= 48 && !it.any(Char::isWhitespace) }
+                }
+            } catch (t: Throwable) { // also UnsatisfiedLinkError without the native dictionary code
+                Log.w(TAG, "couldn't read the SwiftKey dictionary: ${t.javaClass.simpleName}")
+                continue
+            }
+            out.getOrPut(lang) { mutableSetOf() } += words
+        }
+        return out
+    }
+
+    override fun delete(langs: Set<String>): Boolean {
+        var any = false
+        for ((lang, file) in files()) if (lang in langs && file.delete()) any = true
+        return any
+    }
+
+    companion object {
+        const val FILE_NAME = "swiftkey_${DictionaryInfoUtils.USER_DICTIONARY_SUFFIX}" // swiftkey_user.dict
+        private const val TAG = "KudSync"
+    }
 }
 
 object KudSyncLocales {
@@ -118,19 +182,81 @@ class UserHistoryWords(private val context: Context) : KudLearnedWords {
     private companion object { const val TAG = "KudSync" }
 }
 
-/** Writes `synced_user.dict` for every enabled locale whose lang changed, then reloads the keyboard's dictionaries. */
-class SyncedDictFiles(private val context: Context) : KudSyncedDicts {
-    override fun rebuild(langs: Set<String>, mirror: Map<String, Map<String, Int>>) {
+/**
+ * Writes `synced_user.dict` for every enabled locale whose lang changed, filtered against that locale's main
+ * dictionary ([KudSyncedWordFilter]), then reloads the keyboard's dictionaries. Remembers how each was built
+ * ([KudSyncStore.dictStamps]) so a new filter or main dictionary rebuilds it once ([stale]).
+ */
+class SyncedDictFiles(
+    private val context: Context,
+    private val store: KudSyncStore = KudSyncStore(context),
+) : KudSyncedDicts {
+    override fun rebuild(langs: Set<String>, words: KudSyncedWords) {
         if (langs.isEmpty()) return
-        var any = false
+        var changed = false
+        val stamps = store.dictStamps.toMutableMap()
         for (locale in KudSyncLocales.enabled()) {
             val lang = KudSyncLocales.lang(locale)
             if (lang !in langs) continue
             val file = KudSyncedDictionary.file(context, locale) ?: continue
-            KudSyncedDictionary.write(file, locale, mirror[lang].orEmpty())
-            any = true
+            val entries = words.forLang(lang)
+            val existed = file.exists()
+            if (entries.isEmpty()) { // nothing to write and nothing to look up
+                file.delete()
+                stamps[locale.toLanguageTag()] = stamp(locale)
+                changed = changed || existed
+                continue
+            }
+            val main = openMain(locale)
+            try {
+                KudSyncedDictionary.write(file, locale, KudSyncedWordFilter.filter(entries, main.words, locale))
+            } finally {
+                main.close()
+            }
+            // not when the main dictionary couldn't be read: the next check filters it then
+            if (main.readable) stamps[locale.toLanguageTag()] = stamp(locale) else stamps.remove(locale.toLanguageTag())
+            changed = changed || existed || file.exists()
         }
-        if (any) KudSyncedDictionary.notifyChanged(context)
+        store.dictStamps = stamps
+        if (changed) KudSyncedDictionary.notifyChanged(context)
+    }
+
+    override fun stale(words: KudSyncedWords): Set<String> {
+        val stamps = store.dictStamps
+        return KudSyncLocales.enabled().filter { locale ->
+            val lang = KudSyncLocales.lang(locale)
+            words.hasWords(lang) && stamps[locale.toLanguageTag()] != stamp(locale)
+        }.map(KudSyncLocales::lang).toSet()
+    }
+
+    /** The filter version and the main dictionary file(s) of [locale]: a user-added one, or the one from the app. */
+    private fun stamp(locale: Locale): String {
+        val dir = DictionaryInfoUtils.getCacheDirectoryForLocale(locale, context)
+        val mains = listOf(DictionaryInfoUtils.MAIN_DICT_PREFIX + DictionaryInfoUtils.USER_DICTIONARY_SUFFIX,
+            DictionaryInfoUtils.MAIN_DICT_FILE_NAME)
+            .mapNotNull { name -> dir?.let { File(it, name) }?.takeIf { it.isFile } }
+            .joinToString(",") { "${it.name}:${it.length()}:${it.lastModified()}" }
+        return "v$FILTER_VERSION|$mains"
+    }
+
+    private class Main(val words: KudMainWords?, val readable: Boolean, val close: () -> Unit)
+
+    /** [locale]'s main dictionary (extracted from the app's assets if needed), read-only, without its add-ons. */
+    private fun openMain(locale: Locale): Main = try {
+        val dicts = DictionaryFactory.getMainDictsForLocale(context, locale, false)
+        val main = dicts.firstOrNull { it.mDictType == Dictionary.TYPE_MAIN }
+        dicts.filter { it !== main }.forEach { it.close() }
+        if (main == null) Main(null, true) {} // no main dictionary: nothing to compare with
+        else Main({ main.getFrequency(it) }, true) { main.close() }
+    } catch (t: Throwable) { // also UnsatisfiedLinkError without the native dictionary code
+        Log.w(TAG, "couldn't open the main dictionary: ${t.javaClass.simpleName}")
+        Main(null, false) {}
+    }
+
+    companion object {
+        /** Bump when [KudSyncedWordFilter] changes what it writes: every synced dictionary is rebuilt once. */
+        const val FILTER_VERSION = 1
+        private const val TAG = "KudSync"
     }
 }
 
@@ -145,7 +271,8 @@ class KudSync(
     private val client: SyncClient = SyncClient({ settings.apiBase }),
     val store: KudSyncStore = KudSyncStore(context),
     private val learned: KudLearnedWords = UserHistoryWords(context.applicationContext),
-    private val dicts: KudSyncedDicts = SyncedDictFiles(context.applicationContext),
+    private val dicts: KudSyncedDicts = SyncedDictFiles(context.applicationContext, store),
+    private val legacyImport: KudLegacyImport = SwiftKeyDictFiles(context.applicationContext),
     private val prefs: SharedPreferences = context.prefs(),
     private val clock: () -> Long = System::currentTimeMillis,
     private val onSignedOut: () -> Unit = { KudSyncWork.cancelAll(context) },
@@ -201,7 +328,7 @@ class KudSync(
             }
             // The synced dictionaries come back from the mirror. Words already sent aren't sent again (each typed
             // word goes with its own last-use time, so an old one never revives a removal).
-            dicts.rebuild(store.mirror.keys, store.mirror)
+            syncedWords().let { dicts.rebuild(it.langs, it) }
             // exact: the server ends up holding the restored settings, keys added since that backup removed
             syncLocked(token, exact = true)
         }
@@ -220,16 +347,84 @@ class KudSync(
         // also out of the other subtypes' user history of the same language, so it isn't read back as typed
         langs.forEach { learned.remove(it, listOf(word)) }
         store.pushed = store.pushed.mapValues { (_, w) -> w - word }
+        store.pendingImport = store.pendingImport.mapValues { (_, w) -> w - word }
         val mirror = store.mirror
         val hit = mirror.filterValues { word in it }.keys
         if (hit.isNotEmpty()) {
             val next = mirror.mapValues { (lang, w) -> if (lang in hit) w - word else w }
             store.mirror = next
-            dicts.rebuild(hit, next)
+            dicts.rebuild(hit, syncedWords(next))
+        }
+    }
+
+    /**
+     * Housekeeping that needs no network, at app start and when a dictionary is added: moves the old
+     * `swiftkey_user.dict` into the import queue, and rebuilds synced dictionaries built with an older filter or
+     * main dictionary. Signed out, the file is deleted as soon as its words are safely queued (they are in the
+     * synced dictionary from then on); signed in, the next sync imports them and deletes it.
+     */
+    suspend fun maintain() = lock.withLock {
+        withContext(Dispatchers.IO) {
+            try {
+                maintainLocked()
+            } catch (t: Throwable) {
+                Log.w(TAG, "maintenance failed: ${t.javaClass.simpleName}")
+            }
         }
     }
 
     // --- internals ---------------------------------------------------------------------------
+
+    /** What the synced dictionaries are built from now. */
+    private fun syncedWords(mirror: Map<String, Map<String, Int>> = store.mirror) =
+        KudSyncedWords(mirror, store.imported, store.pendingImport)
+
+    /** [maintain] under the lock, and the first step of every sync. Returns the langs with a SwiftKey file left. */
+    private fun maintainLocked(): Set<String> {
+        val changed = mutableSetOf<String>()
+        val legacy = legacyImport.read()
+        if (legacy.isNotEmpty()) {
+            val mirror = store.mirror
+            val removed = store.removed
+            val tombstones = store.tombstones
+            val pending = store.pendingImport.mapValues { it.value.toMutableSet() }.toMutableMap()
+            for ((lang, words) in legacy) {
+                // not what the account has already, nor what was removed (an import never revives a removal)
+                val gone = removed[lang].orEmpty().keys + tombstones.filter { it.lang == lang }.map { it.word }
+                val add = words - mirror[lang].orEmpty().keys - gone
+                if (add.isNotEmpty() && pending.getOrPut(lang) { mutableSetOf() }.addAll(add)) changed += lang
+            }
+            store.pendingImport = pending
+            val queued = store.pendingImport // read back: only words that are really on disk count as safe
+            val safe = legacy.filterKeys { lang ->
+                val left = legacy[lang].orEmpty() - mirror[lang].orEmpty().keys - removed[lang].orEmpty().keys -
+                    tombstones.filter { it.lang == lang }.map { it.word }.toSet()
+                queued[lang].orEmpty().containsAll(left)
+            }.keys
+            Log.i(TAG, "SwiftKey dictionary: ${legacy.values.sumOf { it.size }} words, ${pending.values.sumOf { it.size }} queued") // counts only
+            if (!settings.isSignedIn && safe.isNotEmpty() && legacyImport.delete(safe)) changed += safe
+        }
+        val words = syncedWords()
+        changed += dicts.stale(words)
+        if (changed.isNotEmpty()) dicts.rebuild(changed, words)
+        return if (settings.isSignedIn) legacy.keys else emptySet()
+    }
+
+    /** Sends the import queue to the server; false when a batch failed (the rest stays queued). */
+    private suspend fun importPending(token: String): Boolean {
+        for ((lang, words) in store.pendingImport) {
+            for (batch in words.chunked(SyncClient.MAX_IMPORT_WORDS)) {
+                when (val r = client.importWords(token, lang, SyncWord.SOURCE_SWIFTKEY, batch)) {
+                    is SyncResult.Ok -> store.pendingImport = store.pendingImport.mapValues { (l, w) -> if (l == lang) w - batch.toSet() else w }
+                    else -> {
+                        lastFail = r.fail(SYNC_ERROR)
+                        return false
+                    }
+                }
+            }
+        }
+        return true
+    }
 
     private suspend fun run(errorText: String, block: suspend (String) -> KudSyncOutcome): KudSyncOutcome = lock.withLock {
         val token = settings.sessionToken
@@ -289,6 +484,13 @@ class KudSync(
 
         // --- words ---
         val typed = learned.read()
+        // an install from before sources were kept pulls everything once more to learn them
+        val fullPull = initial || !start.sourcesKnown
+
+        // the old SwiftKey dictionary into the import queue, and the queue to the server: the pull below brings
+        // the words back with their source, and then the file can go
+        val legacyLangs = maintainLocked()
+        if (!importPending(token)) return lastFail ?: KudSyncOutcome.Retry
 
         // removals made here go first, so the pull below already reflects them
         if (!postWords(token, store.tombstones.map { SyncWord(it.word, it.lang, 0, SyncWord.SOURCE_TYPED, true, iso(it.at)) })) {
@@ -296,13 +498,14 @@ class KudSync(
         }
 
         // pull: everything on the first sync, then what changed since the last pull
-        when (val r = client.getWords(token, if (initial) null else start.wordsSince)) {
+        when (val r = client.getWords(token, if (fullPull) null else start.wordsSince)) {
             is SyncResult.Ok -> {
-                val mirror = (if (initial) emptyMap() else store.mirror).mapValues { it.value.toMutableMap() }.toMutableMap()
+                val mirror = (if (fullPull) emptyMap() else store.mirror).mapValues { it.value.toMutableMap() }.toMutableMap()
+                val imported = (if (fullPull) emptyMap() else store.imported).mapValues { it.value.toMutableSet() }.toMutableMap()
                 val removed = store.removed.mapValues { it.value.toMutableMap() }.toMutableMap()
                 val changed = mutableSetOf<String>()
                 val forget = mutableMapOf<String, MutableSet<String>>() // removed elsewhere: out of the user history too
-                if (initial) changed += store.mirror.keys // drop what a previous account left
+                if (fullPull) changed += store.mirror.keys // drop what a previous account left, rebuild with sources
                 for (w in r.value.words) {
                     val lang = KudSyncLocales.lang(w.locale)
                     val words = mirror.getOrPut(lang) { mutableMapOf() }
@@ -318,11 +521,19 @@ class KudSync(
                         words[w.word] = maxOf(1, w.count)
                         removed[lang]?.remove(w.word)
                     }
-                    if (words[w.word] != before) changed += lang
+                    val importedHere = imported.getOrPut(lang) { mutableSetOf() }
+                    val wasImported = w.word in importedHere
+                    val isImported = !w.deleted && w.source == SyncWord.SOURCE_SWIFTKEY
+                    if (isImported) importedHere += w.word else importedHere -= w.word
+                    if (words[w.word] != before || isImported != wasImported) changed += lang
                 }
                 store.mirror = mirror
+                store.imported = imported.filterValues { it.isNotEmpty() }
                 store.removed = removed.filterValues { it.isNotEmpty() }
-                dicts.rebuild(changed, mirror)
+                // the SwiftKey file's words are on the server and in the mirror now (or were removed): it can go
+                val pendingLangs = store.pendingImport.filterValues { it.isNotEmpty() }.keys
+                if (legacyImport.delete(legacyLangs - pendingLangs)) changed += legacyLangs - pendingLangs
+                dicts.rebuild(changed, syncedWords(mirror))
                 forget.forEach { (lang, words) -> learned.remove(lang, words) }
                 store.update { it.copy(wordsSince = r.value.now.ifEmpty { null } ?: it.wordsSince) }
             }
@@ -344,7 +555,7 @@ class KudSync(
         }
         if (!postWords(token, rows)) return lastFail ?: KudSyncOutcome.Retry
 
-        store.update { it.copy(lastSyncAt = clock(), lastError = null, initialDone = true) }
+        store.update { it.copy(lastSyncAt = clock(), lastError = null, initialDone = true, sourcesKnown = true) }
         Log.i(TAG, "synced: ${rows.size} words sent") // counts only
         return KudSyncOutcome.Done
     }
@@ -419,6 +630,17 @@ class KudSync(
 
         /** For work a screen starts that must outlive it (a restore): main thread, never cancelled by a screen. */
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+        /**
+         * [maintain] in the background, for app start and a newly added dictionary. Not before the user unlocks the
+         * phone: the dictionaries and the sync state live in credential-encrypted storage.
+         */
+        @JvmStatic
+        fun maintainSoon(context: Context) {
+            val app = context.applicationContext
+            if (!androidx.core.os.UserManagerCompat.isUserUnlocked(app)) return
+            CoroutineScope(Dispatchers.IO).launch { KudSync(app).maintain() }
+        }
 
         /** For LatinIME (Java): [recordRemoved] with the default wiring. Blocking: call off the main thread. */
         @JvmStatic
