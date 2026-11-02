@@ -220,6 +220,15 @@ class KudApostropheInputTest {
         assertEquals("plim dont", text)
     }
 
+    @Test fun aQuickSpaceBeforeTheStripUpdatesStillFixes() {
+        // with Autocorrect off, space right after the last letter: the strip update is still pending
+        latinIME.prefs().edit { putBoolean(Settings.PREF_AUTO_CORRECTION, false) }
+        start()
+        ShadowKudFacilitator.typing = suggestionResults(emptyList())
+        type("plim dont ")
+        assertEquals("plim don't ", text)
+    }
+
     @Test fun notWithAutocorrectAndFixApostrophesOff() {
         latinIME.prefs().edit {
             putBoolean(Settings.PREF_AUTO_CORRECTION, false)

@@ -13,6 +13,7 @@ import com.kudcrafts.kudkeys.voice.SyncWord
 import com.kudcrafts.kudkeys.voice.VoiceSettings
 import helium314.keyboard.latin.dictionary.Dictionary
 import helium314.keyboard.latin.dictionary.DictionaryFactory
+import helium314.keyboard.latin.dictionary.ReadOnlyBinaryDictionary
 import helium314.keyboard.latin.makedict.DictIO
 import helium314.keyboard.latin.personalization.PersonalizationHelper
 import helium314.keyboard.latin.utils.DictionaryInfoUtils
@@ -97,6 +98,9 @@ interface KudLegacyImport {
 }
 
 class SwiftKeyDictFiles(private val context: Context) : KudLegacyImport {
+    /** The files [read] could read; [delete] only removes these, never one whose words weren't taken. */
+    private val readFiles = mutableSetOf<File>()
+
     private fun files() = KudSyncLocales.enabled().mapNotNull { locale ->
         DictionaryInfoUtils.getCacheDirectoryForLocale(locale, context)
             ?.let { File(it, FILE_NAME) }?.takeIf { it.isFile }?.let { KudSyncLocales.lang(locale) to it }
@@ -104,6 +108,7 @@ class SwiftKeyDictFiles(private val context: Context) : KudLegacyImport {
 
     override fun read(): Map<String, Set<String>> {
         val out = mutableMapOf<String, MutableSet<String>>()
+        synchronized(readFiles) { readFiles.clear() } // only what this read could take
         for ((lang, file) in files()) {
             val words = try {
                 DictIO.readBinaryDictionary(file.absolutePath).mapNotNull { p ->
@@ -114,13 +119,15 @@ class SwiftKeyDictFiles(private val context: Context) : KudLegacyImport {
                 continue
             }
             out.getOrPut(lang) { mutableSetOf() } += words
+            synchronized(readFiles) { readFiles += file }
         }
         return out
     }
 
     override fun delete(langs: Set<String>): Boolean {
         var any = false
-        for ((lang, file) in files()) if (lang in langs && file.delete()) any = true
+        val read = synchronized(readFiles) { readFiles.toSet() }
+        for ((lang, file) in files()) if (lang in langs && file in read && file.delete()) any = true
         return any
     }
 
@@ -247,7 +254,14 @@ class SyncedDictFiles(
         val main = dicts.firstOrNull { it.mDictType == Dictionary.TYPE_MAIN }
         dicts.filter { it !== main }.forEach { it.close() }
         if (main == null) Main(null, true) {} // no main dictionary: nothing to compare with
-        else Main({ main.getFrequency(it) }, true) { main.close() }
+        else Main({ word ->
+            val frequency = main.getFrequency(word)
+            // a word the main dictionary flags as possibly offensive is hidden there (Block offensive words), so it
+            // doesn't count as "already in main": the imported copy stays
+            if (frequency != KudMainWords.NOT_A_WORD
+                && (main as? ReadOnlyBinaryDictionary)?.getWordProperty(word, false)?.mIsPossiblyOffensive == true
+            ) KudMainWords.NOT_A_WORD else frequency
+        }, true) { main.close() }
     } catch (t: Throwable) { // also UnsatisfiedLinkError without the native dictionary code
         Log.w(TAG, "couldn't open the main dictionary: ${t.javaClass.simpleName}")
         Main(null, false) {}

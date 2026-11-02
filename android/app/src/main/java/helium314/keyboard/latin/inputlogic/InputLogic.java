@@ -1199,7 +1199,11 @@ public final class InputLogic {
         }
         // isComposingWord() may have changed since we stored wasComposing
         if (mWordComposer.isComposingWord()) {
-            if ((settingsValues.mAutoCorrectEnabled || isKudApostropheFix(settingsValues)) && ! isInlineEmojiSearchAction()) {
+            // Kud Keys: a possible apostrophe fix goes through commitCurrentAutoCorrection, which first applies a
+            // pending suggestion update (the stored correction is cleared on every keypress) and then checks again
+            if ((settingsValues.mAutoCorrectEnabled || (settingsValues.mKudFixApostrophes
+                    && helium314.keyboard.kudkeys.KudApostrophes.fixFor(mWordComposer.getTypedWord()) != null))
+                    && ! isInlineEmojiSearchAction()) {
                 final String separator = shouldAvoidSendingCode ? LastComposedWord.NOT_A_SEPARATOR
                         : StringUtils.newSingleCodePointString(codePoint);
                 commitCurrentAutoCorrection(settingsValues, separator, handler);
@@ -2496,7 +2500,13 @@ public final class InputLogic {
         final SuggestedWordInfo autoCorrectionOrNull = settingsValues.mAutoCorrectEnabled || mWordComposer.isBatchMode()
                 || isKudApostropheFix(settingsValues) ? mWordComposer.getAutoCorrectionOrNull() : null;
         final String typedWord = mWordComposer.getTypedWord();
-        final String stringToCommit = (autoCorrectionOrNull != null) ? autoCorrectionOrNull.mWord : typedWord;
+        String stringToCommit = (autoCorrectionOrNull != null) ? autoCorrectionOrNull.mWord : typedWord;
+        if (autoCorrectionOrNull == null && !settingsValues.mAutoCorrectEnabled && typedWord != null) {
+            // Kud Keys: no correction computed (yet), e.g. space right after the last letter: an apostrophe fix
+            // doesn't depend on the suggestions, so how fast space is pressed never changes what gets committed
+            final String fix = kudApostropheFixNow(settingsValues);
+            if (fix != null) stringToCommit = fix;
+        }
         if (stringToCommit != null) {
             final boolean isBatchMode = mWordComposer.isBatchMode();
             commitChosenWord(settingsValues, stringToCommit, LastComposedWord.COMMIT_TYPE_DECIDED_WORD, separator);
@@ -2960,6 +2970,15 @@ public final class InputLogic {
         if (!settingsValues.mKudFixApostrophes) return false;
         final SuggestedWordInfo correction = mWordComposer.getAutoCorrectionOrNull();
         return correction != null && helium314.keyboard.kudkeys.KudApostrophes.isFix(mWordComposer.getTypedWord(), correction.mWord);
+    }
+
+
+    /** Kud Keys: the apostrophe fix for the word being typed, under the conditions Suggest applies; null if none. */
+    private String kudApostropheFixNow(final SettingsValues settingsValues) {
+        if (!settingsValues.mKudFixApostrophes || mWordComposer.isResumed() || mWordComposer.isBatchMode()
+                || !settingsValues.mInputAttributes.mIsKudEverydayText
+                || !mDictionaryFacilitator.hasLanguage(java.util.Locale.ENGLISH.getLanguage())) return null;
+        return helium314.keyboard.kudkeys.KudApostrophes.fixFor(mWordComposer.getTypedWord());
     }
 
 }
