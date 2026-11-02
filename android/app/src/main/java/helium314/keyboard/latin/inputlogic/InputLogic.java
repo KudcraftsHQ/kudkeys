@@ -97,6 +97,10 @@ public final class InputLogic {
     private int mSpaceState;
     // Never null
     public SuggestedWords mSuggestedWords = SuggestedWords.getEmptyInstance();
+    // Kud Keys: the last word committed as typed while unknown, and the correction autocorrect would have made.
+    // The correction is the context for the next prediction; the typo is never learned as part of a word pair.
+    @Nullable private String mTypoForContext;
+    @Nullable private String mTypoCorrectionForContext;
     public Suggest mSuggest; // non-final for active gesture data gathering, revert when data gathering phase is done (end of 2026 latest)
     public DictionaryFacilitator mDictionaryFacilitator; // non-final for active gesture data gathering, revert when data gathering phase is done (end of 2026 latest)
     private SingleDictionaryFacilitator mEmojiDictionaryFacilitator;
@@ -163,6 +167,8 @@ public final class InputLogic {
     public void startInput(final String combiningSpec, final SettingsValues settingsValues) {
         mEnteredText = null;
         mWordBeingCorrectedByCursor = null;
+        mTypoForContext = null;
+        mTypoCorrectionForContext = null;
         mConnection.onStartInput();
         if (!mWordComposer.getTypedWord().isEmpty()) {
             // For messaging apps that offer send button, the IME does not get the opportunity
@@ -1563,6 +1569,7 @@ public final class InputLogic {
         NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(settingsValues.mSpacingAndPunctuations, 2);
         long timeStampInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
         mDictionaryFacilitator.unlearnFromUserHistory(word, ngramContext, timeStampInSeconds, event);
+        mSuggest.clearNextWordSuggestionsCache();
     }
 
     /**
@@ -1790,6 +1797,8 @@ public final class InputLogic {
         final int timeStampInSeconds = (int)TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
         mDictionaryFacilitator.addToUserHistory(word, wasAutoCapitalized, ngramContext,
                 timeStampInSeconds, settingsValues.mBlockPotentiallyOffensive);
+        // Kud Keys: predictions are cached per context; what was just learned must show up next time
+        mSuggest.clearNextWordSuggestionsCache();
     }
 
     private void addToHistoryIfEmoji(final String text, final SettingsValues settingsValues) {
@@ -2532,8 +2541,19 @@ public final class InputLogic {
         // When we are composing word, get n-gram context from the 2nd previous word because the
         // 1st previous word is the word to be committed. Otherwise get n-gram context from the 1st
         // previous word.
-        final NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(
+        final NgramContext textNgramContext = mConnection.getNgramContextFromNthPreviousWord(
                 settingsValues.mSpacingAndPunctuations, mWordComposer.isComposingWord() ? 2 : 1);
+        // Kud Keys: an unknown word kept as typed (autocorrect off) whose correction would have been confident.
+        final String contextCorrection = (commitType == LastComposedWord.COMMIT_TYPE_USER_TYPED_WORD
+                    || commitType == LastComposedWord.COMMIT_TYPE_DECIDED_WORD)
+                && mWordComposer.isComposingWord() && chosenWord.equals(mWordComposer.getTypedWord())
+                && mSuggestedWords.mTypedWordInfo != null && chosenWord.equals(mSuggestedWords.mTypedWordInfo.mWord)
+                ? mSuggestedWords.mKudContextCorrection : null;
+        // Never learn a typo as part of a word pair, neither "previous typo" nor "typo next": learn the word alone.
+        final NgramContext ngramContext = contextCorrection != null || isTypoInContext(textNgramContext)
+                ? NgramContext.EMPTY_PREV_WORDS_INFO : textNgramContext;
+        mTypoForContext = contextCorrection != null ? chosenWord : null;
+        mTypoCorrectionForContext = contextCorrection;
         if (DebugFlags.DEBUG_ENABLED) {
             long runTimeMillis = SystemClock.elapsedRealtime() - startTimeMillis;
             Log.d(TAG, "commitChosenWord() : " + runTimeMillis + " ms to run "
@@ -2619,6 +2639,20 @@ public final class InputLogic {
         return true;
     }
 
+    /** Kud Keys: the context with the last typo kept as typed replaced by its confident correction (text unchanged). */
+    @NonNull
+    public NgramContext withTypoCorrected(@NonNull final NgramContext ngramContext) {
+        final String typo = mTypoForContext;
+        final String correction = mTypoCorrectionForContext;
+        if (typo == null || correction == null) return ngramContext;
+        return ngramContext.withWordReplaced(typo, correction);
+    }
+
+    private boolean isTypoInContext(@NonNull final NgramContext ngramContext) {
+        final String typo = mTypoForContext;
+        return typo != null && ngramContext.containsWord(typo);
+    }
+
     // we used to provide keyboard, settingsValues and keyboardShiftMode, but every time read it from current instance anyway
     void getSuggestedWords(final int inputStyle, final int sequenceNumber, final OnGetSuggestedWordsCallback callback) {
         final Keyboard keyboard = KeyboardSwitcher.getInstance().getKeyboard();
@@ -2636,12 +2670,12 @@ public final class InputLogic {
                 getActualCapsMode(settingsValues, KeyboardSwitcher.getInstance().getKeyboardCapsMode()));
         try {
             SuggestedWords suggestedWords = mSuggest.getSuggestedWords(mWordComposer.copy(),
-                    getNgramContextFromNthPreviousWordForSuggestion(
+                    withTypoCorrected(getNgramContextFromNthPreviousWordForSuggestion(
                     settingsValues.mSpacingAndPunctuations,
                     // Get the word on which we should search the bigrams. If we are composing
                     // a word, it's whatever is *before* the half-committed word in the buffer,
                     // hence 2; if we aren't, we should just skip whitespace if any, so 1.
-                    mWordComposer.isComposingWord() ? 2 : 1),
+                    mWordComposer.isComposingWord() ? 2 : 1)),
                     keyboard,
                     settingsValues.mSettingsValuesForSuggestion,
                     settingsValues.mAutoCorrectEnabled,

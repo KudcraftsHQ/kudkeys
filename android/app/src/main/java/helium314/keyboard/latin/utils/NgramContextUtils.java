@@ -90,13 +90,26 @@ public final class NgramContextUtils {
                 prevWordsInfo[i] = WordInfo.BEGINNING_OF_SENTENCE_WORD_INFO;
                 break;
             }
-            // If ends in a word separator or connector, the context is unclear.
+            // Kud Keys: a word followed by a comma (or another mid-sentence separator, "ok," "jadi;") keeps its
+            // context, so "terima kasih, " still predicts from "kasih". Sentence terminators were handled above.
+            String word = focusedWord;
+            if (spacingAndPunctuations.isWordSeparator(lastChar)) {
+                int end = word.length();
+                while (end > 0 && spacingAndPunctuations.isWordSeparator(word.charAt(end - 1))
+                        && !spacingAndPunctuations.isSentenceTerminator(word.charAt(end - 1))) {
+                    end--;
+                }
+                word = word.substring(0, end);
+                if (word.isEmpty() || !Character.isLetterOrDigit(word.charAt(word.length() - 1))) {
+                    break; // only punctuation, or something like "ok)," : the context is unclear
+                }
+            }
+            // If ends in a word connector, the context is unclear.
             // TODO: Return meaningful context for this case.
-            if (spacingAndPunctuations.isWordSeparator(lastChar)
-                    || spacingAndPunctuations.isWordConnector(lastChar)) {
+            if (spacingAndPunctuations.isWordConnector(word.charAt(word.length() - 1))) {
                 break;
             }
-            prevWordsInfo[i] = new WordInfo(focusedWord);
+            prevWordsInfo[i] = new WordInfo(word);
         }
         return new NgramContext(prevWordsInfo);
     }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.kudkeys
 
+import helium314.keyboard.latin.Suggest
 import helium314.keyboard.latin.SuggestedWords
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
 
@@ -54,7 +55,8 @@ object KudSettings {
         if (!suggestedWords.isPrediction || suggestedWords.isEmpty) return null
         // predictions have no typed word, so the best one (index 0) is the one in the middle of the strip
         val best = suggestedWords.getInfo(0)
-        return best.takeIf { it.mWord.isNotBlank() && !it.isEmoji() }
+        // a filler (history top word, starter word) is not a prediction for this context, so space stays a space
+        return best.takeIf { it.mWord.isNotBlank() && !it.isEmoji() && it.mSourceDict !== Suggest.DICTIONARY_FALLBACK }
     }
 
     /** Whether the enter key keeps its long-press emoji. */

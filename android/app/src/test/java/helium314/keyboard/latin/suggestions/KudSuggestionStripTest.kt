@@ -14,6 +14,7 @@ import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.SuggestedWords
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
+import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.dictionary.Dictionary
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
@@ -28,6 +29,8 @@ import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
@@ -69,6 +72,17 @@ class KudSuggestionStripTest {
         assertContentEquals(intArrayOf(0, 1, 3), SuggestionStripLayoutHelper.getSlotIndices(listOf("hullo", "hello", "hullo", "hall"), true))
     }
 
+    @Test fun aWordInAnotherCaseNeverTakesASecondSlot() {
+        // "ma" never shows "MA" beside it, and "Mau" doesn't repeat "mau"
+        assertContentEquals(intArrayOf(0, 2, 4), SuggestionStripLayoutHelper.getSlotIndices(listOf("ma", "MA", "mau", "Mau", "man"), true))
+        assertContentEquals(intArrayOf(2, 0, -1), SuggestionStripLayoutHelper.getSlotIndices(listOf("zorbo", "Zorbo", "vorn"), false))
+    }
+
+    @Test fun theTypedWordsCapitalisedFormIsStillOffered() {
+        // a name typed in lowercase: the capitalised form is the fix, not a duplicate
+        assertContentEquals(intArrayOf(0, 1, 2), SuggestionStripLayoutHelper.getSlotIndices(listOf("kelvara", "Kelvara", "kelvin"), true))
+    }
+
     @Test fun missingSuggestionsLeaveEmptySlots() {
         assertContentEquals(intArrayOf(0, -1, -1), SuggestionStripLayoutHelper.getSlotIndices(listOf("Sjdh"), true))
         assertContentEquals(intArrayOf(-1, 0, -1), SuggestionStripLayoutHelper.getSlotIndices(listOf("aku"), false))
@@ -77,13 +91,15 @@ class KudSuggestionStripTest {
 
     // ---- the real strip ----
 
-    private fun typing(typed: String, vararg suggestions: String): SuggestedWords {
+    private fun typing(typed: String, vararg suggestions: String): SuggestedWords = typing(typed, false, false, *suggestions)
+
+    private fun typing(typed: String, typedValid: Boolean, willAutoCorrect: Boolean, vararg suggestions: String): SuggestedWords {
         val typedInfo = SuggestedWordInfo(typed, "", SuggestedWordInfo.MAX_SCORE, SuggestedWordInfo.KIND_TYPED,
             Dictionary.DICTIONARY_USER_TYPED, 0, 0)
         val infos = ArrayList(listOf(typedInfo) + suggestions.mapIndexed { i, w ->
             SuggestedWordInfo(w, "", 100 - i, SuggestedWordInfo.KIND_CORRECTION, Dictionary.DICTIONARY_USER_TYPED, 0, 0)
         })
-        return SuggestedWords(infos, null, typedInfo, false, false, false, SuggestedWords.INPUT_STYLE_TYPING, 0)
+        return SuggestedWords(infos, null, typedInfo, typedValid, willAutoCorrect, false, SuggestedWords.INPUT_STYLE_TYPING, 0)
     }
 
     private fun predictions(vararg words: String): SuggestedWords {
@@ -168,6 +184,39 @@ class KudSuggestionStripTest {
         assertTrue(centre.text.endsWith("…"), "ellipsized: ${centre.text}")
         assertEquals(3, slots.size)
         screenshot("4-very-long-suggestion")
+    }
+
+    private fun isBold(text: CharSequence) = text is android.text.Spanned &&
+        text.getSpans(0, text.length, android.text.style.StyleSpan::class.java).any { it.style == android.graphics.Typeface.BOLD }
+
+    @Test fun theBestGuessIsHighlightedAndTheTypedWordIsNotBold() {
+        val colors = Settings.getValues().mColors
+        val full = colors.get(ColorType.SUGGESTION_AUTO_CORRECT)
+        val muted = colors.get(ColorType.SUGGESTED_WORD)
+        assertNotEquals(full, muted, "the theme must tell them apart")
+
+        val slots = show(typing("plimo", true, false, "plimko", "plimp"))
+        assertEquals(listOf("plimo", "plimko", "plimp"), slots.map { it.text.toString() })
+        assertFalse(isBold(slots[0].text), "a valid typed word is no longer bold")
+        assertEquals(full, slots[1].currentTextColor, "the best guess has the full text colour")
+        assertEquals(SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT, slots[1].typeface.weight)
+        assertEquals(muted, slots[2].currentTextColor, "the side slots stay muted")
+        assertTrue(slots[2].typeface.weight < SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT)
+        assertTrue(slots[0].typeface.weight < SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT)
+        screenshot("5-best-guess-typing")
+
+        val predicted = show(predictions("vorn", "tesk", "mipo"))
+        assertEquals("vorn", predicted[1].text.toString())
+        assertEquals(full, predicted[1].currentTextColor)
+        assertEquals(muted, predicted[0].currentTextColor)
+        assertEquals(SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT, predicted[1].typeface.weight)
+        screenshot("6-best-guess-predictions")
+    }
+
+    @Test fun withAutocorrectOnTheCorrectionKeepsItsOwnStyle() {
+        val slots = show(typing("plimp", false, true, "plimo", "plimko"))
+        assertEquals(Settings.getValues().mColors.get(ColorType.SUGGESTION_AUTO_CORRECT), slots[1].currentTextColor)
+        assertTrue(slots[1].typeface.weight < SuggestionStripLayoutHelper.BEST_GUESS_WEIGHT, "bold span instead of medium")
     }
 
     @Test fun oneSuggestionKeepsThreeSlots() {

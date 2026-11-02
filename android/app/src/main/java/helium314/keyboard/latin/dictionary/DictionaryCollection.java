@@ -69,6 +69,21 @@ public final class DictionaryCollection extends Dictionary {
         return false;
     }
 
+    /** Kud Keys: whether a dictionary of {@code dictType} in this collection has the word, ignoring the others (add-ons). */
+    public boolean isValidWordInDictsOfType(final String word, final String dictType) {
+        for (final Dictionary dictionary : mDictionaries)
+            if (dictType.equals(dictionary.mDictType) && dictionary.isValidWord(word)) return true;
+        return false;
+    }
+
+    /** Kud Keys: {@link #getFrequency} over dictionaries of {@code dictType} only (the main dictionary, not add-ons). */
+    public int getFrequencyInDictsOfType(final String word, final String dictType) {
+        int maxFreq = -1;
+        for (final Dictionary dictionary : mDictionaries)
+            if (dictType.equals(dictionary.mDictType)) maxFreq = Math.max(maxFreq, dictionary.getFrequency(word));
+        return maxFreq;
+    }
+
     @Override
     public int getFrequency(final String word) {
         int maxFreq = -1;
