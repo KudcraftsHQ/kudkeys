@@ -145,6 +145,30 @@ class KudPredictionInputTest {
         assertEquals("tesk", ngramAfterText().getNthPrevWord(1).toString())
     }
 
+    @Test fun aTypoStaysOutOfLongerNgramsUntilItLeavesTheWindow() {
+        start()
+        type("plim zorbp")
+        offerContextCorrection("zorbp", "zorbo")
+        type(" vorn tesk mipo lark ")
+        val learned = ShadowKudFacilitator.learned.associate { it.first to it.second }
+        assertEquals(NgramContext.EMPTY_PREV_WORDS_INFO, learned["vorn"], "right after the typo: alone")
+        // cut off at the typo, never "zorbp vorn tesk"
+        assertEquals(NgramContext(WordInfo("vorn")), learned["tesk"])
+        assertEquals(NgramContext(WordInfo("tesk"), WordInfo("vorn")), learned["mipo"])
+        // out of the 3-word window: the full context again
+        assertEquals(NgramContext(WordInfo("mipo"), WordInfo("tesk"), WordInfo("vorn")), learned["lark"])
+    }
+
+    @Test fun predictionsUseTheCorrectionWhileTheTypoIsInTheWindow() {
+        start()
+        type("plim zorbp")
+        offerContextCorrection("zorbp", "zorbo")
+        type(" vorn ")
+        assertEquals(NgramContext(WordInfo("vorn"), WordInfo("zorbo"), WordInfo("plim")), ngramAfterText())
+        type("tesk ")
+        assertEquals(NgramContext(WordInfo("tesk"), WordInfo("vorn"), WordInfo("zorbo")), ngramAfterText())
+    }
+
     @Test fun aKnownWordKeepsItsContext() {
         start()
         type("plim vorn ")

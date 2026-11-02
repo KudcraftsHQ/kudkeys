@@ -1032,7 +1032,7 @@ public class LatinIME extends InputMethodService implements
             // Kud Keys: an empty field gets sentence-start predictions instead of a blank strip
             // (a clipboard suggestion still wins, see InputLogic.performUpdateSuggestionStripSync)
             if (currentSettingsValues.needsToLookupSuggestions() && currentSettingsValues.mBigramPredictionEnabled
-                    && isFieldEmptyBeforeCursor()) { // startInput already reset any composing word
+                    && currentSettingsValues.mInputAttributes.mIsKudEverydayText && isFieldEmptyBeforeCursor()) { // startInput already reset any composing word
                 mHandler.postUpdateSuggestionStrip(SuggestedWords.INPUT_STYLE_TYPING);
             }
         }

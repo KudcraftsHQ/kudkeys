@@ -121,19 +121,35 @@ public class NgramContext {
         return false;
     }
 
+    /** Kud Keys: whether {@code word} is one of the previous words. */
+    public boolean containsWord(@NonNull final String word) {
+        return indexOfWord(word) >= 0;
+    }
+
+    /** Kud Keys: the position of {@code word} among the previous words (0 = the word right before), or -1. */
+    public int indexOfWord(@NonNull final String word) {
+        for (int i = 0; i < mPrevWordsCount; i++) {
+            final WordInfo info = mPrevWordsInfo[i];
+            if (info != null && !info.mIsBeginningOfSentence && TextUtils.equals(info.mWord, word)) return i;
+        }
+        return -1;
+    }
+
+    /**
+     * Kud Keys: only the previous words closer than position {@code count} (the words before it are dropped), or
+     * {@link #EMPTY_PREV_WORDS_INFO} when {@code count} is 0.
+     */
+    @NonNull
+    public NgramContext withFirstWords(final int count) {
+        if (count >= mPrevWordsCount) return this;
+        if (count <= 0) return EMPTY_PREV_WORDS_INFO;
+        return new NgramContext(mMaxPrevWordCount, Arrays.copyOf(mPrevWordsInfo, count));
+    }
+
     /**
      * Kud Keys: this context with every previous word equal to {@code from} replaced by {@code to}, or this context
      * when there is none.
      */
-    /** Kud Keys: whether {@code word} is one of the previous words. */
-    public boolean containsWord(@NonNull final String word) {
-        for (int i = 0; i < mPrevWordsCount; i++) {
-            final WordInfo info = mPrevWordsInfo[i];
-            if (info != null && !info.mIsBeginningOfSentence && TextUtils.equals(info.mWord, word)) return true;
-        }
-        return false;
-    }
-
     @NonNull
     public NgramContext withWordReplaced(@NonNull final String from, @NonNull final String to) {
         WordInfo[] replaced = null;

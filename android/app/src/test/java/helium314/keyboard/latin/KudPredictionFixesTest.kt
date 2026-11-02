@@ -225,6 +225,47 @@ class KudPredictionFixesTest {
         assertEquals(false, ShadowKudFacilitator.lastIncludeHistory, "incognito shows starter words only")
     }
 
+    @Test fun aLowercasedSuggestionRemembersItsStoredForm() {
+        // so removing "aku" from the strip also removes the "Aku" it came from (see KudSuggestionStripTest)
+        ShadowKudFacilitator.valid = setOf("zorbo")
+        ShadowKudFacilitator.typing = suggestionResults(listOf(suggestion("Zorbo", 900_000)))
+        val info = get("zor", midSentence).mSuggestedWordInfoList.first { it.mWord == "zorbo" }
+        assertEquals("Zorbo", info.mKudStoredWord)
+        ShadowKudFacilitator.typing = suggestionResults(listOf(suggestion("zorbo", 900_000)))
+        assertNull(get("zor", midSentence).mSuggestedWordInfoList.first { it.mWord == "zorbo" }.mKudStoredWord)
+    }
+
+    @Test fun aNameIsNotLoweredBecauseAnAddOnHasItInLowercase() {
+        // "Flimbor" from history, "flimbor" only in the SwiftKey import: still a name
+        ShadowKudFacilitator.valid = setOf("Flimbor", "flimbor")
+        ShadowKudFacilitator.addOnOnly = setOf("flimbor")
+        ShadowKudFacilitator.typing = suggestionResults(listOf(suggestion("Flimbor", 900_000)))
+        assertEquals(listOf("flim", "Flimbor"), words(get("flim", midSentence)))
+    }
+
+    @Test fun noFillersInURLEmailSearchOrPasswordFields() {
+        ShadowKudFacilitator.fallback = listOf("zarn", "vorn", "tesk")
+        fun field(inputType: Int, imeOptions: Int = 0) {
+            Settings.getInstance().loadSettings(latinIME, Locale.ENGLISH, InputAttributes(android.view.inputmethod.EditorInfo().also {
+                it.inputType = inputType; it.imeOptions = imeOptions; it.packageName = "com.example"
+            }, false, latinIME.packageName))
+            suggest.clearNextWordSuggestionsCache()
+        }
+        val text = android.text.InputType.TYPE_CLASS_TEXT
+        field(text)
+        assertEquals(listOf("zarn", "vorn", "tesk"), words(get("", midSentence)), "a chat field gets fillers")
+        for (variation in listOf(android.text.InputType.TYPE_TEXT_VARIATION_URI, android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+                android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS, android.text.InputType.TYPE_TEXT_VARIATION_FILTER)) {
+            field(text or variation)
+            assertEquals(emptyList(), words(get("", midSentence)), "variation $variation")
+        }
+        field(text, android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH)
+        assertEquals(emptyList(), words(get("", midSentence)), "a search field")
+        // an incognito chat field still gets the starter words
+        field(text, android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING)
+        assertEquals(listOf("zarn", "vorn", "tesk"), words(get("", midSentence)))
+    }
+
     @Test fun onATieLowercaseComesFirst() {
         val results = suggestionResults(listOf(suggestion("Zorbo", 100), suggestion("zorbo", 100), suggestion("Vorn", 100), suggestion("aaaaa", 100)))
         assertEquals(listOf("Vorn", "aaaaa", "zorbo", "Zorbo"), results.map { it.mWord }) // shorter first, as before
@@ -300,6 +341,9 @@ class ShadowKudFacilitator {
         var valid = emptySet<String>()
         var fallback = emptyList<String>()
         var prefersCapitalized = emptySet<String>()
+        /** Valid only through an add-on (a SwiftKey import): not a word for [isValidWordWithoutAddOns]. */
+        var addOnOnly = emptySet<String>()
+        val removed = mutableListOf<String>()
         var lastIncludeHistory: Boolean? = null
         val learned = mutableListOf<Pair<String, NgramContext>>()
 
@@ -309,6 +353,8 @@ class ShadowKudFacilitator {
             valid = emptySet()
             fallback = emptyList()
             prefersCapitalized = emptySet()
+            addOnOnly = emptySet()
+            removed.clear()
             lastIncludeHistory = null
             learned.clear()
         }
@@ -318,6 +364,8 @@ class ShadowKudFacilitator {
     @Implementation fun getMainLocale(): Locale = Locale.ENGLISH
     @Implementation fun hasAtLeastOneInitializedMainDictionary() = true
     @Implementation fun isValidSpellingWord(word: String) = word in valid
+    @Implementation fun isValidWordWithoutAddOns(word: String) = word in valid && word !in addOnOnly
+    @Implementation fun removeWord(word: String) { removed += word }
     @Implementation fun getFallbackPredictions(includeHistory: Boolean): List<String> {
         lastIncludeHistory = includeHistory
         return fallback

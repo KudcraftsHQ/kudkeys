@@ -404,19 +404,26 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun removeSuggestion(wordView: TextView) {
         val word = wordView.text.toString()
         listener.removeSuggestion(word)
+        // Kud Keys: shown in another case than stored ("Aku" shown as "aku"): the stored form goes too, or it comes
+        // straight back. Only that one form, never every case of the word (that would blacklist names like "Mark").
+        val stored = (wordView.tag as? Int)?.takeIf { it < suggestedWords.size() }?.let { suggestedWords.getInfo(it) }
+            ?.takeIf { it.word == word }?.mKudStoredWord?.takeIf { it != word }
+        if (stored != null) listener.removeSuggestion(stored)
         moreSuggestionsView.dismissPopupKeysPanel()
         // show suggestions, but without the removed word
         val suggestedWordInfos = ArrayList<SuggestedWordInfo>()
         for (i in 0..<suggestedWords.size()) {
             val info = suggestedWords.getInfo(i)
-            if (info.word != word) suggestedWordInfos.add(info)
+            if (info.word != word && info.word != stored) suggestedWordInfos.add(info)
         }
         suggestedWords.mRawSuggestions?.removeFirst { it.word == word }
+        if (stored != null) suggestedWords.mRawSuggestions?.removeFirst { it.word == stored }
 
         val newSuggestedWords = SuggestedWords(
             suggestedWordInfos, suggestedWords.mRawSuggestions, suggestedWords.typedWordInfo, suggestedWords.mTypedWordValid,
             suggestedWords.mWillAutoCorrect, suggestedWords.mIsObsoleteSuggestions, suggestedWords.mInputStyle, suggestedWords.mSequenceNumber
         )
+        newSuggestedWords.mKudContextCorrection = suggestedWords.mKudContextCorrection
         setSuggestions(newSuggestedWords, direction != 1)
         updateMiddle()
     }

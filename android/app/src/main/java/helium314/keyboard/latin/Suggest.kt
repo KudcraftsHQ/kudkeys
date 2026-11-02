@@ -182,7 +182,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
     /**
      * Kud Keys: while not shifted and not at a sentence start, "Xxxx" becomes "xxxx" when "xxxx" is a word in any
-     * active dictionary (the score stays). A word that only exists capitalised (a name, a city) keeps its capital,
+     * active dictionary other than an add-on (the score stays). A word that only exists capitalised (a name, a city) keeps its capital,
      * and so does one the main dictionary uses more often capitalised ("God", "English"), or one from contacts.
      * Single letters and "I'm"-style words are left alone ("I" stays "I").
      */
@@ -192,16 +192,20 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             if (info.isKindOf(SuggestedWordInfo.KIND_SHORTCUT) || info.isKindOf(SuggestedWordInfo.KIND_WHITELIST)) continue
             if (info.mSourceDict.mDictType == Dictionary.TYPE_CONTACTS) continue
             val lower = lowercasedFormOrNull(info.mWord, info.mSourceDict.mLocale ?: mDictionaryFacilitator.mainLocale) ?: continue
-            if (!mDictionaryFacilitator.isValidSpellingWord(lower)) continue
+            // judged without the add-ons: "flimbor" in a SwiftKey import doesn't lowercase the name "Flimbor"
+            if (!mDictionaryFacilitator.isValidWordWithoutAddOns(lower)) continue
             if (mDictionaryFacilitator.mainDictPrefersCapitalized(info.mWord, lower)) continue
             suggestions[i] = SuggestedWordInfo(lower, info.mPrevWordsContext, info.mScore, info.mKindAndFlags,
                 info.mSourceDict, info.mIndexOfTouchPointOfSecondWord, info.mAutoCommitFirstWordConfidence)
+                .also { it.mKudStoredWord = info.mKudStoredWord ?: info.mWord }
         }
     }
 
     /** Kud Keys: fills up to three predictions from the most used history words, then a short per-language list. */
     private fun addFallbackPredictions(suggestions: ArrayList<SuggestedWordInfo>) {
         if (suggestions.size >= FALLBACK_PREDICTION_TARGET) return
+        // no "aku ya udah" in a URL bar, an email address, a search or a password field
+        if (!Settings.getValues().mInputAttributes.mIsKudEverydayText) return
         val seen = suggestions.mapTo(HashSet()) { it.mWord.lowercase(Locale.ROOT) }
         // incognito and no-learning fields never show the user's own most used words
         for (word in mDictionaryFacilitator.getFallbackPredictions(!Settings.getValues().mIncognitoModeEnabled)) {

@@ -268,6 +268,12 @@ public class SuggestedWords {
         public static final int KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION = 0x10000000;
 
         public final String mWord;
+        /**
+         * Kud Keys: the form the word is stored in when it is shown in another case ("Aku" shown as "aku" mid-sentence,
+         * see {@code Suggest.lowercaseMidSentenceCapitals}), so removing it from the strip removes the stored one too.
+         * Null when shown as stored.
+         */
+        @Nullable public String mKudStoredWord;
         public final String mPrevWordsContext;
         // The completion info from the application. Null for suggestions that don't come from
         // the application (including keyboard-computed ones, so this is almost always null)

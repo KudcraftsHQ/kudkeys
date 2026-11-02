@@ -596,6 +596,8 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
             cap != Dictionary.NOT_A_PROBABILITY && cap > freq(lowercase)
         }
 
+    override fun isValidWordWithoutAddOns(word: String): Boolean = dictionaryGroups.any { isValidWordWithoutAddOns(word, it) }
+
     // this is unused, so leave it for now (redirecting to isValidWord seems to defeat the purpose...)
     override fun isValidSuggestionWord(word: String): Boolean {
         return isValidWord(word, DictionaryFacilitator.ALL_DICTIONARY_TYPES, dictionaryGroups[0])
@@ -661,7 +663,11 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
     override fun removeWord(word: String) {
         for (dictionaryGroup in dictionaryGroups) {
             dictionaryGroup.removeWord(word)
+            // Kud Keys: a starter word is in no dictionary, so removing it only sticks through the blacklist
+            if (word in KudStarterWords.forLocale(dictionaryGroup.locale)) dictionaryGroup.addToBlacklist(word)
         }
+        // Kud Keys: out of the fillers now, not at the next history scan (history removals aren't blacklisted)
+        frequentHistoryWords = frequentHistoryWords.mapValues { (_, words) -> words.filterNot { it == word } }
         frequentHistoryWordsStale = true
     }
 
