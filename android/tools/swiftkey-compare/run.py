@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cases import CASES, SPEED_SENTENCE  # noqa: E402
+from cases import ADDON_CASES, CASES, SPEED_SENTENCE  # noqa: E402
 
 OUT = os.path.abspath(os.environ.get("OUT", "compare-out"))
 APKS = os.environ.get("APKS", "apks")
@@ -520,10 +520,12 @@ def snapshot(kb, case_id, k, km, ime_pkg):
             "capture_s": round(time.time() - t0, 2)}
 
 
-def run_cases(kb, pos, km, ime_pkg):
+def run_cases(kb, pos, km, ime_pkg, only=None):
     res = []
     for cid, kind, dsl in CASES:
         if ONLY and cid not in ONLY.split(","):
+            continue
+        if only is not None and cid not in only:
             continue
         clear_field()
         snaps = []
@@ -579,6 +581,39 @@ def speed_run(kb, pos, km):
     return {"typing_s": round(typing_s, 2), "events": ev, "final": field_text()}
 
 
+def kud_addon_pass(pos, km):
+    """Fresh Kud Keys data + the synthetic add-on dict in the Indonesian dictionary dir, then the ADDON_CASES."""
+    src = os.path.join(APKS, "synthetic", "swiftkey_user.dict")
+    if not os.path.exists(src):
+        log("no synthetic dict; skipping add-on pass")
+        return None
+    sh(f"pm clear {KUD_PKG}")
+    select_ime(KUD_IME)
+    open_field()
+    clear_field()
+    tap(km["W"] // 2, 300)
+    time.sleep(3)
+    listing = sh(f"run-as {KUD_PKG} sh -c 'ls -la /data/user_de/0/{KUD_PKG}/files/dicts/ /data/user_de/0/{KUD_PKG}/files/dicts/*; ls -la files/dicts/ 2>&1'")
+    log("kud dict dirs before:", listing)
+    run(f"adb push {shlex.quote(src)} /data/local/tmp/swiftkey_user.dict")
+    sh("chmod 644 /data/local/tmp/swiftkey_user.dict")
+    dirs = sorted(set(re.findall(r"\b(id|in|in_ID|id_ID|id-ID)\b", listing))) or ["id"]
+    for base in (f"/data/user_de/0/{KUD_PKG}/files/dicts", f"/data/user/0/{KUD_PKG}/files/dicts"):
+        if "No such file" in sh(f"run-as {KUD_PKG} ls {base}"):
+            continue
+        for d in dirs:
+            sh(f"run-as {KUD_PKG} sh -c 'mkdir -p {base}/{d} && cp /data/local/tmp/swiftkey_user.dict {base}/{d}/swiftkey_user.dict'")
+        log("kud dict dir after:", base, sh(f"run-as {KUD_PKG} ls -laR {base}"))
+    sh(f"am force-stop {KUD_PKG}")
+    time.sleep(1)
+    select_ime(KUD_IME)
+    open_field()
+    clear_field()
+    tap(km["W"] // 2, 300)
+    time.sleep(3)
+    return {"cases": run_cases("kudkeys_addon", pos, km, KUD_PKG, only=ADDON_CASES)}
+
+
 def main():
     phase = sys.argv[1] if len(sys.argv) > 1 else "all"
     overrides = {}
@@ -631,6 +666,8 @@ def main():
                 kr["cases"] = run_cases(kb, pos, km, pkg)
                 kr["speed"] = speed_run(kb, pos, km)
             results[kb] = kr
+            if kb == "kudkeys" and phase in ("all", "cases"):
+                results["kudkeys_addon"] = kud_addon_pass(pos, km)
         except Exception as e:  # noqa
             import traceback
             log(kb, "FAILED", traceback.format_exc())

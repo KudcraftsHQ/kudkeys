@@ -38,6 +38,14 @@ jobs:
           cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/apks/kudkeys-debug.apk"
           cp tools/typetest/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/apks/typetest.apk"
 
+      - name: Synthetic SwiftKey-style add-on dictionary (common words only)
+        working-directory: android
+        env:
+          SYNTH_DICT_OUT: ${{ github.workspace }}/apks/synthetic/swiftkey_user.dict
+        run: |
+          ./gradlew --no-daemon :app:testDebugUnitTest --tests 'helium314.keyboard.kudkeys.KudCompareSyntheticDictTest'
+          ls -la "$SYNTH_DICT_OUT"
+
       - name: Download SwiftKey (never committed)
         run: |
           set -x
