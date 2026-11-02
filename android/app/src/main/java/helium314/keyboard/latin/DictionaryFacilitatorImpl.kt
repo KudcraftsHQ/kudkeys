@@ -587,6 +587,15 @@ class DictionaryFacilitatorImpl : DictionaryFacilitator {
         return result
     }
 
+    override fun mainDictPrefersCapitalized(capitalized: String, lowercase: String): Boolean =
+        dictionaryGroups.any { group ->
+            val main = group.getDict(Dictionary.TYPE_MAIN) ?: return@any false
+            fun freq(w: String) = if (main is DictionaryCollection) main.getFrequencyInDictsOfType(w, Dictionary.TYPE_MAIN)
+                else main.getFrequency(w)
+            val cap = freq(capitalized)
+            cap != Dictionary.NOT_A_PROBABILITY && cap > freq(lowercase)
+        }
+
     // this is unused, so leave it for now (redirecting to isValidWord seems to defeat the purpose...)
     override fun isValidSuggestionWord(word: String): Boolean {
         return isValidWord(word, DictionaryFacilitator.ALL_DICTIONARY_TYPES, dictionaryGroups[0])

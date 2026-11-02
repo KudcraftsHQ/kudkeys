@@ -168,6 +168,14 @@ class KudPredictionFixesTest {
         assertEquals(listOf("kelv", "Kelvara", "kelvin"), words(get("kelv", midSentence)))
     }
 
+    @Test fun aWordTheMainDictionaryPrefersCapitalisedKeepsItsCapital() {
+        // "God" vs "god": both are words, but the main dictionary uses the capitalised form more.
+        ShadowKudFacilitator.valid = setOf("Zarim", "zarim", "zarik")
+        ShadowKudFacilitator.prefersCapitalized = setOf("Zarim")
+        ShadowKudFacilitator.typing = suggestionResults(listOf(suggestion("Zarim", 900_000), suggestion("zarik", 800_000)))
+        assertEquals(listOf("zar", "Zarim", "zarik"), words(get("zar", midSentence)))
+    }
+
     @Test fun capitalsStayAtASentenceStartAndWhenShifted() {
         ShadowKudFacilitator.valid = setOf("zorbo")
         ShadowKudFacilitator.typing = suggestionResults(listOf(suggestion("Zorbo", 900_000)))
@@ -269,6 +277,7 @@ class ShadowKudFacilitator {
         var next = suggestionResults(emptyList())
         var valid = emptySet<String>()
         var fallback = emptyList<String>()
+        var prefersCapitalized = emptySet<String>()
         val learned = mutableListOf<Pair<String, NgramContext>>()
 
         fun reset() {
@@ -276,6 +285,7 @@ class ShadowKudFacilitator {
             next = suggestionResults(emptyList())
             valid = emptySet()
             fallback = emptyList()
+            prefersCapitalized = emptySet()
             learned.clear()
         }
     }
@@ -285,6 +295,7 @@ class ShadowKudFacilitator {
     @Implementation fun hasAtLeastOneInitializedMainDictionary() = true
     @Implementation fun isValidSpellingWord(word: String) = word in valid
     @Implementation fun getFallbackPredictions(): List<String> = fallback
+    @Implementation fun mainDictPrefersCapitalized(capitalized: String, lowercase: String) = capitalized in prefersCapitalized
     @Implementation
     fun getSuggestionResults(composedData: ComposedData, ngramContext: NgramContext, keyboard: Keyboard,
                              settingsValuesForSuggestion: SettingsValuesForSuggestion, sessionId: Int, inputStyle: Int

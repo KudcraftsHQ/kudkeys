@@ -141,6 +141,14 @@ public interface DictionaryFacilitator {
     boolean isValidSpellingWord(final String word);
 
     /**
+     * Kud Keys: whether a main dictionary (not its add-ons) uses {@code capitalized} more often than {@code lowercase},
+     * e.g. "God" over "god". Such words keep their capital mid-sentence.
+     */
+    default boolean mainDictPrefersCapitalized(final String capitalized, final String lowercase) {
+        return false;
+    }
+
+    /**
      * Kud Keys: words to fill a prediction strip that has fewer than three predictions, best first: the most used
      * words in user history for the active languages, then a short starter list per language. May be empty.
      */

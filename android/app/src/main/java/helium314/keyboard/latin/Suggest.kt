@@ -182,15 +182,18 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
     /**
      * Kud Keys: while not shifted and not at a sentence start, "Xxxx" becomes "xxxx" when "xxxx" is a word in any
-     * active dictionary (the score stays). A word that only exists capitalised (a name, a city) keeps its capital.
+     * active dictionary (the score stays). A word that only exists capitalised (a name, a city) keeps its capital,
+     * and so does one the main dictionary uses more often capitalised ("God", "English"), or one from contacts.
      * Single letters and "I'm"-style words are left alone ("I" stays "I").
      */
     private fun lowercaseMidSentenceCapitals(suggestions: ArrayList<SuggestedWordInfo>) {
         for (i in suggestions.indices) {
             val info = suggestions[i]
             if (info.isKindOf(SuggestedWordInfo.KIND_SHORTCUT) || info.isKindOf(SuggestedWordInfo.KIND_WHITELIST)) continue
+            if (info.mSourceDict.mDictType == Dictionary.TYPE_CONTACTS) continue
             val lower = lowercasedFormOrNull(info.mWord, info.mSourceDict.mLocale ?: mDictionaryFacilitator.mainLocale) ?: continue
             if (!mDictionaryFacilitator.isValidSpellingWord(lower)) continue
+            if (mDictionaryFacilitator.mainDictPrefersCapitalized(info.mWord, lower)) continue
             suggestions[i] = SuggestedWordInfo(lower, info.mPrevWordsContext, info.mScore, info.mKindAndFlags,
                 info.mSourceDict, info.mIndexOfTouchPointOfSecondWord, info.mAutoCommitFirstWordConfidence)
         }

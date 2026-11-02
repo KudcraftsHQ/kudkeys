@@ -76,6 +76,14 @@ public final class DictionaryCollection extends Dictionary {
         return false;
     }
 
+    /** Kud Keys: {@link #getFrequency} over dictionaries of {@code dictType} only (the main dictionary, not add-ons). */
+    public int getFrequencyInDictsOfType(final String word, final String dictType) {
+        int maxFreq = -1;
+        for (final Dictionary dictionary : mDictionaries)
+            if (dictType.equals(dictionary.mDictType)) maxFreq = Math.max(maxFreq, dictionary.getFrequency(word));
+        return maxFreq;
+    }
+
     @Override
     public int getFrequency(final String word) {
         int maxFreq = -1;
