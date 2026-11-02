@@ -148,6 +148,21 @@ def field_events():
     return ev
 
 
+def dismiss_dialogs():
+    """System 'isn't responding' dialogs (slow emulator boot) cover the keyboard: press Wait."""
+    for _ in range(3):
+        ns = nodes(dump())
+        if not any("isn't responding" in (n["text"] or "") for n in ns):
+            return
+        w = find(ns, r"^wait$")
+        log("ANR dialog:", [n["text"] for n in ns if "responding" in (n["text"] or "")])
+        if w:
+            tap_node(w)
+        else:
+            sh("input keyevent BACK")
+        time.sleep(1.5)
+
+
 def focused():
     return TT_PKG in sh("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'")
 
@@ -213,6 +228,7 @@ def select_ime(ime):
 
 def explore(tag, steps, accept, stop=None, max_steps=25):
     """Screenshot + dump each screen; tap the first match from `accept`. Returns the last node list."""
+    dismiss_dialogs()
     d = os.path.join(OUT, "setup")
     os.makedirs(d, exist_ok=True)
     ns = []
@@ -307,6 +323,17 @@ def setup_swiftkey(ime):
 
 # ---------- calibration ----------
 def calibrate(kb):
+    dismiss_dialogs()
+    km = calibrate_once(kb)
+    if "r1" not in km:
+        log(kb, "calibration found no row 1; retrying")
+        dismiss_dialogs()
+        open_field()
+        km = calibrate_once(kb)
+    return km
+
+
+def calibrate_once(kb):
     """Tap scans find the key rows and row-1 columns; returns the key map."""
     d = os.path.join(OUT, kb)
     os.makedirs(d, exist_ok=True)
@@ -409,13 +436,13 @@ def keymap(km, override):
     pos["."] = (left + km.get("period_f", 0.80) * kw * 10, km["r4"])
     pitch = km["r2"] - km["r1"]
     strip_bottom = int(km["r1"] - pitch * 0.5)
-    strip = km.get("strip_y", (km["top"] + strip_bottom) // 2)
+    strip = km.get("strip_y", strip_bottom - 55)
     slots = km.get("slots_f", (0.2, 0.5, 0.8))
     pos["<l>"] = (W * slots[0], strip)
     pos["<c>"] = (W * slots[1], strip)
     pos["<r>"] = (W * slots[2], strip)
     km["strip"] = strip
-    km["strip_box"] = km.get("strip_box", (0, km["top"], W, strip_bottom))
+    km["strip_box"] = km.get("strip_box", (0, strip - 75, W, strip_bottom))
     return pos, km
 
 
@@ -544,6 +571,8 @@ def main():
     sh("settings put system screen_off_timeout 1800000")
     sh("svc power stayon true")
     sh("input keyevent WAKEUP")
+    sh("settings put global hide_error_dialogs 1")
+    time.sleep(20)  # let the launcher and system settle after a cold boot
     install_all()
     results = {"device": {"size": sh("wm size").strip(), "density": sh("wm density").strip(),
                           "sdk": sh("getprop ro.build.version.sdk").strip()},
@@ -573,6 +602,7 @@ def main():
         try:
             select_ime(ime)
             open_field()
+            dismiss_dialogs()
             km = calibrate(kb)
             pos, km = keymap(km, overrides.get(kb))
             log(kb, "keymap", json.dumps({k: v for k, v in km.items() if k not in ("yscan",)}))
