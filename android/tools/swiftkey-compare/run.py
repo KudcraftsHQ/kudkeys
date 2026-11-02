@@ -260,7 +260,7 @@ def explore(tag, steps, accept, stop=None, max_steps=25):
     return ns
 
 
-ACCEPT = [r"^not now$", r"^skip$", r"^no,? thanks$", r"^maybe later$", r"^i agree$", r"^agree", r"^accept",
+ACCEPT = [r"^let.s set up", r"^not now$", r"^skip$", r"^no,? thanks$", r"^maybe later$", r"^i agree$", r"^agree", r"^accept",
           r"^continue$", r"^got it$", r"^ok$", r"^next$", r"^allow$", r"^finish", r"^done$", r"^start",
           r"^enable swiftkey$", r"^select swiftkey$", r"^try it", r"^close$", r"^dismiss$"]
 
@@ -273,19 +273,25 @@ def setup_swiftkey(ime):
     # back in our field with SwiftKey up: accept whatever the keyboard itself asks
     select_ime(ime)
     open_field()
-    explore("sk_inkb", step, [r"^continue$", r"^got it$", r"^ok$", r"^accept", r"^agree", r"^not now$",
-                              r"^no,? thanks$", r"^dismiss$", r"^close$"], max_steps=6)
-    # settings → Languages → Indonesian
-    sh(f"monkey -p {SK_PKG} -c android.intent.category.LAUNCHER 1")
-    time.sleep(4)
-    ns = explore("sk_settings", step, ACCEPT, stop=r"^languages$", max_steps=8)
-    n = find(ns, r"^languages$")
-    if not n:
-        log("SwiftKey: no Languages entry")
-        return
-    tap_node(n)
-    time.sleep(3)
-    for i in range(40):
+    ns = explore("sk_inkb", step, [r"^change$"], max_steps=3)
+    if not find(ns, r"indonesian|all languages|languages"):
+        explore("sk_inkb", step, [r"^continue$", r"^got it$", r"^ok$", r"^accept", r"^agree", r"^not now$",
+                                  r"^no,? thanks$", r"^dismiss$", r"^close$"], max_steps=6)
+        sh(f"monkey -p {SK_PKG} -c android.intent.category.LAUNCHER 1")
+        time.sleep(4)
+        ns = explore("sk_settings", step, ACCEPT, stop=r"^languages$", max_steps=10)
+        n = find(ns, r"^languages$")
+        if not n:
+            log("SwiftKey: no Languages entry")
+            return
+        tap_node(n)
+        time.sleep(3)
+    languages()
+    select_ime(ime)
+
+
+def languages():
+    for i in range(70):
         xml = dump(os.path.join(OUT, "setup", f"sk_lang_{i:02d}.xml"))
         ns = nodes(xml)
         if i % 5 == 0:
@@ -297,7 +303,7 @@ def setup_swiftkey(ime):
             tap_node(n)
             break
         w, h = screen_size()
-        sh(f"input swipe {w//2} {int(h*0.8)} {w//2} {int(h*0.35)} 400")
+        sh(f"input swipe {w//2} {int(h*0.85)} {w//2} {int(h*0.25)} 300")
         time.sleep(1.2)
     # let the language pack download
     for i in range(12):
@@ -379,6 +385,8 @@ def calibrate_once(kb):
     km = {"W": W, "H": H, "top": top, "bottom": bottom, "yscan": samples}
     for r, letters in rows.items():
         ys = [y for y, dl in samples if len(dl) == 1 and dl.lower() in letters]
+        if r == "r4" and "r3_span" in km:
+            ys = [y for y in ys if y > km["r3_span"][1]]
         if ys:
             km[r] = (min(ys) + max(ys)) // 2
             km[r + "_span"] = (min(ys), max(ys))
