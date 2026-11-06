@@ -20,6 +20,7 @@ import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { bearer } from 'better-auth/plugins/bearer'
 import { isAllowed } from './lib/allowlist'
+import { devAutoSignIn, devAutoSignInEmail } from './dev-auto-sign-in'
 
 type Database = Parameters<typeof betterAuth>[0]['database']
 
@@ -81,7 +82,10 @@ export function createAuth(opts: {
   secret?: string
   /** Default: KUDKEYS_SIGNUP_OPEN. */
   signUpOpen?: boolean
+  /** Dev only: sign every browser in as this email. Default: KUDKEYS_DEV_AUTO_SIGNIN (throws in production). */
+  devAutoSignInAs?: string | null
 }) {
+  const autoSignInAs = opts.devAutoSignInAs === undefined ? devAutoSignInEmail() : opts.devAutoSignInAs
   return betterAuth({
     baseURL: opts.baseURL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8080',
     secret: opts.secret ?? process.env.BETTER_AUTH_SECRET,
@@ -114,7 +118,7 @@ export function createAuth(opts: {
     account: { modelName: MODEL_NAMES.account },
     verification: { modelName: MODEL_NAMES.verification },
 
-    plugins: [bearer()],
+    plugins: [bearer(), ...(autoSignInAs ? [devAutoSignIn(autoSignInAs)] : [])],
 
     databaseHooks: {
       user: {
