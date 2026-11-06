@@ -19,9 +19,18 @@ export function devAutoSignInEmail(env: Record<string, string | undefined> = pro
   return email
 }
 
-/** A same-origin path to land on (never another site, never back to /login). */
-const safePath = (next: string | null) =>
-  next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') && !next.startsWith('/login') ? next : '/'
+/** A same-origin path to land on (never another site, never back to /login). Resolved the way a browser would. */
+const safePath = (next: string | null) => {
+  if (!next || !next.startsWith('/')) return '/'
+  const base = 'http://dev.invalid'
+  try {
+    const u = new URL(next, base)
+    if (u.origin !== base || u.pathname.startsWith('/login')) return '/'
+    return u.pathname + u.search + u.hash
+  } catch {
+    return '/'
+  }
+}
 
 export function devAutoSignIn(email: string): BetterAuthPlugin {
   return {
