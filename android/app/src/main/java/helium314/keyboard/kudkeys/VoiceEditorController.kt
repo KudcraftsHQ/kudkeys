@@ -72,10 +72,21 @@ class VoiceEditorController(
 
     private var open = false
     private var mode = EditorMode.Idle
-    private var draft: VoiceDraft = store.load() ?: VoiceDraft("", "")
+    /**
+     * The stored draft and tidy toggle, read on a background thread right after construction (kudkeys: the IME used to
+     * read the file and prefs on the main thread while starting); the first use waits for that read if needed.
+     */
+    private val stored = lazy(LazyThreadSafetyMode.SYNCHRONIZED) { (store.load() ?: VoiceDraft("", "")) to store.tidyOn }
+    private var draftValue: VoiceDraft? = null
+    private var draft: VoiceDraft
+        get() = draftValue ?: stored.value.first.also { draftValue = it }
+        set(value) { draftValue = value }
     private val undo = ArrayDeque<VoiceDraft>()
     private var showingRaw = false
-    private var tidyOn = store.tidyOn
+    private var tidyOnValue: Boolean? = null
+    private var tidyOn: Boolean
+        get() = tidyOnValue ?: stored.value.second.also { tidyOnValue = it }
+        set(value) { tidyOnValue = value }
     private var live: VoiceState = VoiceState.Idle
     private var message: String? = null
     private var cancelMessage: (() -> Unit)? = null
@@ -85,6 +96,10 @@ class VoiceEditorController(
     private var dictationPrivate = false
     private var job: Job? = null
     private val collector: Job = scope.launch { engine.state.collect { onEngineState(it) } }
+
+    init {
+        Thread({ runCatching { stored.value } }, "kudkeys-draft").apply { isDaemon = true }.start()
+    }
 
     val isOpen get() = open
     val hasDraft get() = !draft.isEmpty

@@ -32,14 +32,15 @@ class App : Application(), Configuration.Provider {
         FoldableUtils.init(this)
         Settings.init(this)
         SubtypeSettings.init(this)
-        // kudkeys: periodic sync and backup while signed in (v0.4); no-op when signed out
-        helium314.keyboard.kudkeys.sync.KudSyncWork.ensureScheduled(this)
         // kudkeys: the old SwiftKey dictionary moves into the synced words; synced dictionaries built with an older
         // filter or main dictionary are rebuilt once (in the background, after the phone is unlocked)
         helium314.keyboard.kudkeys.sync.KudSync.maintainSoon(this)
 
         val scope = CoroutineScope(Dispatchers.Default)
         scope.launch { // do some uncritical work in background for faster startup
+            // kudkeys: periodic sync and backup while signed in (v0.4); no-op when signed out. In the background: the
+            // first WorkManager call opens its database, which held up the keyboard's process start.
+            runCatching { helium314.keyboard.kudkeys.sync.KudSyncWork.ensureScheduled(this@App) }
             SupportedEmojis.load(this@App)
             LayoutUtilsCustom.removeMissingLayouts(this@App)
             val packageInfo = packageManager.getPackageInfo(packageName, 0)

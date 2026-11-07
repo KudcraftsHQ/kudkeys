@@ -30,6 +30,18 @@ object KudPrivacy {
         }.getOrNull()
     }
 
+    private val refresher by lazy { java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "kudkeys-home").apply { isDaemon = true } } }
+
+    /**
+     * [refreshHomePackage] on a background thread (kudkeys: a package manager call on every keyboard open slowed the
+     * open). The cached value serves the current field; onStartInputView re-checks privacy, so a launcher change is
+     * picked up by the time the keys show (or, at worst, on the next open).
+     */
+    fun refreshHomePackageAsync(context: Context) {
+        val app = context.applicationContext ?: context
+        refresher.execute { refreshHomePackage(app) }
+    }
+
     fun launcherPackages(): Set<String> = homePackage?.let { KNOWN_LAUNCHERS + it } ?: KNOWN_LAUNCHERS
 
     @JvmStatic

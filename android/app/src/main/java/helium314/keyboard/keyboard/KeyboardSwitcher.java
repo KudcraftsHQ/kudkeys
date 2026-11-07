@@ -14,11 +14,13 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.text.InputType;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewStub;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodSubtype;
@@ -39,6 +41,7 @@ import helium314.keyboard.keyboard.internal.LayoutDirective;
 import helium314.keyboard.keyboard.internal.ShiftMode;
 import helium314.keyboard.keyboard.internal.keyboard_parser.EmojiParserKt;
 import helium314.keyboard.latin.CapsMode;
+import helium314.keyboard.latin.InputAttributes;
 import helium314.keyboard.latin.InputView;
 import helium314.keyboard.latin.KeyboardWrapperView;
 import helium314.keyboard.latin.LatinIME;
@@ -61,6 +64,8 @@ import helium314.keyboard.latin.utils.ScriptUtils;
 import helium314.keyboard.latin.utils.SubtypeUtilsAdditional;
 import helium314.keyboard.latin.utils.ToolbarMode;
 
+import java.util.ArrayList;
+
 public final class KeyboardSwitcher {
     private static final String TAG = KeyboardSwitcher.class.getSimpleName();
 
@@ -68,7 +73,8 @@ public final class KeyboardSwitcher {
     private KeyboardWrapperView mKeyboardViewWrapper;
     private View mMainKeyboardFrame;
     private MainKeyboardView mKeyboardView;
-    private EmojiPalettesView mEmojiPalettesView;
+    private EmojiPalettesView mEmojiPalettesView; // kudkeys: null until emoji are first shown, see getEmojiPalettesView
+    private ViewStub mEmojiPalettesStub;
     private View mEmojiTabStripView;
     private SuggestionStripView mSuggestionStripView;
     private FrameLayout mStripContainer;
@@ -87,6 +93,20 @@ public final class KeyboardSwitcher {
     private int mCurrentOrientation;
     private int mCurrentDpi;
     private boolean mThemeNeedsReload;
+
+    // kudkeys: input views that can be shown without inflating. One is built while the IME is idle after it starts
+    // (prebuildInputView), so the first open doesn't inflate; and the view being replaced when only the look changes
+    // (a private field's incognito theme and back) is kept for when that look comes back. A view only fits while
+    // nothing else changed since it was built: anything else bumps mViewGeneration and drops them.
+    private static final int MAX_READY_VIEWS = 2;
+    private static final class ReadyView {
+        final InputView view; final String key; final int generation;
+        ReadyView(InputView view, String key, int generation) { this.view = view; this.key = key; this.generation = generation; }
+    }
+    private final ArrayList<ReadyView> mReadyViews = new ArrayList<>();
+    private int mViewGeneration;
+    private String mCurrentViewKey;
+    private int mCurrentViewGeneration = -1;
 
     @SuppressLint("StaticFieldLeak") // this is a keyboard, we want to keep it alive in background
     private static final KeyboardSwitcher sInstance = new KeyboardSwitcher();
@@ -126,21 +146,27 @@ public final class KeyboardSwitcher {
 
     private boolean updateKeyboardThemeAndContextThemeWrapper(final Context context, final KeyboardTheme keyboardTheme) {
         final Resources res = context.getResources();
-        if (mThemeNeedsReload
-                || mThemeContext == null
-                || !keyboardTheme.equals(mKeyboardTheme)
-                || mCurrentDpi != res.getDisplayMetrics().densityDpi
-                || mCurrentOrientation != res.getConfiguration().orientation
-                || (mCurrentUiMode & Configuration.UI_MODE_NIGHT_MASK) != (res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                || !mThemeContext.getResources().equals(res)
-                || Settings.getValues().mColors.haveColorsChanged(context)) {
+        // kudkeys: the reason is logged, and only a change of theme alone (a private field's look) keeps ready views
+        final String envChange;
+        if (mThemeNeedsReload) envChange = "reload requested";
+        else if (mThemeContext == null) envChange = "first";
+        else if (mCurrentDpi != res.getDisplayMetrics().densityDpi) envChange = "density";
+        else if (mCurrentOrientation != res.getConfiguration().orientation) envChange = "orientation";
+        else if ((mCurrentUiMode & Configuration.UI_MODE_NIGHT_MASK) != (res.getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)) envChange = "night mode";
+        else if (!mThemeContext.getResources().equals(res)) envChange = "resources";
+        else if (Settings.getValues().mColors.haveColorsChanged(context)) envChange = "colors";
+        else envChange = null;
+        if (envChange != null || !keyboardTheme.equals(mKeyboardTheme)) {
+            Log.i(TAG, "theme reload: " + (envChange != null ? envChange : "theme " + (mKeyboardTheme == null ? -1 : mKeyboardTheme.getThemeId()) + " -> " + keyboardTheme.getThemeId()));
+            if (envChange != null) invalidateReadyViews();
             mThemeNeedsReload = false;
             mKeyboardTheme = keyboardTheme;
             mThemeContext = new ContextThemeWrapper(context, keyboardTheme.mStyleId);
             mCurrentUiMode = res.getConfiguration().uiMode;
             mCurrentOrientation = res.getConfiguration().orientation;
             mCurrentDpi = res.getDisplayMetrics().densityDpi;
-            KeyboardLayoutSet.Companion.onKeyboardThemeChanged();
+            if (envChange != null) KeyboardLayoutSet.Companion.onKeyboardThemeChanged();
+            else KeyboardLayoutSet.Companion.onKeyboardLookChanged();
             return true;
         }
         return false;
@@ -235,8 +261,10 @@ public final class KeyboardSwitcher {
         // @see LatinIME#onComputeInset(android.inputmethodservice.InputMethodService.Insets)
         mMainKeyboardFrame.setVisibility(visibility);
         mKeyboardViewWrapper.setVisibility(Settings.getInstance().readShowToolbarOnly() ? View.GONE : View.VISIBLE);
-        mEmojiPalettesView.setVisibility(View.GONE);
-        mEmojiPalettesView.stopEmojiPalettes();
+        if (mEmojiPalettesView != null) {
+            mEmojiPalettesView.setVisibility(View.GONE);
+            mEmojiPalettesView.stopEmojiPalettes();
+        }
         mEmojiTabStripView.setVisibility(View.GONE);
         mSuggestionStripView.setVisibility(stripVisibility);
     }
@@ -292,8 +320,10 @@ public final class KeyboardSwitcher {
             if (toggleState == KeyboardSwitchState.EMOJI) {
                 setEmojiKeyboard();
             } else {
-                mEmojiPalettesView.stopEmojiPalettes();
-                mEmojiPalettesView.setVisibility(View.GONE);
+                if (mEmojiPalettesView != null) {
+                    mEmojiPalettesView.stopEmojiPalettes();
+                    mEmojiPalettesView.setVisibility(View.GONE);
+                }
 
                 mMainKeyboardFrame.setVisibility(View.VISIBLE);
                 mKeyboardView.setVisibility(View.VISIBLE);
@@ -340,7 +370,10 @@ public final class KeyboardSwitcher {
     public void reloadKeyboard() {
         if (mCurrentInputView == null)
             return;
-        mEmojiPalettesView.clearKeyboardCache();
+        // kudkeys: one-handed / split / floating size changed: a parked view of the other look has the old geometry
+        invalidateReadyViews();
+        if (mEmojiPalettesView != null)
+            mEmojiPalettesView.clearKeyboardCache();
         reloadMainKeyboard();
     }
 
@@ -472,15 +505,17 @@ public final class KeyboardSwitcher {
         if (mEmojiPalettesView != null) {
             mEmojiPalettesView.clearKeyboardCache();
         }
+        mReadyViews.clear(); // kudkeys: spare input views go first
     }
 
     @SuppressLint("InflateParams")
     public View onCreateInputView(@NonNull Context displayContext, boolean isHardwareAcceleratedDrawingEnabled) {
-        Log.d(TAG, "create new input view");
+        Log.d(TAG, "onCreateInputView");
         if (mKeyboardView != null) {
             mKeyboardView.closing();
         }
-        PointerTracker.clearOldViewData();
+        // kudkeys: not PointerTracker.clearOldViewData(): it drops what a ready view's MainKeyboardView registered when
+        // it was built (switchTo then crashes); the map is weak, so views that are gone leave it by themselves
         SharedPreferences prefs = KtxKt.prefs(displayContext);
         if (mSuggestionStripView != null)
             prefs.unregisterOnSharedPreferenceChangeListener(mSuggestionStripView);
@@ -488,9 +523,24 @@ public final class KeyboardSwitcher {
             Settings.getInstance().loadSettings(displayContext, Settings.getValues().mLocale, Settings.getValues().mInputAttributes);
 
         updateKeyboardThemeAndContextThemeWrapper(displayContext, KeyboardTheme.getKeyboardTheme(displayContext));
-        mCurrentInputView = (InputView)LayoutInflater.from(mThemeContext).inflate(R.layout.input_view, null);
+        final String key = inputViewKey();
+        // kudkeys: keep the view being replaced when only the look changed, for when that look comes back
+        if (mCurrentInputView != null && mCurrentViewGeneration == mViewGeneration && !key.equals(mCurrentViewKey))
+            addReadyView(mCurrentInputView, mCurrentViewKey);
+        InputView view = takeReadyView(key);
+        if (view == null) {
+            Log.d(TAG, "create new input view");
+            view = inflateInputView();
+        } else {
+            Log.d(TAG, "use ready input view");
+        }
+        mCurrentInputView = view;
+        mCurrentViewKey = key;
+        mCurrentViewGeneration = mViewGeneration;
         mMainKeyboardFrame = mCurrentInputView.findViewById(R.id.main_keyboard_frame);
-        mEmojiPalettesView = mCurrentInputView.findViewById(R.id.emoji_palettes_view);
+        mEmojiPalettesView = mCurrentInputView.findViewById(R.id.emoji_palettes_view); // null until first inflated
+        mEmojiPalettesStub = mCurrentInputView.findViewById(R.id.emoji_palettes_stub);
+        if (mEmojiPalettesView != null) setUpEmojiPalettesView(isHardwareAcceleratedDrawingEnabled);
         mFakeToastView = mCurrentInputView.findViewById(R.id.fakeToast);
 
         mKeyboardViewWrapper = mCurrentInputView.findViewById(R.id.keyboard_view_wrapper);
@@ -498,8 +548,6 @@ public final class KeyboardSwitcher {
         mKeyboardView = mCurrentInputView.findViewById(R.id.keyboard_view);
         mKeyboardView.setHardwareAcceleratedDrawingEnabled(isHardwareAcceleratedDrawingEnabled);
         mKeyboardView.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);
-        mEmojiPalettesView.setHardwareAcceleratedDrawingEnabled(isHardwareAcceleratedDrawingEnabled);
-        mEmojiPalettesView.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);
         mEmojiTabStripView = mCurrentInputView.findViewById(R.id.emoji_tab_strip);
         mSuggestionStripView = mCurrentInputView.findViewById(R.id.suggestion_strip_view);
         mStripContainer = mCurrentInputView.findViewById(R.id.strip_container);
@@ -507,6 +555,121 @@ public final class KeyboardSwitcher {
         prefs.registerOnSharedPreferenceChangeListener(mSuggestionStripView);
         PointerTracker.switchTo(mKeyboardView);
         return mCurrentInputView;
+    }
+
+    private InputView inflateInputView() {
+        return (InputView) LayoutInflater.from(mThemeContext).inflate(R.layout.input_view, null);
+    }
+
+    /** kudkeys: what a ready view must match: the theme, and the normal or incognito colours baked in at inflation. */
+    private String inputViewKey() {
+        return mKeyboardTheme.getThemeId() + ":" + Settings.getValues().mKudIncognitoLook;
+    }
+
+    private void addReadyView(@NonNull InputView view, @NonNull String key) {
+        for (int i = mReadyViews.size() - 1; i >= 0; i--) {
+            final ReadyView r = mReadyViews.get(i);
+            if (r.view == view || r.key.equals(key) || r.generation != mViewGeneration) mReadyViews.remove(i);
+        }
+        mReadyViews.add(new ReadyView(view, key, mViewGeneration));
+        while (mReadyViews.size() > MAX_READY_VIEWS) mReadyViews.remove(0);
+    }
+
+    /** A ready view built for [key] in the current generation, taken out of the list; never one still on screen. */
+    @Nullable private InputView takeReadyView(@NonNull String key) {
+        for (int i = mReadyViews.size() - 1; i >= 0; i--) {
+            final ReadyView r = mReadyViews.get(i);
+            if (r.generation != mViewGeneration) {
+                mReadyViews.remove(i);
+            } else if (r.key.equals(key) && r.view.getParent() == null) {
+                mReadyViews.remove(i);
+                return r.view;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasReadyView(@NonNull String key) {
+        for (ReadyView r : mReadyViews)
+            if (r.generation == mViewGeneration && r.key.equals(key) && r.view.getParent() == null) return true;
+        return false;
+    }
+
+    private void invalidateReadyViews() {
+        mViewGeneration++;
+        mReadyViews.clear();
+    }
+
+    /** kudkeys: any configuration change may have changed what a view baked in (font scale, locale…): build anew. */
+    public void onConfigurationChanged() {
+        invalidateReadyViews();
+    }
+
+    /**
+     * kudkeys: inflates the input view while the IME is idle before its first show, so that show takes it instead of
+     * inflating (about 40 ms on a fast phone). Runs the same theme check as a show: a theme, density, orientation,
+     * night mode or colour change before the show still leads to a new view there. Returns whether it built one.
+     */
+    public boolean prebuildInputView(@NonNull Context displayContext, boolean incognitoLook) {
+        if (mLatinIME == null || mCurrentInputView != null || mLatinIME.isInputViewShown()) return false;
+        // The IME usually restarts while a launcher (a private field: incognito look) has the focus, but the first
+        // open is mostly in a normal field: build the asked look, with settings loaded for it, then put them back.
+        final Settings settings = Settings.getInstance();
+        final SettingsValues current = settings.getCurrent();
+        final boolean swap = current.mKudIncognitoLook != incognitoLook;
+        if (swap) {
+            final EditorInfo look = new EditorInfo();
+            look.inputType = InputType.TYPE_CLASS_TEXT;
+            if (incognitoLook) look.imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
+            settings.loadSettings(displayContext, current.mLocale, new InputAttributes(look, false, displayContext.getPackageName()));
+        }
+        try {
+            updateKeyboardTheme(displayContext);
+            final String key = inputViewKey();
+            if (hasReadyView(key)) return false;
+            addReadyView(inflateInputView(), key);
+            return true;
+        } finally {
+            if (swap) {
+                settings.loadSettings(displayContext, current.mLocale, current.mInputAttributes);
+                updateKeyboardThemeAndContextThemeWrapper(displayContext, KeyboardTheme.getKeyboardTheme(displayContext));
+            }
+        }
+    }
+
+    /**
+     * kudkeys: builds the alphabet keyboard for the current field in the background of the first show: parsing the
+     * layout files and loading the classes involved is the slow part, and those caches are what the first show's
+     * loadKeyboard then finds (the keyboard itself too, when the field is the same).
+     */
+    public void prewarmKeyboard(@Nullable EditorInfo editorInfo, @NonNull KeyboardElement element) {
+        if (mThemeContext == null || mCurrentInputView != null) return;
+        try {
+            final SettingsValues settingsValues = Settings.getValues();
+            new KeyboardLayoutSet.Builder(mThemeContext, editorInfo, settingsValues)
+                    .setKeyboardGeometry(ResourceUtils.getKeyboardWidth(mThemeContext, settingsValues),
+                            ResourceUtils.getKeyboardHeight(mThemeContext.getResources(), settingsValues))
+                    .setSubtype(mRichImm.getCurrentSubtype())
+                    .build()
+                    .getKeyboard(element);
+        } catch (Throwable e) {
+            Log.w(TAG, "keyboard prewarm failed", e);
+        }
+    }
+
+    /** kudkeys: the emoji palette, inflated from its stub the first time it is needed. */
+    @Nullable private EmojiPalettesView getEmojiPalettesView() {
+        if (mEmojiPalettesView == null && mEmojiPalettesStub != null) {
+            mEmojiPalettesView = (EmojiPalettesView) mEmojiPalettesStub.inflate();
+            mEmojiPalettesStub = null;
+            setUpEmojiPalettesView(mIsHardwareAcceleratedDrawingEnabled);
+        }
+        return mEmojiPalettesView;
+    }
+
+    private void setUpEmojiPalettesView(boolean isHardwareAcceleratedDrawingEnabled) {
+        mEmojiPalettesView.setHardwareAcceleratedDrawingEnabled(isHardwareAcceleratedDrawingEnabled);
+        mEmojiPalettesView.setKeyboardActionListener(mLatinIME.mKeyboardActionListener);
     }
 
     public CapsMode getKeyboardCapsMode() {
@@ -537,6 +700,7 @@ public final class KeyboardSwitcher {
      *  If the keyboard is currently showing, theme will be reloaded immediately. */
     public void setThemeNeedsReload() {
         mThemeNeedsReload = true;
+        invalidateReadyViews(); // kudkeys
         if (mLatinIME == null || !mLatinIME.isInputViewShown())
             return; // will be reloaded right before showing IME
 
@@ -589,9 +753,10 @@ public final class KeyboardSwitcher {
             mSuggestionStripView.setVisibility(View.GONE);
             mStripContainer.setVisibility(getSecondaryStripVisibility());
             mEmojiTabStripView.setVisibility(View.VISIBLE);
-            mEmojiPalettesView.startEmojiPalettes(mKeyboardView.getKeyVisualAttribute(),
+            final EmojiPalettesView emojiPalettesView = getEmojiPalettesView();
+            emojiPalettesView.startEmojiPalettes(mKeyboardView.getKeyVisualAttribute(),
                 mLatinIME.getCurrentInputEditorInfo(), mLatinIME.mKeyboardActionListener);
-            mEmojiPalettesView.setVisibility(View.VISIBLE);
+            emojiPalettesView.setVisibility(View.VISIBLE);
         }
 
         @Override
@@ -641,6 +806,7 @@ public final class KeyboardSwitcher {
         public void switchOneHandedMode() {
             mKeyboardViewWrapper.switchOneHandedModeSide();
             Settings.getInstance().writeOneHandedModeGravity(mKeyboardViewWrapper.getOneHandedGravity());
+            invalidateReadyViews(); // kudkeys: a parked view of the other look would come back on the old side
         }
 
         @Override
