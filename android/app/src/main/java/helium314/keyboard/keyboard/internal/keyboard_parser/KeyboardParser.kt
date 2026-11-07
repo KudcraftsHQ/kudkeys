@@ -247,6 +247,9 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
             )
             baseKeys.removeAt(baseKeys.lastIndex)
         }
+        // Kud Keys: numbers on top of the symbols page (SwiftKey) leave no numpad key in its bottom row
+        if (params.mId.element == KeyboardElement.SYMBOLS && params.mId.numberRowInSymbols && !params.mId.numberRowEnabled)
+            functionalKeysBottom.removeAll { it.label == KeyLabel.NUMPAD }
         // add zwnj key next to space if necessary
         val spaceIndex = functionalKeysBottom.indexOfFirst { it.label == KeyLabel.SPACE && it.width <= 0 } // width could be 0 or -1
         if (spaceIndex >= 0) {
@@ -271,10 +274,9 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
 
     private fun addNumberRowOrPopupKeys(baseKeys: MutableList<MutableList<KeyData>>, numberRow: MutableList<KeyData>) {
         if (!params.mId.numberRowEnabled && params.mId.numberRowInSymbols && params.mId.element == KeyboardElement.SYMBOLS) {
-            // replace first symbols row with number row, but use the labels as popupKeys
-            val numberRowCopy = numberRow.toMutableList()
-            numberRowCopy.forEachIndexed { index, keyData -> keyData.popup.symbol = baseKeys[0].getOrNull(index)?.label }
-            baseKeys[0] = numberRowCopy
+            // replace first symbols row with number row
+            // Kud Keys: like SwiftKey, the replaced symbols are not added to the number keys' popups
+            baseKeys[0] = numberRow.toMutableList()
         } else if (!params.mId.numberRowEnabled && params.mId.element.isAlphabet && !hasBuiltInNumbers()) {
             if (baseKeys[0].any { it.popup.main != null || !it.popup.relevant.isNullOrEmpty() } // first row of baseKeys has any layout popup key
                 && params.mPopupKeyHintOrder.let {

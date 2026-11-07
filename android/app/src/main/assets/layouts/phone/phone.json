@@ -3,32 +3,32 @@
     {"label": "1", "type": "numeric", "width": 0.2},
     {"label": "2", "type": "numeric", "width": 0.2},
     {"label": "3", "type": "numeric", "width": 0.2},
-    {"label": "(", "width": 0.13},
-    {"label": ")", "width": 0.13},
-    {"label": ",", "width": 0.14}
+    {"label": "(", "type": "numeric", "width": 0.13},
+    {"label": ")", "type": "numeric", "width": 0.13},
+    {"label": ",", "type": "numeric", "width": 0.14}
   ],
   [
     {"label": "4", "type": "numeric", "width": 0.2},
     {"label": "5", "type": "numeric", "width": 0.2},
     {"label": "6", "type": "numeric", "width": 0.2},
-    {"label": "+", "width": 0.13},
-    {"label": "-", "width": 0.13},
-    {"label": ";", "width": 0.14}
+    {"label": "+", "type": "numeric", "width": 0.13},
+    {"label": "-", "type": "numeric", "width": 0.13},
+    {"label": ";", "type": "numeric", "width": 0.14}
   ],
   [
     {"label": "7", "type": "numeric", "width": 0.2},
     {"label": "8", "type": "numeric", "width": 0.2},
     {"label": "9", "type": "numeric", "width": 0.2},
-    {"label": "/", "width": 0.13},
-    {"label": "N", "width": 0.13},
+    {"label": "/", "type": "numeric", "width": 0.13},
+    {"label": "N", "type": "numeric", "width": 0.13},
     {"label": "delete", "width": 0.14}
   ],
   [
-    {"label": "*", "width": 0.2},
+    {"label": "*", "type": "numeric", "width": 0.2},
     {"label": "0", "type": "numeric", "width": 0.2},
-    {"label": "#", "width": 0.2},
-    {"label": ".", "width": 0.13},
-    {"label": "space", "width": 0.13, "type": "normal", "labelFlags": 0},
+    {"label": "#", "type": "numeric", "width": 0.2},
+    {"label": ".", "type": "numeric", "width": 0.13},
+    {"label": "!icon/space_key|!code/key_space", "type": "numeric", "width": 0.13},
     {"label": "enter", "width": 0.14}
   ]
 ]

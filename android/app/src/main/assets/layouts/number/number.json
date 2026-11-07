@@ -3,32 +3,32 @@
     {"$": "variation_selector", "default": {"label": "1", "type": "numeric", "width": 0.2}, "password": {"label": "1", "type": "numeric", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "2", "type": "numeric", "width": 0.2}, "password": {"label": "2", "type": "numeric", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "3", "type": "numeric", "width": 0.2}, "password": {"label": "3", "type": "numeric", "width": 0.3333}},
-    {"$": "variation_selector", "default": {"label": "(", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": ")", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": ",", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
+    {"$": "variation_selector", "default": {"label": "(", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ")", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ",", "type": "numeric", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
   ],
   [
     {"$": "variation_selector", "default": {"label": "4", "type": "numeric", "width": 0.2}, "password": {"label": "4", "type": "numeric", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "5", "type": "numeric", "width": 0.2}, "password": {"label": "5", "type": "numeric", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "6", "type": "numeric", "width": 0.2}, "password": {"label": "6", "type": "numeric", "width": 0.3333}},
-    {"$": "variation_selector", "default": {"label": "+", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": "-", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": ";", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
+    {"$": "variation_selector", "default": {"label": "+", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "-", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ";", "type": "numeric", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
   ],
   [
     {"$": "variation_selector", "default": {"label": "7", "type": "numeric", "width": 0.2}, "password": {"label": "7", "type": "numeric", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "8", "type": "numeric", "width": 0.2}, "password": {"label": "8", "type": "numeric", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "9", "type": "numeric", "width": 0.2}, "password": {"label": "9", "type": "numeric", "width": 0.3333}},
-    {"$": "variation_selector", "default": {"label": "/", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": "N", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "/", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "N", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
     {"$": "variation_selector", "default": {"label": "delete", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
   ],
   [
-    {"$": "variation_selector", "default": {"label": "*", "width": 0.2}, "password": {"label": "delete", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "*", "type": "numeric", "width": 0.2}, "password": {"label": "delete", "width": 0.3333}},
     {"$": "variation_selector", "default": {"label": "0", "type": "numeric", "width": 0.2}, "password": {"label": "0", "type": "numeric", "width": 0.3333}},
-    {"$": "variation_selector", "default": {"label": "#", "width": 0.2}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": ".", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": "space", "width": 0.13, "type": "normal", "labelFlags": 0}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "#", "type": "numeric", "width": 0.2}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ".", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "!icon/space_key|!code/key_space", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
     {"$": "variation_selector", "default": {"label": "enter", "width": 0.14}, "password": {"label": "enter", "width": 0.3333}}
   ]
 ]

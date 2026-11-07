@@ -27,9 +27,10 @@
       "symbols": { "label": ",", "width": 0.12, "labelFlags": 1073741824 }
     },
     { "$": "keyboard_state_selector", "languageKeyEnabled": { "$": "keyboard_state_selector", "alphabet": { "label": "language_switch" }}},
+    { "$": "keyboard_state_selector", "symbols": { "label": "numpad" } },
     { "$": "keyboard_state_selector",
-      "symbols": { "label": "space", "width": 0.5 },
-      "moreSymbols": { "label": "space", "width": 0.3157 },
+      "symbols": { "label": "!icon/space_key_for_number_layout|!code/key_space", "type": "navigation", "width": 0.5 },
+      "moreSymbols": { "label": "!icon/space_key_for_number_layout|!code/key_space", "type": "navigation", "width": 0.3157 },
       "default": { "label": "space" }
     },
     { "$": "keyboard_state_selector",
@@ -39,7 +40,7 @@
     { "$": "keyboard_state_selector",
       "alphabet": { "label": "period", "labelFlags": 1073741824 },
       "symbols": { "label": ".", "width": 0.12, "labelFlags": 1073741824, "popup": { "relevant": [
-        { "label": "!fixedColumnOrder!2" }, { "label": "!evenLeft!" }, { "label": "•" }, { "label": "…" }
+        { "label": "!fixedColumnOrder!2" }, { "label": "!swiftKeyPopup!" }, { "label": "•" }, { "label": "…" }
       ] } }
     },
     { "$": "keyboard_state_selector", "moreSymbols": { "label": "×", "width": 0.1051 } },
