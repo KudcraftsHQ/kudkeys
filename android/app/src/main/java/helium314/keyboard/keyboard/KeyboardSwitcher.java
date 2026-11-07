@@ -512,7 +512,8 @@ public final class KeyboardSwitcher {
         if (mKeyboardView != null) {
             mKeyboardView.closing();
         }
-        PointerTracker.clearOldViewData();
+        // kudkeys: not PointerTracker.clearOldViewData(): it drops what a ready view's MainKeyboardView registered when
+        // it was built (switchTo then crashes); the map is weak, so views that are gone leave it by themselves
         SharedPreferences prefs = KtxKt.prefs(displayContext);
         if (mSuggestionStripView != null)
             prefs.unregisterOnSharedPreferenceChangeListener(mSuggestionStripView);
