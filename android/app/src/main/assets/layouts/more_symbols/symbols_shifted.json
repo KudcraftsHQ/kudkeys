@@ -1,0 +1,33 @@
+[
+  [
+    {"label": "£", "width": 0.1296},
+    {"label": "€", "width": 0.1051},
+    {"label": "¥", "width": 0.1051},
+    {"label": "¢", "width": 0.1051},
+    {"label": "©", "width": 0.1051},
+    {"label": "®", "width": 0.1051},
+    {"label": "™", "width": 0.1051},
+    {"label": "~", "width": 0.1102},
+    {"label": "¿", "width": 0.1296}
+  ],
+  [
+    {"label": "tab", "width": 0.1296, "type": "normal"},
+    {"label": "[", "width": 0.1051},
+    {"label": "]", "width": 0.1051},
+    {"label": "{", "width": 0.1051},
+    {"label": "}", "width": 0.1051},
+    {"label": "<", "width": 0.1051},
+    {"label": ">", "width": 0.1051},
+    {"label": "^", "width": 0.1102},
+    {"label": "¡", "width": 0.1296}
+  ],
+  [
+    {"label": "`", "width": 0.1051},
+    {"label": ";", "width": 0.1051},
+    {"label": "÷", "width": 0.1051},
+    {"label": "\\", "width": 0.1051},
+    {"label": "|", "width": 0.1051},
+    {"label": "¦", "width": 0.1051},
+    {"label": "¬", "width": 0.1102}
+  ]
+]

@@ -5,6 +5,7 @@
  */
 package helium314.keyboard.keyboard.internal
 
+import android.text.InputType
 import android.text.TextUtils
 import helium314.keyboard.event.Event
 import helium314.keyboard.keyboard.KeyboardSwitcher
@@ -104,6 +105,10 @@ class KeyboardState(private val switchActions: SwitchActions) {
             // Reset keyboard to alphabet mode.
             loadLayout(Alphabet(ShiftMode.UNSHIFT, autoCapsFlags, recapitalizeMode))
             onUpdateShiftState(autoCapsFlags, recapitalizeMode)
+            // Kud Keys: date / time fields open on the symbols page, like SwiftKey
+            val inputType = Settings.getValues()?.mInputAttributes?.mInputType ?: 0
+            if ((inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_DATETIME)
+                setLayout(Utility.SYMBOLS)
         }
         switchActions.setOneHandedModeEnabled(onHandedModeEnabled)
         switchActions.setFloatingKeyboardEnabled(Settings.getValues().mIsFloatingKeyboard)

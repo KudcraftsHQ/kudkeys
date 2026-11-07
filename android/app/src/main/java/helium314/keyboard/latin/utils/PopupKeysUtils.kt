@@ -46,7 +46,8 @@ fun createPopupKeysArray(popupSet: PopupSet<*>?, params: KeyboardParams, label: 
         return null
     val fco = popupKeys.firstOrNull { it.startsWith(Key.POPUP_KEYS_FIXED_COLUMN_ORDER) }
     if (fco != null && fco.substringAfter(Key.POPUP_KEYS_FIXED_COLUMN_ORDER).toIntOrNull() != popupKeys.size - 1) {
-        val fcoExpected = popupKeys.size - popupKeys.count { it.startsWith("!") && it.endsWith("!") } - 1
+        // keys that are not flags (the column-order flag counts itself among the flags)
+        val fcoExpected = popupKeys.size - popupKeys.count { it.startsWith("!") && it.endsWith("!") || it.startsWith(Key.POPUP_KEYS_FIXED_COLUMN_ORDER) }
         if (fco.substringAfter(Key.POPUP_KEYS_FIXED_COLUMN_ORDER).toIntOrNull() != fcoExpected)
             popupKeys.remove(fco) // maybe rather adjust the number instead of remove?
     }
