@@ -236,6 +236,14 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
             clearKeyboardCache()
         }
 
+        /** kudkeys: only the look changed (a private field's incognito theme): keyboards and icons follow the theme,
+         *  the parsed layout files don't, so those stay cached. */
+        fun onKeyboardLookChanged() {
+            keyboardCache.clear()
+            uniqueKeysCache.clear()
+            needsReload = true
+        }
+
         private fun clearKeyboardCache() {
             keyboardCache.clear()
             uniqueKeysCache.clear()

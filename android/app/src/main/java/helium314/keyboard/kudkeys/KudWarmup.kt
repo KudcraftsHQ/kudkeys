@@ -28,7 +28,8 @@ import helium314.keyboard.latin.utils.getDisplayContext
  * Makes the first keyboard open (process running, keyboard never shown) nearly as fast as a later one. Android
  * restarts the IME right after its process dies, so there is idle time between the service starting and the first
  * show; in it, one small step per idle moment (a show request can always get in between):
- * 1. the input view is inflated ([KeyboardSwitcher.prebuildInputView]); the first show takes it instead of inflating;
+ * 1. the input view is inflated ([KeyboardSwitcher.prebuildInputView]); the first show takes it instead of inflating
+ *    (the normal look first, the private fields' incognito look last);
  * 2. the alphabet keyboards for the current field are built, warming the layout parser's caches and classes;
  * 3. a tiny off-screen frame is drawn with the hardware renderer, on its own thread: the render thread's EGL context,
  *    shader cache and glyph cache are created now, not during the first frame of the keyboard (an IME, unlike an
@@ -41,9 +42,10 @@ object KudWarmup {
     fun start(ime: LatinIME) {
         val switcher = KeyboardSwitcher.getInstance()
         val steps = ArrayDeque<Pair<String, () -> Unit>>()
-        steps += "input view" to { switcher.prebuildInputView(ime.getDisplayContext()) }
+        steps += "input view" to { switcher.prebuildInputView(ime.getDisplayContext(), false) }
         steps += "keyboard" to { switcher.prewarmKeyboard(ime.currentInputEditorInfo, KeyboardElement.ALPHABET_AUTOMATIC_SHIFTED) }
         steps += "keyboard (unshifted)" to { switcher.prewarmKeyboard(ime.currentInputEditorInfo, KeyboardElement.ALPHABET) }
+        steps += "input view (private look)" to { switcher.prebuildInputView(ime.getDisplayContext(), true) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && ime.enableHardwareAcceleration())
             steps += "renderer" to { warmRenderer(ime) }
 

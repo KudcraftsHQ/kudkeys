@@ -14,6 +14,7 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.text.InputType;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -40,6 +41,7 @@ import helium314.keyboard.keyboard.internal.LayoutDirective;
 import helium314.keyboard.keyboard.internal.ShiftMode;
 import helium314.keyboard.keyboard.internal.keyboard_parser.EmojiParserKt;
 import helium314.keyboard.latin.CapsMode;
+import helium314.keyboard.latin.InputAttributes;
 import helium314.keyboard.latin.InputView;
 import helium314.keyboard.latin.KeyboardWrapperView;
 import helium314.keyboard.latin.LatinIME;
@@ -163,7 +165,8 @@ public final class KeyboardSwitcher {
             mCurrentUiMode = res.getConfiguration().uiMode;
             mCurrentOrientation = res.getConfiguration().orientation;
             mCurrentDpi = res.getDisplayMetrics().densityDpi;
-            KeyboardLayoutSet.Companion.onKeyboardThemeChanged();
+            if (envChange != null) KeyboardLayoutSet.Companion.onKeyboardThemeChanged();
+            else KeyboardLayoutSet.Companion.onKeyboardLookChanged();
             return true;
         }
         return false;
@@ -604,13 +607,31 @@ public final class KeyboardSwitcher {
      * inflating (about 40 ms on a fast phone). Runs the same theme check as a show: a theme, density, orientation,
      * night mode or colour change before the show still leads to a new view there. Returns whether it built one.
      */
-    public boolean prebuildInputView(@NonNull Context displayContext) {
+    public boolean prebuildInputView(@NonNull Context displayContext, boolean incognitoLook) {
         if (mLatinIME == null || mCurrentInputView != null || mLatinIME.isInputViewShown()) return false;
-        updateKeyboardTheme(displayContext);
-        final String key = inputViewKey();
-        if (hasReadyView(key)) return false;
-        addReadyView(inflateInputView(), key);
-        return true;
+        // The IME usually restarts while a launcher (a private field: incognito look) has the focus, but the first
+        // open is mostly in a normal field: build the asked look, with settings loaded for it, then put them back.
+        final Settings settings = Settings.getInstance();
+        final SettingsValues current = settings.getCurrent();
+        final boolean swap = current.mKudIncognitoLook != incognitoLook;
+        if (swap) {
+            final EditorInfo look = new EditorInfo();
+            look.inputType = InputType.TYPE_CLASS_TEXT;
+            if (incognitoLook) look.imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
+            settings.loadSettings(displayContext, current.mLocale, new InputAttributes(look, false, displayContext.getPackageName()));
+        }
+        try {
+            updateKeyboardTheme(displayContext);
+            final String key = inputViewKey();
+            if (hasReadyView(key)) return false;
+            addReadyView(inflateInputView(), key);
+            return true;
+        } finally {
+            if (swap) {
+                settings.loadSettings(displayContext, current.mLocale, current.mInputAttributes);
+                updateKeyboardThemeAndContextThemeWrapper(displayContext, KeyboardTheme.getKeyboardTheme(displayContext));
+            }
+        }
     }
 
     /**
