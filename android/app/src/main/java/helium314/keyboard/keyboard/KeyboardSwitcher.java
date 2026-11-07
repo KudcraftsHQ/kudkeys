@@ -370,6 +370,8 @@ public final class KeyboardSwitcher {
     public void reloadKeyboard() {
         if (mCurrentInputView == null)
             return;
+        // kudkeys: one-handed / split / floating size changed: a parked view of the other look has the old geometry
+        invalidateReadyViews();
         if (mEmojiPalettesView != null)
             mEmojiPalettesView.clearKeyboardCache();
         reloadMainKeyboard();
@@ -804,6 +806,7 @@ public final class KeyboardSwitcher {
         public void switchOneHandedMode() {
             mKeyboardViewWrapper.switchOneHandedModeSide();
             Settings.getInstance().writeOneHandedModeGravity(mKeyboardViewWrapper.getOneHandedGravity());
+            invalidateReadyViews(); // kudkeys: a parked view of the other look would come back on the old side
         }
 
         @Override

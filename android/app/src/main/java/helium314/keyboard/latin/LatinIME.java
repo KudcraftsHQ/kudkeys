@@ -714,6 +714,7 @@ public class LatinIME extends InputMethodService implements
 
     @Override
     public void onDestroy() {
+        KudWarmup.INSTANCE.stop(); // kudkeys: no warmup step may run after this
         if (mQuickVoice != null) mQuickVoice.destroy();
         mClipboardHistoryManager.onDestroy();
         mDictionaryFacilitator.closeDictionaries();

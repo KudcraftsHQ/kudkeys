@@ -40,7 +40,16 @@ object KudWarmup {
     private const val TAG = "KudWarmup"
 
     /** [hardwareAccelerated]: what LatinIME got from enableHardwareAcceleration, which may only be called before onCreate. */
+    /** Bumped by [stop]: an idle handler from an earlier [start] gives up instead of touching a destroyed IME. */
+    private var generation = 0
+
+    /** LatinIME.onDestroy: drop any warmup steps still waiting, so they never run against a destroyed keyboard. */
+    fun stop() {
+        generation++
+    }
+
     fun start(ime: LatinIME, hardwareAccelerated: Boolean) {
+        val gen = ++generation
         val switcher = KeyboardSwitcher.getInstance()
         val steps = ArrayDeque<Pair<String, () -> Unit>>()
         steps += "input view" to { switcher.prebuildInputView(ime.getDisplayContext(), false) }
@@ -53,6 +62,7 @@ object KudWarmup {
         val handler = Handler(Looper.getMainLooper())
         Looper.myQueue().addIdleHandler(object : MessageQueue.IdleHandler {
             override fun queueIdle(): Boolean {
+                if (gen != generation) return false // stopped: the IME was destroyed (or started again)
                 if (ime.isInputViewShown) return false // too late to help
                 val (name, step) = steps.removeFirstOrNull() ?: return false
                 val t = SystemClock.uptimeMillis()
