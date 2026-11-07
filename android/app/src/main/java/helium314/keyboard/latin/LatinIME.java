@@ -602,7 +602,7 @@ public class LatinIME extends InputMethodService implements
 
         StatsUtils.onCreate(mSettings.getCurrent(), mRichImm);
         // kudkeys: build the keyboard view (and warm its layout and the renderer) while idle, before the first show
-        KudWarmup.INSTANCE.start(this);
+        KudWarmup.INSTANCE.start(this, mIsHardwareAcceleratedDrawingEnabled);
     }
 
     private void loadSettings() {

@@ -39,14 +39,15 @@ import helium314.keyboard.latin.utils.getDisplayContext
 object KudWarmup {
     private const val TAG = "KudWarmup"
 
-    fun start(ime: LatinIME) {
+    /** [hardwareAccelerated]: what LatinIME got from enableHardwareAcceleration, which may only be called before onCreate. */
+    fun start(ime: LatinIME, hardwareAccelerated: Boolean) {
         val switcher = KeyboardSwitcher.getInstance()
         val steps = ArrayDeque<Pair<String, () -> Unit>>()
         steps += "input view" to { switcher.prebuildInputView(ime.getDisplayContext(), false) }
         steps += "keyboard" to { switcher.prewarmKeyboard(ime.currentInputEditorInfo, KeyboardElement.ALPHABET_AUTOMATIC_SHIFTED) }
         steps += "keyboard (unshifted)" to { switcher.prewarmKeyboard(ime.currentInputEditorInfo, KeyboardElement.ALPHABET) }
         steps += "input view (private look)" to { switcher.prebuildInputView(ime.getDisplayContext(), true) }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && ime.enableHardwareAcceleration())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hardwareAccelerated)
             steps += "renderer" to { warmRenderer(ime) }
 
         val handler = Handler(Looper.getMainLooper())
