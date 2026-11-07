@@ -47,13 +47,18 @@ def select_ime():
 
 def trace(name, opener):
     sh("logcat -c")
-    sh(f"perfetto --txt -c /data/local/tmp/kcfg.txt -o /data/misc/perfetto-traces/{name}.pftrace --background")
+    out = sh(f"cat /data/local/tmp/kcfg.txt | perfetto --txt -c - -o /data/misc/perfetto-traces/{name.replace('/', '_')}.pftrace --background 2>&1")
+    if not out.strip().isdigit():
+        print("perfetto:", out.strip()[:500], flush=True)
     time.sleep(1)
     opener()
     time.sleep(8)
     shown = "mInputShown=true" in sh("dumpsys input_method")
-    adb("pull", f"/data/misc/perfetto-traces/{name}.pftrace", os.path.join(OUT, name + ".pftrace"))
-    sh(f"rm /data/misc/perfetto-traces/{name}.pftrace")
+    remote = f"/data/misc/perfetto-traces/{name.replace('/', '_')}.pftrace"
+    r = subprocess.run(["adb", "pull", remote, os.path.join(OUT, name + ".pftrace")], capture_output=True, text=True)
+    if r.returncode:
+        print("pull:", r.stderr.strip()[:300], sh("ls -la /data/misc/perfetto-traces/ | tail -3"), flush=True)
+    sh(f"rm {remote}")
     log = sh("logcat -d -s KeyboardSwitcher:V KudWarmup:V LatinIME:I Settings:I InputMethodService:I AndroidRuntime:E")
     if "FATAL EXCEPTION" in log:
         print(log[log.index("FATAL EXCEPTION"):][:3000], flush=True)
@@ -102,6 +107,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     adb("root"); time.sleep(3); adb("wait-for-device")
     sh("setprop persist.traced.enable 1"); time.sleep(2)
+    print("traced:", sh("getprop persist.traced.enable").strip(), sh("ps -A | grep -E 'traced|perfetto'").strip(), flush=True)
     adb("push", os.path.join(HERE, "cfg.txt"), "/data/local/tmp/kcfg.txt")
     adb("install", "-r", os.path.join(APKS, "typetest.apk"))
     for v in sys.argv[1:] or ["before", "after"]:
