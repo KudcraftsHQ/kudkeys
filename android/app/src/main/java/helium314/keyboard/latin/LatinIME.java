@@ -71,6 +71,7 @@ import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.suggestions.SuggestionStripView;
 import helium314.keyboard.kudkeys.KudPrivacy;
 import helium314.keyboard.kudkeys.KudQuickVoice;
+import helium314.keyboard.kudkeys.KudWarmup;
 import helium314.keyboard.latin.suggestions.SuggestionStripViewAccessor;
 import helium314.keyboard.latin.touchinputconsumer.GestureConsumer;
 import helium314.keyboard.latin.utils.ColorUtilKt;
@@ -563,7 +564,7 @@ public class LatinIME extends InputMethodService implements
 
         loadSettings();
         mClipboardHistoryManager.onCreate();
-        KudPrivacy.INSTANCE.refreshHomePackage(this);
+        KudPrivacy.INSTANCE.refreshHomePackageAsync(this);
         mQuickVoice = new KudQuickVoice(this);
         mHandler.onCreate();
         if (FoldableUtils.INSTANCE.isFoldable())
@@ -600,6 +601,8 @@ public class LatinIME extends InputMethodService implements
         ContextCompat.registerReceiver(this, mEmojiSearchReceiver, emojiSearchFilter, ContextCompat.RECEIVER_NOT_EXPORTED);
 
         StatsUtils.onCreate(mSettings.getCurrent(), mRichImm);
+        // kudkeys: build the keyboard view (and warm its layout and the renderer) while idle, before the first show
+        KudWarmup.INSTANCE.start(this);
     }
 
     private void loadSettings() {
@@ -737,6 +740,7 @@ public class LatinIME extends InputMethodService implements
     public void onConfigurationChanged(final Configuration conf) {
         SettingsValues settingsValues = mSettings.getCurrent();
         Log.i(TAG, "onConfigurationChanged");
+        mKeyboardSwitcher.onConfigurationChanged(); // kudkeys: no ready input view survives a configuration change
         SubtypeSettings.INSTANCE.reloadSystemLocales(this);
         if (settingsValues.mDisplayOrientation != conf.orientation) {
             mHandler.startOrientationChanging();
@@ -782,6 +786,8 @@ public class LatinIME extends InputMethodService implements
         mInsetsUpdater = ViewOutlineProviderUtilsKt.setInsetsOutlineProvider(view);
         KtxKt.updateSoftInputWindowLayoutParameters(this, mInputView);
         updateSuggestionStripView(view);
+        // kudkeys: a ready view (KeyboardSwitcher) may have been built before the field's privacy was known
+        if (hasSuggestionStripView()) mSuggestionStripView.updatePrivacy();
     }
 
     public void updateSuggestionStripView(View view) {
@@ -893,7 +899,7 @@ public class LatinIME extends InputMethodService implements
 
     void onStartInputViewInternal(final EditorInfo editorInfo, final boolean restarting) {
         super.onStartInputView(editorInfo, restarting);
-        KudPrivacy.INSTANCE.refreshHomePackage(this); // the default launcher counts as a search field
+        KudPrivacy.INSTANCE.refreshHomePackageAsync(this); // the default launcher counts as a search field (cached, refreshed off the main thread)
         if (mQuickVoice != null) mQuickVoice.onField(editorInfo); // kudkeys: another field cancels voice
 
 

@@ -54,26 +54,6 @@ class KudVoiceEditorView @JvmOverloads constructor(
     private fun dp(v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics)
     private fun dpi(v: Int) = dp(v.toFloat()).roundToInt()
 
-    private val statusDot = View(context)
-    private val statusTime = TextView(context)
-    private val statusLabel = TextView(context)
-    private val tidyToggle = ImageButton(context)
-    private val closeButton = ImageButton(context)
-
-    private val card = LinearLayout(context)
-    private val cardLabel = TextView(context)
-    private val cardChips = LinearLayout(context)
-    private val cardClose = ImageButton(context)
-
-    private val body = TextView(context)
-    private val scroll = LinesScrollView(context)
-
-    private val discardButton = ImageButton(context)
-    private val undoButton = ImageButton(context)
-    private val rawButton = TextView(context)
-    private val tidyButton = TextView(context)
-    private val insertButton = TextView(context)
-    private val micButton = ImageButton(context)
 
     private var colors: Colors? = null
     private var textColor = Color.WHITE
@@ -88,107 +68,139 @@ class KudVoiceEditorView @JvmOverloads constructor(
     private var lastScrollFor: String? = null
     private val END = Any()
 
-    private val root = LinearLayout(context)
+    /**
+     * The editor's views, built the first time it opens (kudkeys: not with every new keyboard view — most keyboards
+     * never open the editor, and building ~25 views and their icons slowed the first keyboard open).
+     */
+    private var parts: Parts? = null
+    private val p: Parts get() = parts ?: Parts().also { parts = it; colors = null }
 
     init {
         isClickable = true // the keys underneath never get a touch
         setWillNotDraw(false)
-        root.apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpi(12), dpi(2), dpi(8), dpi(6))
-        }
-        addView(root, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-
-        // header: status · tidy toggle · close
-        val header = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-        statusDot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(RED) }
-        header.addView(statusDot, LinearLayout.LayoutParams(dpi(8), dpi(8)).apply { marginEnd = dpi(8) })
-        statusTime.apply { textSize = 13f; fontFeatureSettings = "tnum"; setTypeface(typeface, Typeface.BOLD) }
-        header.addView(statusTime, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dpi(8) })
-        statusLabel.apply { textSize = 13f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END }
-        header.addView(statusLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        iconButton(tidyToggle, R.drawable.kud_ic_tidy, "Tidy on stop")
-        header.addView(tidyToggle, LinearLayout.LayoutParams(dpi(34), dpi(34)))
-        iconButton(closeButton, R.drawable.kud_ic_close, "Close, keep draft")
-        header.addView(closeButton, LinearLayout.LayoutParams(dpi(34), dpi(34)))
-        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(32)))
-
-        // question card: one at a time, a single row
-        card.apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpi(10), 0, dpi(2), 0)
-        }
-        cardLabel.apply { textSize = 13f; isSingleLine = true; text = "Did you say" }
-        card.addView(cardLabel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dpi(6) })
-        val chipsScroll = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false }
-        cardChips.apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        chipsScroll.addView(cardChips, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        card.addView(chipsScroll, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-        iconButton(cardClose, R.drawable.kud_ic_close, "Dismiss question")
-        cardClose.setPadding(dpi(8), dpi(8), dpi(8), dpi(8))
-        cardClose.scaleType = ImageView.ScaleType.FIT_CENTER
-        card.addView(cardClose, LinearLayout.LayoutParams(dpi(30), dpi(30)))
-        root.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(32)).apply { bottomMargin = dpi(2); marginEnd = dpi(4) })
-
-        // the text: scrolls, shows whole lines only, fades a little where there is more
-        body.apply {
-            textSize = 16f
-            setLineSpacing(dp(2f), 1f)
-            // uniform lines: every line is lineHeight tall (the last one gets its spacing as padding)
-            includeFontPadding = false
-            setPadding(0, 0, dpi(4), lineHeight - paint.getFontMetricsInt(null))
-        }
-        scroll.isVerticalScrollBarEnabled = true
-        scroll.isScrollbarFadingEnabled = true
-        scroll.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
-        scroll.isVerticalFadingEdgeEnabled = true
-        scroll.isFillViewport = true
-        scroll.overScrollMode = View.OVER_SCROLL_NEVER
-        scroll.addView(body, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        // the lines are measured in onMeasure; the space below the last whole line stays empty, above the actions
-        val textArea = FrameLayout(context)
-        textArea.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.TOP))
-        root.addView(textArea, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dpi(2) })
-
-        // actions: discard undo raw tidy · · insert mic (spoken edits: Instruct on the top bar)
-        val actions = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-        iconButton(discardButton, R.drawable.kud_ic_trash, "Discard draft")
-        actions.addView(discardButton, LinearLayout.LayoutParams(dpi(40), dpi(40)))
-        iconButton(undoButton, R.drawable.kud_ic_undo, "Undo")
-        actions.addView(undoButton, LinearLayout.LayoutParams(dpi(40), dpi(40)))
-        rawButton.apply {
-            textSize = 13f; gravity = Gravity.CENTER; setPadding(dpi(10), 0, dpi(10), 0)
-            setTypeface(typeface, Typeface.BOLD)
-        }
-        actions.addView(rawButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(30)).apply { marginStart = dpi(2) })
-        tidyButton.apply {
-            text = "Tidy"; textSize = 13f; gravity = Gravity.CENTER; setPadding(dpi(10), 0, dpi(12), 0)
-            setTypeface(typeface, Typeface.BOLD)
-            contentDescription = "Tidy the text still as dictated"
-            compoundDrawablePadding = dpi(4)
-        }
-        actions.addView(tidyButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(30)).apply { marginStart = dpi(6) })
-        actions.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
-        insertButton.apply {
-            text = "Insert"; textSize = 14f; gravity = Gravity.CENTER; setPadding(dpi(16), 0, dpi(16), 0)
-            setTypeface(typeface, Typeface.BOLD)
-        }
-        actions.addView(insertButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(36)).apply { marginEnd = dpi(8) })
-        micButton.scaleType = ImageView.ScaleType.CENTER
-        actions.addView(micButton, LinearLayout.LayoutParams(dpi(48), dpi(48)))
-        root.addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(48)))
-
-        tidyToggle.setOnClickListener { controller?.let { it.setTidy(!it.ui.tidyOn) } }
-        closeButton.setOnClickListener { controller?.close() }
-        cardClose.setOnClickListener { controller?.dismissQuestion() }
-        discardButton.setOnClickListener { controller?.discard() }
-        undoButton.setOnClickListener { controller?.undo() }
-        rawButton.setOnClickListener { controller?.toggleRaw() }
-        tidyButton.setOnClickListener { controller?.tidyNow() }
-        insertButton.setOnClickListener { controller?.insert() }
-        micButton.setOnClickListener { controller?.onMicButton() }
         render(EditorUi())
+    }
+
+    private inner class Parts {
+        val statusDot = View(context)
+        val statusTime = TextView(context)
+        val statusLabel = TextView(context)
+        val tidyToggle = ImageButton(context)
+        val closeButton = ImageButton(context)
+
+        val card = LinearLayout(context)
+        val cardLabel = TextView(context)
+        val cardChips = LinearLayout(context)
+        val cardClose = ImageButton(context)
+
+        val body = TextView(context)
+        val scroll = LinesScrollView(context, body)
+
+        val discardButton = ImageButton(context)
+        val undoButton = ImageButton(context)
+        val rawButton = TextView(context)
+        val tidyButton = TextView(context)
+        val insertButton = TextView(context)
+        val micButton = ImageButton(context)
+        val root = LinearLayout(context)
+
+        init {
+            root.apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpi(12), dpi(2), dpi(8), dpi(6))
+            }
+            addView(root, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+            // header: status · tidy toggle · close
+            val header = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+            statusDot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(RED) }
+            header.addView(statusDot, LinearLayout.LayoutParams(dpi(8), dpi(8)).apply { marginEnd = dpi(8) })
+            statusTime.apply { textSize = 13f; fontFeatureSettings = "tnum"; setTypeface(typeface, Typeface.BOLD) }
+            header.addView(statusTime, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dpi(8) })
+            statusLabel.apply { textSize = 13f; isSingleLine = true; ellipsize = TextUtils.TruncateAt.END }
+            header.addView(statusLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            iconButton(tidyToggle, R.drawable.kud_ic_tidy, "Tidy on stop")
+            header.addView(tidyToggle, LinearLayout.LayoutParams(dpi(34), dpi(34)))
+            iconButton(closeButton, R.drawable.kud_ic_close, "Close, keep draft")
+            header.addView(closeButton, LinearLayout.LayoutParams(dpi(34), dpi(34)))
+            root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(32)))
+
+            // question card: one at a time, a single row
+            card.apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dpi(10), 0, dpi(2), 0)
+            }
+            cardLabel.apply { textSize = 13f; isSingleLine = true; text = "Did you say" }
+            card.addView(cardLabel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dpi(6) })
+            val chipsScroll = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false }
+            cardChips.apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            chipsScroll.addView(cardChips, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            card.addView(chipsScroll, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            iconButton(cardClose, R.drawable.kud_ic_close, "Dismiss question")
+            cardClose.setPadding(dpi(8), dpi(8), dpi(8), dpi(8))
+            cardClose.scaleType = ImageView.ScaleType.FIT_CENTER
+            card.addView(cardClose, LinearLayout.LayoutParams(dpi(30), dpi(30)))
+            root.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(32)).apply { bottomMargin = dpi(2); marginEnd = dpi(4) })
+
+            // the text: scrolls, shows whole lines only, fades a little where there is more
+            body.apply {
+                textSize = 16f
+                setLineSpacing(dp(2f), 1f)
+                // uniform lines: every line is lineHeight tall (the last one gets its spacing as padding)
+                includeFontPadding = false
+                setPadding(0, 0, dpi(4), lineHeight - paint.getFontMetricsInt(null))
+            }
+            scroll.isVerticalScrollBarEnabled = true
+            scroll.isScrollbarFadingEnabled = true
+            scroll.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+            scroll.isVerticalFadingEdgeEnabled = true
+            scroll.isFillViewport = true
+            scroll.overScrollMode = View.OVER_SCROLL_NEVER
+            scroll.addView(body, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            // the lines are measured in onMeasure; the space below the last whole line stays empty, above the actions
+            val textArea = FrameLayout(context)
+            textArea.addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.TOP))
+            root.addView(textArea, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dpi(2) })
+
+            // actions: discard undo raw tidy · · insert mic (spoken edits: Instruct on the top bar)
+            val actions = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+            iconButton(discardButton, R.drawable.kud_ic_trash, "Discard draft")
+            actions.addView(discardButton, LinearLayout.LayoutParams(dpi(40), dpi(40)))
+            iconButton(undoButton, R.drawable.kud_ic_undo, "Undo")
+            actions.addView(undoButton, LinearLayout.LayoutParams(dpi(40), dpi(40)))
+            rawButton.apply {
+                textSize = 13f; gravity = Gravity.CENTER; setPadding(dpi(10), 0, dpi(10), 0)
+                setTypeface(typeface, Typeface.BOLD)
+            }
+            actions.addView(rawButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(30)).apply { marginStart = dpi(2) })
+            tidyButton.apply {
+                text = "Tidy"; textSize = 13f; gravity = Gravity.CENTER; setPadding(dpi(10), 0, dpi(12), 0)
+                setTypeface(typeface, Typeface.BOLD)
+                contentDescription = "Tidy the text still as dictated"
+                compoundDrawablePadding = dpi(4)
+            }
+            actions.addView(tidyButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(30)).apply { marginStart = dpi(6) })
+            actions.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+            insertButton.apply {
+                text = "Insert"; textSize = 14f; gravity = Gravity.CENTER; setPadding(dpi(16), 0, dpi(16), 0)
+                setTypeface(typeface, Typeface.BOLD)
+            }
+            actions.addView(insertButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpi(36)).apply { marginEnd = dpi(8) })
+            micButton.scaleType = ImageView.ScaleType.CENTER
+            actions.addView(micButton, LinearLayout.LayoutParams(dpi(48), dpi(48)))
+            root.addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpi(48)))
+
+            tidyToggle.setOnClickListener { controller?.let { it.setTidy(!it.ui.tidyOn) } }
+            closeButton.setOnClickListener { controller?.close() }
+            cardClose.setOnClickListener { controller?.dismissQuestion() }
+            discardButton.setOnClickListener { controller?.discard() }
+            undoButton.setOnClickListener { controller?.undo() }
+            rawButton.setOnClickListener { controller?.toggleRaw() }
+            tidyButton.setOnClickListener { controller?.tidyNow() }
+            insertButton.setOnClickListener { controller?.insert() }
+            micButton.setOnClickListener { controller?.onMicButton() }
+        }
     }
 
     /** The key area's height: the tallest other child of the keyboard wrapper (keys or emoji), never more. */
@@ -210,8 +222,11 @@ class KudVoiceEditorView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val bottom = dpi(6) + bottomGap()
-        if (root.paddingBottom != bottom) root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, bottom)
+        val root = parts?.root
+        if (root != null) {
+            val bottom = dpi(6) + bottomGap()
+            if (root.paddingBottom != bottom) root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, bottom)
+        }
         if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) return super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         val parent = parent as? ViewGroup
         var h = 0
@@ -244,9 +259,13 @@ class KudVoiceEditorView @JvmOverloads constructor(
 
     fun render(next: EditorUi) {
         ui = next
-        applyColors()
         visibility = if (ui.open) VISIBLE else GONE
-        if (!ui.open) return
+        if (!ui.open) return // closed: nothing to draw, and the views needn't exist yet
+        applyColors()
+        renderOpen(p)
+    }
+
+    private fun renderOpen(p: Parts) = with(p) {
 
         // header
         val recording = ui.mode == EditorMode.Recording || ui.mode == EditorMode.InstructListening
@@ -339,13 +358,15 @@ class KudVoiceEditorView @JvmOverloads constructor(
         lastScrollFor = key
         if (first && q == null) return // just opened: start at the top
         pendingScroll = q ?: END
-        scroll.requestLayout()
+        p.scroll.requestLayout()
     }
 
     /** What the next layout of the text scrolls to: a question, [END], or nothing. */
     private var pendingScroll: Any? = null
 
     private fun applyPendingScroll() {
+        val body = parts?.body ?: return
+        val scroll = parts?.scroll ?: return
         val p = pendingScroll ?: return
         val layout = body.layout ?: return
         if (scroll.height == 0) return
@@ -374,13 +395,13 @@ class KudVoiceEditorView @JvmOverloads constructor(
         return "$kind · $words ${if (words == 1) "word" else "words"}"
     }
 
-    private fun applyColors() {
+    private fun applyColors() = with(p) {
         val c = Settings.getValues().mColors
         val inc = Settings.getValues().mKudIncognitoLook
-        if (c === colors && inc == incognito) return
+        if (c === colors && inc == incognito) return@with
         colors = c
         incognito = inc
-        c.setBackground(this, ColorType.MAIN_BACKGROUND)
+        c.setBackground(this@KudVoiceEditorView, ColorType.MAIN_BACKGROUND)
         backgroundColor = c.get(ColorType.MAIN_BACKGROUND).let { if (Color.alpha(it) == 0) Color.BLACK else it }
         textColor = c.get(ColorType.KEY_TEXT)
         mutedColor = c.get(ColorType.KEY_HINT_TEXT)
@@ -467,7 +488,7 @@ class KudVoiceEditorView @JvmOverloads constructor(
      * The text's scroll area, sized to a whole number of the text's lines (the remainder becomes space below it), with
      * a fade half a line long at an edge that has more text.
      */
-    private inner class LinesScrollView(context: Context) : ScrollView(context) {
+    private inner class LinesScrollView(context: Context, private val body: TextView) : ScrollView(context) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
             val line = body.lineHeight
@@ -492,10 +513,10 @@ class KudVoiceEditorView @JvmOverloads constructor(
     }
 
     /** For tests: the views a screenshot test taps. */
-    internal val insertView: View get() = insertButton
-    internal val bodyText: CharSequence get() = body.text
-    internal val textScroll: ScrollView get() = scroll
-    internal val textBody: TextView get() = body
+    internal val insertView: View get() = p.insertButton
+    internal val bodyText: CharSequence get() = p.body.text
+    internal val textScroll: ScrollView get() = p.scroll
+    internal val textBody: TextView get() = p.body
 
     companion object {
         private val RED = Color.parseColor("#E5484D")
