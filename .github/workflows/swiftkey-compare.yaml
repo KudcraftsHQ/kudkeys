@@ -13,7 +13,7 @@ concurrency:
 env:
   MODE: layouts                 # run.py mode: all | cases | layouts
   KUD_REF: feat/swiftkey-symbols-numpad   # empty = build Kud Keys from this branch
-  SKIP_SWIFTKEY: '0'            # 1 = Kud Keys only (SwiftKey ground truth from an earlier run)
+  SKIP_SWIFTKEY: '1'            # 1 = Kud Keys only (SwiftKey ground truth from an earlier run)
 
 jobs:
   compare:

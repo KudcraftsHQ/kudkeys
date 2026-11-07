@@ -647,7 +647,7 @@ def ime_keys(xml, ime_pkg):
             label = n.get("content-desc") or n.get("text") or ""
             if label in ("Back", "Switch input method", "Home", "Hide keyboard"):
                 nav.append(r)
-            elif label and len(n) == 0 and n.get("class") == "android.view.View":
+            elif label and len(n) == 0 and n.get("class") in ("android.view.View", "helium314.keyboard.keyboard.Key"):
                 keys.append({"label": label, "b": list(r)})
         for c in n:
             walk(c, r if r else P)
