@@ -54,7 +54,9 @@ def trace(name, opener):
     shown = "mInputShown=true" in sh("dumpsys input_method")
     adb("pull", f"/data/misc/perfetto-traces/{name}.pftrace", os.path.join(OUT, name + ".pftrace"))
     sh(f"rm /data/misc/perfetto-traces/{name}.pftrace")
-    log = sh("logcat -d -s KeyboardSwitcher:V KudWarmup:V LatinIME:I Settings:I InputMethodService:I")
+    log = sh("logcat -d -s KeyboardSwitcher:V KudWarmup:V LatinIME:I Settings:I InputMethodService:I AndroidRuntime:E")
+    if "FATAL EXCEPTION" in log:
+        print(log[log.index("FATAL EXCEPTION"):][:3000], flush=True)
     with open(os.path.join(OUT, name + ".log"), "w") as f:
         f.write(f"ime={ime_ok()} shown={shown}\n" + log)
     print(name, "ime ok" if ime_ok() else "IME NOT SELECTED", "shown" if shown else "NOT SHOWN", flush=True)
