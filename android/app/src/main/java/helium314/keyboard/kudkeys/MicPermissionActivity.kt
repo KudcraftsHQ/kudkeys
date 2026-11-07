@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.edit
 import com.kudcrafts.kudkeys.voice.VoiceSettings
+import com.kudcrafts.kudkeys.voice.credentialPrefs
 import com.kudcrafts.kudkeys.voice.hasMicPermission
 
 /** Invisible activity that asks for the microphone, because a keyboard can't show the system dialog itself. */
@@ -45,12 +46,13 @@ class MicPermissionActivity : Activity() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
         }
 
-        private fun prefs(context: Context) = context.getSharedPreferences(VoiceSettings.PREFS, Context.MODE_PRIVATE)
+        /** Credential-encrypted: null before the first unlock after a reboot (then nothing is blocked). */
+        private fun prefs(context: Context) = credentialPrefs(context, VoiceSettings.PREFS)()
 
         /** The user denied the mic for good; cleared once it is granted. */
-        fun isBlocked(context: Context) = prefs(context).getBoolean(KEY_BLOCKED, false)
+        fun isBlocked(context: Context) = prefs(context)?.getBoolean(KEY_BLOCKED, false) == true
 
-        fun setBlocked(context: Context, blocked: Boolean) = prefs(context).edit { putBoolean(KEY_BLOCKED, blocked) }
+        fun setBlocked(context: Context, blocked: Boolean) { prefs(context)?.edit { putBoolean(KEY_BLOCKED, blocked) } }
 
         /** This app's page in system settings (Permissions → Microphone). */
         fun openAppSettings(context: Context) {

@@ -658,7 +658,11 @@ class KudSync(
 
         /** For LatinIME (Java): [recordRemoved] with the default wiring. Blocking: call off the main thread. */
         @JvmStatic
-        fun suggestionRemoved(context: Context, word: String) = KudSync(context.applicationContext).recordRemoved(word)
+        fun suggestionRemoved(context: Context, word: String) {
+            // the account and the sync files are credential-encrypted: nothing to record before the first unlock
+            if (!androidx.core.os.UserManagerCompat.isUserUnlocked(context)) return
+            KudSync(context.applicationContext).recordRemoved(word)
+        }
 
         fun iso(ms: Long): String = Instant.ofEpochMilli(ms).toString()
         fun parseIso(s: String?): Long? = s?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }

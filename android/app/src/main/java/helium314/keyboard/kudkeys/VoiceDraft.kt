@@ -10,6 +10,7 @@ import android.util.AtomicFile
 import java.io.File
 import java.io.IOException
 import com.kudcrafts.kudkeys.voice.TidyQuestion
+import com.kudcrafts.kudkeys.voice.credentialPrefs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -175,11 +176,13 @@ interface DraftStore {
  * is written once the directory can be used.
  */
 class PrefsDraftStore(
-    private val prefs: SharedPreferences,
+    /** The tidy toggle's prefs (credential-encrypted), or null while they can't be used (user locked). */
+    private val prefsOrNull: () -> SharedPreferences?,
     /** The draft file, or null while it can't be used (user locked). */
     private val draftFile: () -> File?,
 ) : DraftStore {
-    constructor(context: Context) : this(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), credentialFile(context))
+    constructor(prefs: SharedPreferences, draftFile: () -> File?) : this({ prefs }, draftFile)
+    constructor(context: Context) : this(credentialPrefs(context, PREFS), credentialFile(context))
 
     private var memory: VoiceDraft? = null
     /** [memory] still has to be written (it changed while the file couldn't be used). */
@@ -187,7 +190,8 @@ class PrefsDraftStore(
 
     private fun file(): File? {
         val f = draftFile() ?: return null
-        // A draft an earlier build kept in the device-protected prefs moves to the file (and leaves those prefs).
+        val prefs = prefsOrNull() ?: return null
+        // A draft an earlier build kept in the prefs moves to the file (and leaves those prefs).
         prefs.getString(KEY_DRAFT, null)?.let { old ->
             if (!f.exists() && !pending) VoiceDraft.fromJson(old)?.let { write(f, it) }
             prefs.edit().remove(KEY_DRAFT).apply()
@@ -223,8 +227,8 @@ class PrefsDraftStore(
     }
 
     override var tidyOn: Boolean
-        get() = prefs.getBoolean(KEY_TIDY, true)
-        set(value) { prefs.edit().putBoolean(KEY_TIDY, value).apply() }
+        get() = prefsOrNull()?.getBoolean(KEY_TIDY, true) ?: true
+        set(value) { prefsOrNull()?.edit()?.putBoolean(KEY_TIDY, value)?.apply() }
 
     companion object {
         const val PREFS = "kudkeys_draft"
