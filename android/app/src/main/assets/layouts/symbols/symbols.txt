@@ -11,19 +11,20 @@
 
 @
 #
-$$$
-_ % ‰
+$ !fixedColumnOrder!5 !swiftKeyPopup! € ¥ £ $ ¢
 &
-- – ⁻ — ·
-+ ± ⁺
-( ⁽ < { [
-) ⁾ > } ]
-/
+_
+- !fixedColumnOrder!3 !swiftKeyPopup! ¯ — –
+( !fixedColumnOrder!3 !swiftKeyPopup! { < [
+) !fixedColumnOrder!3 !swiftKeyPopup! } > ]
+= !fixedColumnOrder!2 !swiftKeyPopup! ≈ ≠
+% ‰
 
-* † ‡ ★
-"
-'
-:
-;
-!
-?
+" !fixedColumnOrder!5 !swiftKeyPopup! „ “ « » ”
+* ×
+' !fixedColumnOrder!6 !swiftKeyPopup! ʼ ‹ ‡ ` † ›
+: ;
+/ !fixedColumnOrder!2 !swiftKeyPopup! ÷ \\
+! ¡
+? ¿
++ ±

@@ -1,44 +1,44 @@
 [
     [
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "!" },
-        "default": { "label": "1", "popup": { "relevant": [{ "label": "¹" }, { "label": "½" }, { "label": "⅓" }, { "label": "¼" }, { "label": "⅛" }] } }
+        "manualOrLocked": {"label": "!"},
+        "default": {"label": "1", "popup": {"relevant": [{"label": "!fixedColumnOrder!5"}, {"label": "!swiftKeyPopup!"}, {"label": "¹"}, {"label": "⅛"}, {"label": "¼"}, {"label": "⅓"}, {"label": "½"}]}}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "@" },
-        "default": { "label": "2", "popup": { "relevant": [{ "label": "²" }, { "label": "⅔" }] } }
+        "manualOrLocked": {"label": "@"},
+        "default": {"label": "2", "popup": {"relevant": [{"label": "!fixedColumnOrder!2"}, {"label": "!swiftKeyPopup!"}, {"label": "⅔"}, {"label": "²"}]}}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "#" },
-        "default": { "label": "3", "popup": { "relevant": [{ "label": "³" }, { "label": "¾" }, { "label": "⅜" }] } }
+        "manualOrLocked": {"label": "#"},
+        "default": {"label": "3", "popup": {"relevant": [{"label": "!fixedColumnOrder!3"}, {"label": "!swiftKeyPopup!"}, {"label": "¾"}, {"label": "³"}, {"label": "⅜"}]}}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "$" },
-        "default": { "label": "4", "popup": { "relevant": [{ "label": "⁴" }] } }
+        "manualOrLocked": {"label": "$"},
+        "default": {"label": "4", "popup": {"relevant": [{"label": "⁴"}]}}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "%" },
-        "default": { "label": "5", "popup": { "relevant": [{ "label": "⁵" }, { "label": "⅝" }] } }
+        "manualOrLocked": {"label": "%"},
+        "default": {"label": "5", "popup": {"relevant": [{"label": "!fixedColumnOrder!2"}, {"label": "!swiftKeyPopup!"}, {"label": "⅝"}, {"label": "ⁿ"}]}}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "^" },
-        "default": { "label": "6", "popup": { "relevant": [{ "label": "⁶" }] } }
+        "manualOrLocked": {"label": "^"},
+        "default": {"label": "6"}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "&" },
-        "default": { "label": "7", "popup": { "relevant": [{ "label": "⁷" }, { "label": "⅞" }] } }
+        "manualOrLocked": {"label": "&"},
+        "default": {"label": "7", "popup": {"relevant": [{"label": "⅞"}]}}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "*" },
-        "default": { "label": "8", "popup": { "relevant": [{ "label": "⁸" }] } }
+        "manualOrLocked": {"label": "*"},
+        "default": {"label": "8"}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": "(" },
-        "default": { "label": "9", "popup": { "relevant": [{ "label": "⁹" }] } }
+        "manualOrLocked": {"label": "("},
+        "default": {"label": "9"}
       },
       { "$": "shift_state_selector",
-        "manualOrLocked": { "label": ")" },
-        "default": { "label": "0", "popup": { "relevant": [{ "label": "⁰" }, { "label": "ⁿ" }, { "label": "∅" }] } }
+        "manualOrLocked": {"label": ")"},
+        "default": {"label": "0"}
       }
     ]
   ]

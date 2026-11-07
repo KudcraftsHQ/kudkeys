@@ -749,8 +749,10 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         super.onDrawKeyTopVisuals(key, canvas, paint, params);
         final int code = key.getCode();
         if (code == Constants.CODE_SPACE) {
-            // Kud Keys: always show the languages, like SwiftKey ("‹  en/id  ›")
-            drawLanguageOnSpacebar(key, canvas, paint);
+            // Kud Keys: always show the languages on letters, like SwiftKey ("‹  en/id  ›"); symbols and number pads show none
+            final Keyboard keyboard = getKeyboard();
+            if (keyboard == null || keyboard.mId.getElement().isAlphabet())
+                drawLanguageOnSpacebar(key, canvas, paint);
             // Whether space key needs to show the "..." popup hint for special purposes
             if (key.isLongPressEnabled() && mHasMultipleEnabledIMEsOrSubtypes && Settings.getValues().mSpaceForLangChange) {
                 drawKeyPopupHint(key, canvas, paint, params);

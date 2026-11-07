@@ -4,7 +4,9 @@ import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Process
+import android.os.UserManager
 
 /** Where to connect and with what. [isSession]: [token] is an account's session token, not a legacy one. */
 data class VoiceEndpoint(
@@ -20,51 +22,58 @@ data class VoiceEndpoint(
  * Settings → Voice and the account: server URL, the signed-in account (session token, name, email) and the
  * legacy token, in app-private SharedPreferences that backup excludes. The settings screens write these;
  * [VoiceClient] reads them at every [VoiceClient.start]. Tokens never ship in the APK and are never logged.
+ *
+ * The prefs stay in **credential-encrypted** storage, which doesn't exist before the first unlock after a reboot (the
+ * keyboard runs on the lock screen then). Until then everything reads as signed out and writes are dropped; the IME
+ * process restarts on ACTION_USER_UNLOCKED and reads the real values.
  */
-class VoiceSettings(private val prefs: SharedPreferences) {
-    constructor(context: Context) : this(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE))
+class VoiceSettings private constructor(private val store: () -> SharedPreferences?) {
+    constructor(prefs: SharedPreferences) : this({ prefs })
+    constructor(context: Context) : this(credentialPrefs(context, PREFS))
+
+    private val prefs: SharedPreferences? get() = store()
 
     /** Server URL; blank resets to [DEFAULT_URL]. */
     var serverUrl: String
-        get() = prefs.getString(KEY_URL, null)?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_URL
-        set(value) { prefs.edit().putString(KEY_URL, value.trim()).apply() }
+        get() = prefs?.getString(KEY_URL, null)?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_URL
+        set(value) { prefs?.edit()?.putString(KEY_URL, value.trim())?.apply() }
 
     /** The account API's base, from the server URL: `wss://host/v1/stream` → `https://host`. */
     val apiBase: String get() = apiBaseOf(serverUrl)
 
     /** Legacy static token (Settings → Voice → Advanced). */
     var token: String
-        get() = prefs.getString(KEY_TOKEN, null)?.trim() ?: ""
-        set(value) { prefs.edit().putString(KEY_TOKEN, value.trim()).apply() }
+        get() = prefs?.getString(KEY_TOKEN, null)?.trim() ?: ""
+        set(value) { prefs?.edit()?.putString(KEY_TOKEN, value.trim())?.apply() }
 
     /** The account's session token (`set-auth-token`), or "" when signed out. */
-    val sessionToken: String get() = prefs.getString(KEY_SESSION, null)?.trim() ?: ""
-    val accountName: String get() = prefs.getString(KEY_NAME, null) ?: ""
-    val accountEmail: String get() = prefs.getString(KEY_EMAIL, null) ?: ""
+    val sessionToken: String get() = prefs?.getString(KEY_SESSION, null)?.trim() ?: ""
+    val accountName: String get() = prefs?.getString(KEY_NAME, null) ?: ""
+    val accountEmail: String get() = prefs?.getString(KEY_EMAIL, null) ?: ""
     val isSignedIn: Boolean get() = sessionToken.isNotEmpty()
     /** True after the server rejected the session (401), until the next sign-in. */
-    val wasSignedOut: Boolean get() = prefs.getBoolean(KEY_SIGNED_OUT, false)
+    val wasSignedOut: Boolean get() = prefs?.getBoolean(KEY_SIGNED_OUT, false) == true
 
     /** Signed in, or a legacy token set: voice can start. */
     val hasToken: Boolean get() = isSignedIn || token.isNotEmpty()
 
     fun signedIn(sessionToken: String, name: String, email: String) {
-        prefs.edit().putString(KEY_SESSION, sessionToken.trim()).putString(KEY_NAME, name).putString(KEY_EMAIL, email)
-            .putBoolean(KEY_SIGNED_OUT, false).commit()
+        prefs?.edit()?.putString(KEY_SESSION, sessionToken.trim())?.putString(KEY_NAME, name)?.putString(KEY_EMAIL, email)
+            ?.putBoolean(KEY_SIGNED_OUT, false)?.commit()
     }
 
     fun updateAccount(name: String, email: String) {
-        prefs.edit().putString(KEY_NAME, name).putString(KEY_EMAIL, email).apply()
+        prefs?.edit()?.putString(KEY_NAME, name)?.putString(KEY_EMAIL, email)?.apply()
     }
 
     /** Signed out on purpose: forget the account. */
     fun signOut() {
-        prefs.edit().remove(KEY_SESSION).remove(KEY_NAME).remove(KEY_SIGNED_OUT).commit()
+        prefs?.edit()?.remove(KEY_SESSION)?.remove(KEY_NAME)?.remove(KEY_SIGNED_OUT)?.commit()
     }
 
     /** The server rejected the session: drop the token, keep the email to prefill sign-in. */
     fun markSignedOut() {
-        prefs.edit().remove(KEY_SESSION).putBoolean(KEY_SIGNED_OUT, true).commit()
+        prefs?.edit()?.remove(KEY_SESSION)?.putBoolean(KEY_SIGNED_OUT, true)?.commit()
     }
 
     /** The session token when signed in, else the legacy token. */
@@ -99,6 +108,22 @@ class VoiceSettings(private val prefs: SharedPreferences) {
             val host = u.substringAfter("://").substringBefore('/').substringBefore('?')
             return scheme + host
         }
+    }
+}
+
+/** False before the first unlock after a reboot, while credential-encrypted storage can't be used (always true below N). */
+fun isUserUnlocked(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.N || context.getSystemService(UserManager::class.java)?.isUserUnlocked != false
+
+/**
+ * App-private SharedPreferences [name] in credential-encrypted storage, opened on first use: null while the user is
+ * still locked ([isUserUnlocked]), where opening them throws. Callers treat null as "not available yet".
+ */
+fun credentialPrefs(context: Context, name: String): () -> SharedPreferences? {
+    val app = context.applicationContext ?: context
+    var prefs: SharedPreferences? = null
+    return {
+        prefs ?: if (isUserUnlocked(app)) app.getSharedPreferences(name, Context.MODE_PRIVATE).also { prefs = it } else null
     }
 }
 

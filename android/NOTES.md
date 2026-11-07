@@ -65,6 +65,23 @@ cd android
 - Number-hint visibility on letter keys: `PREF_SHOW_NUMBER_ROW_HINTS` / popup hint settings in `Defaults.kt`.
 - Layout unit tests: `app/src/test/java/helium314/keyboard/LayoutTest.kt`, `KeyboardParserTest.kt`.
 
+### Symbols, number and phone pads (copied from SwiftKey 9.13 on an API 34 pixel_6 emulator)
+
+- Symbols page 1: `symbols/symbols.txt` rows 2–3; the number row on top is `number_row/number_row.json` (Number
+  position = top, the default), so its popups (SwiftKey's ¹⅛¼⅓½, ⅔², …) live there. Row 1 of `symbols.txt` only shows
+  with Number position = numpad, which also keeps the numpad key in the bottom row (`KeyboardParser`).
+- Symbols page 2 (`{&=` / `123` toggle = the shift key): `more_symbols/symbols_shifted.json`, its 9-column widths
+  (140 / 6×113.5 / 119 / 140 px of 1080) and the `× § ¶ °` bottom row (`functional_keys.json`, `moreSymbols` branches).
+- Functional row widths/labels per page: `keyboard_state_selector` in `functional/functional_keys.json`
+  (`abc`, `,` 0.12, space 0.5, `.` 0.12, return 0.1296 on page 1). The language label is drawn on the letters
+  spacebar only (`MainKeyboardView`).
+- Popup placement: `!swiftKeyPopup!` (with `!fixedColumnOrder!N`) puts the default key over the pressed key, the extra
+  key of an even count on the left, and never shifts the panel except at the screen edge (`PopupKeysKeyboard`).
+- Number and phone fields: one 6-column pad (`number/number.json`, `phone/phone.json`); number-password fields get the
+  3×4 PIN pad (`password` branches in `number.json`); date/time fields open the normal keyboard on symbols page 1
+  (`KeyboardLayoutSet`, `KeyboardState.onLoadKeyboard`).
+- Ground truth and side-by-sides: `run.py layouts` on the `tools/swiftkey-compare` branch (never merged).
+
 ## SwiftKey look (v0.1)
 
 - Measured from SwiftKey's dark theme on a 411 dp phone: rows ~51.6 dp (`config_default_keyboard_height` 213dp,

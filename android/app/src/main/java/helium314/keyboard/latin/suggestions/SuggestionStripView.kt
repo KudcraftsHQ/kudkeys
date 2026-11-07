@@ -28,6 +28,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.core.os.UserManagerCompat
 import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import helium314.keyboard.event.HapticEvent
@@ -268,7 +269,7 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
         if (key == Settings.PREF_ALWAYS_INCOGNITO_MODE)
             GlobalScope.launch { delay(10); withContext(Dispatchers.Main) { updateKeys() } }
         if (key == KudSettings.PREF_VOICE_TYPING)
-            updateMicVisibility(prefs.getBoolean(key, KudSettings.DEFAULT_VOICE_TYPING))
+            updateMicVisibility(prefs.getBoolean(key, KudSettings.DEFAULT_VOICE_TYPING) && UserManagerCompat.isUserUnlocked(context))
     }
 
     override fun onVisibilityChanged(view: View, visibility: Int) {
@@ -449,6 +450,11 @@ class SuggestionStripView(context: Context, attrs: AttributeSet?, defStyle: Int)
     private fun updateKeys() {
         isPrivateField = Settings.getValues().mIncognitoModeEnabled
         updateMicVisibility(Settings.getValues().mKudVoiceTyping)
+        // ✦ Fix / Instruct need the account (credential-encrypted): hidden before the first unlock after a reboot. The
+        // slots stay so nothing moves; the process restarts on unlock and shows them again.
+        val tools = if (UserManagerCompat.isUserUnlocked(context)) VISIBLE else INVISIBLE
+        fixKey.visibility = tools
+        instructKey.visibility = tools
         isExternalSuggestionVisible = false
         updateMiddle()
     }

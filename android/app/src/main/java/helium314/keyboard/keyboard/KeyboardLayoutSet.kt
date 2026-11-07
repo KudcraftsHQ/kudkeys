@@ -52,7 +52,8 @@ class KeyboardLayoutSet internal constructor(private val mContext: Context, priv
                 if (baseKeyboardLayoutSetElement == KeyboardElement.SYMBOLS) KeyboardElement.PHONE_SYMBOLS
                 else KeyboardElement.PHONE
             }
-            KeyboardMode.NUMBER, KeyboardMode.DATE, KeyboardMode.TIME, KeyboardMode.DATETIME -> KeyboardElement.NUMBER
+            KeyboardMode.NUMBER -> KeyboardElement.NUMBER
+            // Kud Keys: like SwiftKey, date / time fields get the normal keyboard, opened on the symbols page (KeyboardState)
             else -> baseKeyboardLayoutSetElement
         }
 

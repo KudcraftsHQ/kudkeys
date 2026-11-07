@@ -1,49 +1,34 @@
 [
   [
-    { "label": "1", "type": "numeric" },
-    { "label": "2", "type": "numeric" },
-    { "label": "3", "type": "numeric" },
-    { "label": "-", "type": "function", "popup": { "main": { "label": "+" } }, "labelFlags": 64 }
+    {"$": "variation_selector", "default": {"label": "1", "type": "numeric", "width": 0.2}, "password": {"label": "1", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "2", "type": "numeric", "width": 0.2}, "password": {"label": "2", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "3", "type": "numeric", "width": 0.2}, "password": {"label": "3", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "(", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ")", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ",", "type": "numeric", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
   ],
   [
-    { "label": "4", "type": "numeric" },
-    { "label": "5", "type": "numeric" },
-    { "label": "6", "type": "numeric" },
-    { "label": "space", "type": "function" }
+    {"$": "variation_selector", "default": {"label": "4", "type": "numeric", "width": 0.2}, "password": {"label": "4", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "5", "type": "numeric", "width": 0.2}, "password": {"label": "5", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "6", "type": "numeric", "width": 0.2}, "password": {"label": "6", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "+", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "-", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ";", "type": "numeric", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
   ],
   [
-    { "label": "7", "type": "numeric" },
-    { "label": "8", "type": "numeric" },
-    { "label": "9", "type": "numeric" },
-    { "label": "delete" }
+    {"$": "variation_selector", "default": {"label": "7", "type": "numeric", "width": 0.2}, "password": {"label": "7", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "8", "type": "numeric", "width": 0.2}, "password": {"label": "8", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "9", "type": "numeric", "width": 0.2}, "password": {"label": "9", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "/", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "N", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "delete", "width": 0.14}, "password": {"$": "keyboard_state_selector"}}
   ],
   [
-    { "$": "variation_selector",
-      "default": { "label": ",", "type": "numeric", "groupId": 1 },
-      "date": { "label": ".", "type": "numeric", "groupId": 1 },
-      "time": { "label": ".", "type": "numeric", "groupId": 1, "popup": { "relevant": [
-        { "label": "!fixedColumnOrder!2" },
-        { "label": "!hasLabels!" },
-        { "label": "AM" },
-        { "label": "PM" }
-      ] } },
-      "datetime": { "label": ".", "type": "numeric", "groupId": 1, "popup": { "relevant": [
-        { "label": "!fixedColumnOrder!2" },
-        { "label": "!hasLabels!" },
-        { "label": "AM" },
-        { "label": "PM" }
-      ] } }
-    },
-    { "label": "0", "type": "numeric" },
-    { "$": "variation_selector",
-      "default": { "label": ".", "type": "numeric", "labelFlags": 1073741824 },
-      "date": { "label": "/", "type": "numeric" },
-      "time": { "label": ":", "type": "numeric" },
-      "datetime": { "label": "/ :|/", "type": "numeric", "popup": { "relevant": [
-        { "label": "!noPanelAutoPopupKey!" },
-        { "label": "," }
-      ] } }
-    },
-    { "label": "enter"}
+    {"$": "variation_selector", "default": {"label": "*", "type": "numeric", "width": 0.2}, "password": {"label": "delete", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "0", "type": "numeric", "width": 0.2}, "password": {"label": "0", "type": "numeric", "width": 0.3333}},
+    {"$": "variation_selector", "default": {"label": "#", "type": "numeric", "width": 0.2}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": ".", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "!icon/space_key|!code/key_space", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
+    {"$": "variation_selector", "default": {"label": "!icon/enter_key|!code/key_enter", "type": "function", "width": 0.14}, "password": {"label": "!icon/enter_key|!code/key_enter", "type": "function", "width": 0.3333}}
   ]
 ]

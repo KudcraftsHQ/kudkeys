@@ -54,9 +54,10 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
         // should this also be done with punctuation popupKeys?
         // todo: those defaults should not be in here
         if ("\'" !in popupKeys)
-            popupKeys["\'"] = mutableListOf("!fixedColumnOrder!5", "‚", "‘", "’", "‹", "›")
+            // Kud Keys: SwiftKey's apostrophe and quote popups (layout popups on the symbols page say the same)
+            popupKeys["\'"] = mutableListOf("!fixedColumnOrder!6", "!swiftKeyPopup!", "ʼ", "‹", "‡", "`", "†", "›")
         if ("\"" !in popupKeys)
-            popupKeys["\""] = mutableListOf("!fixedColumnOrder!5", "„", "“", "”", "«", "»")
+            popupKeys["\""] = mutableListOf("!fixedColumnOrder!5", "!swiftKeyPopup!", "„", "“", "«", "»", "”")
         if ("!" !in popupKeys)
             popupKeys["!"] = mutableListOf("¡")
         if (labelQuestion !in popupKeys)

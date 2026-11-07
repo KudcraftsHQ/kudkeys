@@ -32,6 +32,7 @@ public final class PopupKeysKeyboard extends Keyboard {
 
     static class PopupKeysKeyboardParams extends KeyboardParams {
         public boolean mIsPopupKeysFixedOrder;
+        public boolean mIsPopupKeysSwiftKey;
         /* package */int mTopRowAdjustment;
         public int mNumRows;
         public int mNumColumns;
@@ -81,7 +82,7 @@ public final class PopupKeysKeyboard extends Keyboard {
             final int topKeys = numKeys % numColumns;
             mTopKeys = topKeys == 0 ? numColumns : topKeys;
 
-            final int numLeftKeys = (numColumns - 1) / 2;
+            final int numLeftKeys = mIsPopupKeysSwiftKey ? numColumns / 2 : (numColumns - 1) / 2;
             final int numRightKeys = numColumns - numLeftKeys; // including default key.
             // Maximum number of keys we can layout both side of the parent key
             final int maxLeftKeys = coordXInParent / keyWidth;
@@ -99,13 +100,13 @@ public final class PopupKeysKeyboard extends Keyboard {
             }
             // If the left keys fill the left side of the parent key, entire popup keys keyboard
             // should be shifted to the right unless the parent key is on the left edge.
-            if (maxLeftKeys == leftKeys && leftKeys > 0) {
+            if (maxLeftKeys == leftKeys && leftKeys > 0 && !mIsPopupKeysSwiftKey) {
                 leftKeys--;
                 rightKeys++;
             }
             // If the right keys fill the right side of the parent key, entire popup keys
             // should be shifted to the left unless the parent key is on the right edge.
-            if (maxRightKeys == rightKeys - 1 && rightKeys > 1) {
+            if (maxRightKeys == rightKeys - 1 && rightKeys > 1 && !mIsPopupKeysSwiftKey) {
                 leftKeys++;
                 rightKeys--;
             }
@@ -150,7 +151,7 @@ public final class PopupKeysKeyboard extends Keyboard {
             if (!isTopRow(row)) {
                 return col - mLeftKeys;
             }
-            final int rightSideKeys = mTopKeys / 2;
+            final int rightSideKeys = mIsPopupKeysSwiftKey ? (mTopKeys - 1) / 2 : mTopKeys / 2;
             final int leftSideKeys = mTopKeys - (rightSideKeys + 1);
             final int pos = col - leftSideKeys;
             final int numLeftKeys = mLeftKeys + mTopRowAdjustment;
@@ -304,6 +305,7 @@ public final class PopupKeysKeyboard extends Keyboard {
                     ? defaultColumns
                     : (spaceForKeys > 0 ? spaceForKeys : defaultColumns);
             if (finalNumColumns < 1) finalNumColumns = 1; // avoid exception in setParameters
+            mParams.mIsPopupKeysSwiftKey = key.isPopupKeysSwiftKey();
             mParams.setParameters(popupKeys.length, finalNumColumns, keyWidth,
                     rowHeight, key.getX() + key.getWidth() / 2, keyboard.mId.getWidth(),
                     key.isPopupKeysFixedColumn(), key.isPopupKeysFixedOrder(), dividerWidth);

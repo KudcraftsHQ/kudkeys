@@ -215,7 +215,10 @@ public class SettingsValues {
         mKudQuickPredictionInsert = prefs.getBoolean(KudSettings.PREF_QUICK_PREDICTION_INSERT, KudSettings.DEFAULT_QUICK_PREDICTION_INSERT);
         mKudDeleteWordsWhenHeld = prefs.getBoolean(KudHoldDelete.PREF_DELETE_WORDS_WHEN_HELD, KudHoldDelete.DEFAULT_DELETE_WORDS_WHEN_HELD);
         mKudEmojiOnEnter = prefs.getBoolean(KudSettings.PREF_EMOJI_ON_ENTER, KudSettings.DEFAULT_EMOJI_ON_ENTER);
-        mKudVoiceTyping = prefs.getBoolean(KudSettings.PREF_VOICE_TYPING, KudSettings.DEFAULT_VOICE_TYPING);
+        // kudkeys: no voice before the first unlock after a reboot (the account is in credential-encrypted storage);
+        // the process restarts on ACTION_USER_UNLOCKED, so this is read again then
+        mKudVoiceTyping = prefs.getBoolean(KudSettings.PREF_VOICE_TYPING, KudSettings.DEFAULT_VOICE_TYPING)
+                && androidx.core.os.UserManagerCompat.isUserUnlocked(context);
         mKudClassicSound = KudSettings.SOUND_PROFILE_CLASSIC.equals(prefs.getString(KudSettings.PREF_SOUND_PROFILE, KudSettings.DEFAULT_SOUND_PROFILE));
         String languagePref = prefs.getString(Settings.PREF_LANGUAGE_SWITCH_KEY, Defaults.PREF_LANGUAGE_SWITCH_KEY);
         mLanguageSwitchKeyToOtherImes = languagePref.equals("input_method") || languagePref.equals("both");
