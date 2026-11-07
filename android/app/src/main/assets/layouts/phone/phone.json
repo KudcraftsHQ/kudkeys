@@ -29,6 +29,6 @@
     {"label": "#", "type": "numeric", "width": 0.2},
     {"label": ".", "type": "numeric", "width": 0.13},
     {"label": "!icon/space_key|!code/key_space", "type": "numeric", "width": 0.13},
-    {"label": "enter", "width": 0.14}
+    {"label": "!icon/enter_key|!code/key_enter", "type": "function", "width": 0.14}
   ]
 ]

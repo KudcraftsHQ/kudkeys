@@ -29,6 +29,6 @@
     {"$": "variation_selector", "default": {"label": "#", "type": "numeric", "width": 0.2}, "password": {"$": "keyboard_state_selector"}},
     {"$": "variation_selector", "default": {"label": ".", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
     {"$": "variation_selector", "default": {"label": "!icon/space_key|!code/key_space", "type": "numeric", "width": 0.13}, "password": {"$": "keyboard_state_selector"}},
-    {"$": "variation_selector", "default": {"label": "enter", "width": 0.14}, "password": {"label": "enter", "width": 0.3333}}
+    {"$": "variation_selector", "default": {"label": "!icon/enter_key|!code/key_enter", "type": "function", "width": 0.14}, "password": {"label": "!icon/enter_key|!code/key_enter", "type": "function", "width": 0.3333}}
   ]
 ]
