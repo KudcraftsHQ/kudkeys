@@ -508,7 +508,7 @@ public final class KeyboardSwitcher {
 
     @SuppressLint("InflateParams")
     public View onCreateInputView(@NonNull Context displayContext, boolean isHardwareAcceleratedDrawingEnabled) {
-        Log.d(TAG, "create new input view");
+        Log.d(TAG, "onCreateInputView");
         if (mKeyboardView != null) {
             mKeyboardView.closing();
         }
