@@ -853,6 +853,8 @@ def main():
     sh("settings put global hide_error_dialogs 1")
     time.sleep(20)  # let the launcher and system settle after a cold boot
     install_all()
+    u2()  # accessibility service up before any keyboard view exists (Kud Keys only exposes key nodes then)
+    sh(f"am force-stop {KUD_PKG}")
     results = {"device": {"size": sh("wm size").strip(), "density": sh("wm density").strip(),
                           "sdk": sh("getprop ro.build.version.sdk").strip()},
                "versions": {}}
