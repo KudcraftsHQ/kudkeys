@@ -1,29 +1,30 @@
-% ‰
-\
-|
-=
-[
-]
-<
->
-{
-}
+1 !fixedColumnOrder!5 ¹ ⅛ ¼ ⅓ ½
+2 !fixedColumnOrder!2 !evenLeft! ⅔ ²
+3 !fixedColumnOrder!3 ¾ ³ ⅜
+4 ⁴
+5 !fixedColumnOrder!2 !evenLeft! ⅝ ⁿ
+6
+7 ⅞
+8
+9
+0
 
 @
 #
-$$$
-_ % ‰
+$ !fixedColumnOrder!5 € ¥ £ $ ¢
 &
-- – ⁻ — ·
-+ ± ⁺
-( ⁽ < { [
-) ⁾ > } ]
-/
+_
+- !fixedColumnOrder!3 ¯ — –
+( !fixedColumnOrder!3 { < [
+) !fixedColumnOrder!3 } > ]
+= !fixedColumnOrder!2 !evenLeft! ≈ ≠
+% ‰
 
-* † ‡ ★
-"
-'
-:
-;
-!
-?
+" !fixedColumnOrder!5 „ “ « » ”
+* ×
+' !fixedColumnOrder!6 !evenLeft! ʼ ‹ ‡ ` † ›
+: ;
+/ !fixedColumnOrder!2 !evenLeft! ÷ \\
+! ¡
+? ¿
++ ±

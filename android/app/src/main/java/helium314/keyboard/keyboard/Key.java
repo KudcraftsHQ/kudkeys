@@ -124,12 +124,16 @@ public class Key implements Comparable<Key> {
     private static final int POPUP_KEYS_FLAGS_HAS_LABELS = 0x40000000;
     private static final int POPUP_KEYS_FLAGS_NEEDS_DIVIDERS = 0x20000000;
     private static final int POPUP_KEYS_FLAGS_NO_PANEL_AUTO_POPUP_KEY = 0x10000000;
+    // Kud Keys (SwiftKey-style popups): with a fixed column order, the default key sits over the
+    // pressed key, an even count puts the extra key on the left, and the panel only shifts at the edge.
+    private static final int POPUP_KEYS_FLAGS_EVEN_LEFT = 0x08000000;
     // TODO: Rename these specifiers to !autoOrder! and !fixedOrder! respectively.
     public static final String POPUP_KEYS_AUTO_COLUMN_ORDER = "!autoColumnOrder!";
     public static final String POPUP_KEYS_FIXED_COLUMN_ORDER = "!fixedColumnOrder!";
     public static final String POPUP_KEYS_HAS_LABELS = "!hasLabels!";
     private static final String POPUP_KEYS_NEEDS_DIVIDERS = "!needsDividers!";
     private static final String POPUP_KEYS_NO_PANEL_AUTO_POPUP_KEY = "!noPanelAutoPopupKey!";
+    private static final String POPUP_KEYS_EVEN_LEFT = "!evenLeft!";
 
     /** Background type that represents different key background visual than normal one. */
     private final int mBackgroundType;
@@ -689,6 +693,10 @@ public class Key implements Comparable<Key> {
         return (mPopupKeysColumnAndFlags & POPUP_KEYS_FLAGS_FIXED_ORDER) != 0;
     }
 
+    public final boolean isPopupKeysEvenLeft() {
+        return (mPopupKeysColumnAndFlags & POPUP_KEYS_FLAGS_EVEN_LEFT) != 0;
+    }
+
     public final boolean hasLabelsInPopupKeys() {
         return (mPopupKeysColumnAndFlags & POPUP_KEYS_FLAGS_HAS_LABELS) != 0;
     }
@@ -1051,6 +1059,9 @@ public class Key implements Comparable<Key> {
             }
             if (PopupKeySpec.getBooleanValue(popupKeys, POPUP_KEYS_NO_PANEL_AUTO_POPUP_KEY)) {
                 popupKeysColumnAndFlags |= POPUP_KEYS_FLAGS_NO_PANEL_AUTO_POPUP_KEY;
+            }
+            if (PopupKeySpec.getBooleanValue(popupKeys, POPUP_KEYS_EVEN_LEFT)) {
+                popupKeysColumnAndFlags |= POPUP_KEYS_FLAGS_EVEN_LEFT;
             }
             return popupKeysColumnAndFlags;
         }
