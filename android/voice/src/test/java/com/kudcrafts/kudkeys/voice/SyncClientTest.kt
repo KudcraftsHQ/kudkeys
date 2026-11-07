@@ -106,6 +106,21 @@ class SyncClientTest {
         assertEquals(1, server.requestCount)
     }
 
+    @Test fun importWords_bodyAndAnswer() = runBlocking<Unit> {
+        server.enqueue(json(200, """{"added":2,"skipped":1}"""))
+        assertEquals(SyncResult.Ok(2), client.importWords("sess.tok", "id", SyncWord.SOURCE_SWIFTKEY, listOf("zorbel", "plimko", "vandrel")))
+        val b = Json.parseToJsonElement(take("POST", "/api/sync/words/import").body.readUtf8()).jsonObject
+        assertEquals("id", b["locale"]!!.jsonPrimitive.content)
+        assertEquals("swiftkey", b["source"]!!.jsonPrimitive.content)
+        assertEquals(listOf("zorbel", "plimko", "vandrel"), b["words"]!!.jsonArray.map { it.jsonPrimitive.content })
+
+        server.enqueue(json(503, """{"error":"busy"}"""))
+        assertEquals(SyncResult.Unavailable, client.importWords("sess.tok", "id", SyncWord.SOURCE_SWIFTKEY, listOf("zorbel")))
+        val tooMany = List(SyncClient.MAX_IMPORT_WORDS + 1) { "w$it" }
+        assertTrue(runCatching { client.importWords("sess.tok", "id", SyncWord.SOURCE_SWIFTKEY, tooMany) }.isFailure)
+        assertEquals(2, server.requestCount)
+    }
+
     @Test fun backups_listUploadDownloadDelete() = runBlocking<Unit> {
         server.enqueue(json(200, """[{"id":"b2","createdAt":"2026-10-31T02:00:00.000Z","deviceName":"Pixel 8","kind":"auto","sizeBytes":123456},
             {"id":"b1","createdAt":"2026-10-30T02:00:00.000Z","deviceName":"Pixel 8","kind":"manual","sizeBytes":99}]"""))

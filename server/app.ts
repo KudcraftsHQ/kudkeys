@@ -44,7 +44,7 @@ export interface AppDeps {
   now?: () => number
 }
 
-const PRIVATE_PATHS = /^\/api\/(sync|words|backups)(\/|$)/
+const PRIVATE_PATHS = /^\/api\/(sync|words|backups|text|me)(\/|$)/
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
@@ -88,7 +88,7 @@ export function createApp(deps: AppDeps) {
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse()
     if (PRIVATE_PATHS.test(c.req.path)) {
-      // Words, settings and backups never reach the log: a database error's
+      // Words, settings, backups and text never reach the log: a database error's
       // message can quote the row, so only its name and code are logged.
       const code = (err as { code?: unknown }).code
       console.error(`[kudkeys] ${c.req.method} ${c.req.routePath} failed: ${err.name}${code ? ` ${String(code)}` : ''}`)

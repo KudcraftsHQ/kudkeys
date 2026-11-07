@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "setup": "bash \"$CONDUCTOR_ROOT_PATH/scripts/conductor-setup.sh\"",
+    "run": "export API_PORT=$((CONDUCTOR_PORT + 1)); (cd app && PORT=$CONDUCTOR_PORT API_PORT=$API_PORT bun run dev --host 0.0.0.0) & (cd server && PORT=$API_PORT bun run dev) & wait",
+    "archive": "echo 'Nothing to clean up: .env goes with the worktree, the dev database with conductor.'"
+  },
+  "ports": {
+    "default": 2,
+    "labels": [
+      "app",
+      "server"
+    ]
+  }
+}

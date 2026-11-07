@@ -40,6 +40,8 @@ public final class InputAttributes {
     final public boolean mNoLearning;
     /** kudkeys: private field (incognito, password, URL, search, launcher), see {@link helium314.keyboard.kudkeys.KudPrivacy} */
     final public boolean mIsPrivate;
+    /** kudkeys: a field for everyday words (not URL, email, search, password), see {@link helium314.keyboard.kudkeys.KudPrivacy#isForEverydayText} */
+    final public boolean mIsKudEverydayText;
     /**
      * Whether the floating gesture preview should be disabled. If true, this should override the
      * corresponding keyboard settings preference, always suppressing the floating preview text.
@@ -58,6 +60,7 @@ public final class InputAttributes {
         mTargetApplicationPackageName = null != editorInfo ? editorInfo.packageName : null;
         mInputType = AppWorkarounds.INSTANCE.adjustInputType(null != editorInfo ? editorInfo.inputType : 0, mTargetApplicationPackageName);
         mIsPrivate = helium314.keyboard.kudkeys.KudPrivacy.isPrivate(editorInfo, mTargetApplicationPackageName);
+        mIsKudEverydayText = helium314.keyboard.kudkeys.KudPrivacy.isForEverydayText(editorInfo, mTargetApplicationPackageName);
         final int inputClass = mInputType & InputType.TYPE_MASK_CLASS;
         mIsPasswordField = InputTypeUtils.isPasswordInputType(mInputType)
                 || InputTypeUtils.isVisiblePasswordInputType(mInputType);

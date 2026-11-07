@@ -31,6 +31,8 @@
     <string name="kud_autocorrect_summary" translatable="false">Words will be corrected to the middle prediction as you type</string>
     <string name="kud_undo_autocorrect" translatable="false">Undo autocorrect on backspace</string>
     <string name="kud_undo_autocorrect_summary" translatable="false">Backspacing after an autocorrection will return original text</string>
+    <string name="kud_fix_apostrophes" translatable="false">Fix apostrophes</string>
+    <string name="kud_fix_apostrophes_summary" translatable="false">dont → don’t and im → I’m when you press space, even with Autocorrect off</string>
     <string name="kud_quick_prediction" translatable="false">Quick prediction insert</string>
     <string name="kud_quick_prediction_summary" translatable="false">Tapping the spacebar will insert the middle prediction, even when you haven’t started the next word</string>
     <string name="kud_quick_period" translatable="false">Quick period</string>

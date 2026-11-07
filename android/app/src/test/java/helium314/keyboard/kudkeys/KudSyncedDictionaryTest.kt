@@ -6,6 +6,9 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.kudkeys.sync.KudSyncLocales
 import helium314.keyboard.kudkeys.sync.KudSyncedDictionary
 import helium314.keyboard.kudkeys.sync.SyncedDictFiles
+import helium314.keyboard.kudkeys.sync.SwiftKeyDictFiles
+import helium314.keyboard.kudkeys.sync.KudSyncStore
+import helium314.keyboard.kudkeys.sync.KudSyncedWords
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.NgramContext
 import helium314.keyboard.latin.WordComposer
@@ -60,7 +63,7 @@ class KudSyncedDictionaryTest {
         val locale = KudSyncLocales.enabled().first { KudSyncLocales.lang(it) == "en" }
 
         val words = mapOf("glorbixate" to 12, "vandelopia" to 1, "snorfleplex" to 3, "two words" to 5)
-        SyncedDictFiles(ime).rebuild(setOf("en"), mapOf("en" to words))
+        SyncedDictFiles(ime).rebuild(setOf("en"), KudSyncedWords(mapOf("en" to words)))
 
         val file = KudSyncedDictionary.file(ime, locale)!!
         assertEquals("synced_user.dict", file.name)
@@ -82,13 +85,62 @@ class KudSyncedDictionaryTest {
 
         // a removed word leaves the file on the next rebuild; no words left → no file
         dicts.forEach { it.close() }
-        SyncedDictFiles(ime).rebuild(setOf("en"), mapOf("en" to words - "glorbixate"))
+        SyncedDictFiles(ime).rebuild(setOf("en"), KudSyncedWords(mapOf("en" to words - "glorbixate")))
         val again = DictionaryFactory.getDictionary(file, locale)!!
         assertFalse(again.isValidWord("glorbixate"))
         assertTrue(again.isValidWord("vandelopia"))
         again.close()
-        SyncedDictFiles(ime).rebuild(setOf("en"), emptyMap())
+        SyncedDictFiles(ime).rebuild(setOf("en"), KudSyncedWords(emptyMap()))
         assertFalse(file.exists())
+    }
+
+    private fun setUpKeyboard(): Pair<LatinIME, Locale> {
+        val ime = Robolectric.setupService(LatinIME::class.java)
+        ime.prefs().edit().clear().commit()
+        SubtypeSettings.reloadEnabledSubtypes(ime)
+        KeyboardSwitcher.getInstance().apply { onCreateInputView(ime, true); reloadMainKeyboard() }
+        return ime to KudSyncLocales.enabled().first { KudSyncLocales.lang(it) == "en" }
+    }
+
+    @Test fun theSyncedDictionaryLeavesOutImportedWordsTheMainDictionaryHas() {
+        val (ime, locale) = setUpKeyboard()
+        val store = KudSyncStore(File(ime.cacheDir, "dict-test").also { it.deleteRecursively() })
+        val dicts = SyncedDictFiles(ime, store)
+        // a sentence-start capture of a common word, an unknown word (both imported), a typed common word
+        val words = KudSyncedWords(
+            mirror = mapOf("en" to mapOf("Because" to 3, "zorbelfrax" to 2, "about" to 5)),
+            imported = mapOf("en" to setOf("Because", "zorbelfrax")),
+        )
+        dicts.rebuild(setOf("en"), words)
+
+        val synced = DictionaryFactory.getDictionary(KudSyncedDictionary.file(ime, locale)!!, locale)!!
+        assertTrue(synced.isValidWord("zorbelfrax"))
+        assertTrue(synced.isValidWord("about"), "typed words always stay")
+        assertFalse(synced.isValidWord("Because"))
+        assertFalse(synced.isValidWord("because"), "the main dictionary has it")
+        synced.close()
+
+        // built with the current filter and main dictionary: not stale; a different stamp (an older filter) is
+        assertEquals(emptySet(), dicts.stale(words))
+        store.dictStamps = store.dictStamps.mapValues { "v0|" }
+        assertEquals(setOf("en"), dicts.stale(words))
+        // a lang with no words never needs a rebuild
+        assertEquals(emptySet(), dicts.stale(KudSyncedWords(emptyMap())))
+    }
+
+    @Test fun theOldSwiftKeyDictionaryIsReadWordByWord() {
+        val (ime, locale) = setUpKeyboard()
+        val dir = File(helium314.keyboard.latin.utils.DictionaryInfoUtils.getCacheDirectoryForLocale(locale, ime)!!)
+        val file = File(dir, SwiftKeyDictFiles.FILE_NAME)
+        KudSyncedDictionary.write(file, locale, mapOf("zorbelfrax" to 1, "Vandrelik" to 1, "plimkott" to 1))
+
+        val legacy = SwiftKeyDictFiles(ime)
+        assertEquals(mapOf("en" to setOf("zorbelfrax", "Vandrelik", "plimkott")), legacy.read())
+        assertFalse(legacy.delete(setOf("id")))
+        assertTrue(file.exists())
+        assertTrue(legacy.delete(setOf("en")))
+        assertFalse(file.exists())
+        assertEquals(emptyMap(), legacy.read())
     }
 
     companion object {

@@ -13,6 +13,8 @@ import helium314.keyboard.kudkeys.sync.KudSync
 import helium314.keyboard.kudkeys.sync.KudSyncOutcome
 import helium314.keyboard.kudkeys.sync.KudSyncStore
 import helium314.keyboard.kudkeys.sync.KudSyncedDicts
+import helium314.keyboard.kudkeys.sync.KudSyncedWords
+import helium314.keyboard.kudkeys.sync.KudLegacyImport
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.utils.SubtypeSettings
 import helium314.keyboard.latin.utils.prefs
@@ -66,11 +68,23 @@ class KudSyncTest {
     private var mergedSettings: String? = null
     private var serverWords = """{"words":[],"now":"2026-10-31T00:00:00.000Z"}"""
     private var status = 200
+    private var importStatus = 200
     private var backupZip = ByteArray(0)
 
     private var typed: Map<String, Map<String, LearnedWord>>? = emptyMap()
     private val historyRemoved = mutableListOf<Pair<String, Set<String>>>()
     private val rebuilt = mutableListOf<Pair<Set<String>, Map<String, Map<String, Int>>>>()
+    private val rebuiltWords = mutableListOf<KudSyncedWords>()
+    /** The old swiftkey_user.dict per lang, as the fake legacy import holds it (null: can't be read). */
+    private val legacyFiles = mutableMapOf<String, Set<String>?>()
+    private val legacy = object : KudLegacyImport {
+        override fun read() = legacyFiles.filterValues { it != null }.mapValues { it.value!! }
+        override fun delete(langs: Set<String>): Boolean {
+            val hit = legacyFiles.keys.filter { it in langs }
+            hit.forEach(legacyFiles::remove)
+            return hit.isNotEmpty()
+        }
+    }
     private var signedOutCalls = 0
     private var now = 1_790_000_000_000L
 
@@ -81,7 +95,8 @@ class KudSyncTest {
             override fun read() = typed
             override fun remove(lang: String, words: Collection<String>) { historyRemoved += lang to words.toSet() }
         },
-        dicts = KudSyncedDicts { langs, mirror -> rebuilt += langs to mirror },
+        dicts = KudSyncedDicts { langs, words -> rebuilt += langs to words.mirror; rebuiltWords += words },
+        legacyImport = legacy,
         prefs = prefs, clock = { now }, onSignedOut = { signedOutCalls++ },
     )
 
@@ -103,6 +118,8 @@ class KudSyncTest {
                         serverPrefs = mergeLikeServer(serverPrefs ?: JsonObject(emptyMap()), b["prefs"]!!.jsonObject)
                         json(200, mergedSettings ?: """{"prefs":$serverPrefs,"updatedAt":${b["updatedAt"]}}""")
                     }
+                    path == "/api/sync/words/import" ->
+                        if (importStatus != 200) json(importStatus, """{"error":"x"}""") else json(200, """{"added":1,"skipped":0}""")
                     path.startsWith("/api/sync/words") && request.method == "GET" -> json(200, serverWords)
                     path == "/api/sync/words" -> json(200, """{"accepted":1,"now":"2026-10-31T01:00:00.000Z"}""")
                     path == "/api/backups" && request.method == "POST" -> json(200, """{"id":"b9"}""")
@@ -142,7 +159,10 @@ class KudSyncTest {
     private fun bodies(method: String, pathPrefix: String) = synchronized(requests) {
         requests.filter { it.first.method == method && it.first.path!!.startsWith(pathPrefix) }.map { it.second }
     }
-    private fun postedWords(): List<JsonObject> = bodies("POST", "/api/sync/words").flatMap {
+    private fun imports(): List<JsonObject> = bodies("POST", "/api/sync/words/import").map { Json.parseToJsonElement(String(it)).jsonObject }
+    private fun postedWords(): List<JsonObject> = bodies("POST", "/api/sync/words").filterNot {
+        String(it).startsWith("{\"locale\"") // an import: plain words, see imports()
+    }.flatMap {
         Json.parseToJsonElement(String(it)).jsonObject["words"]!!.jsonArray.map { w -> w.jsonObject }
     }
 
@@ -518,13 +538,142 @@ class KudSyncTest {
         assertEquals(SyncClient.sha256(body), req.getHeader("X-Backup-Sha256"))
     }
 
+    // ---- the old swiftkey_user.dict ----
+
+    private fun importedWords(body: JsonObject) = body["words"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet()
+
+    @Test fun swiftKeyDictionary_goesToTheAccountThenTheFileIsDeleted() = runBlocking<Unit> {
+        legacyFiles["id"] = setOf("zorbel", "plimko", "vandrel")
+        // the server answers the pull with the imported rows, source swiftkey
+        serverWords = """{"words":[
+            {"word":"zorbel","locale":"id","count":1,"source":"swiftkey","deleted":false,"updatedAt":"2026-10-31T00:00:00Z"},
+            {"word":"plimko","locale":"id","count":1,"source":"swiftkey","deleted":false,"updatedAt":"2026-10-31T00:00:00Z"},
+            {"word":"vandrel","locale":"id","count":3,"source":"typed","deleted":false,"updatedAt":"2026-10-31T00:00:00Z"}],
+            "now":"2026-10-31T00:00:00.000Z"}"""
+
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+
+        // the import goes before the pull, so the pull brings the words back with their source
+        val c = calls()
+        assertTrue(c.indexOf("POST /api/sync/words/import") in 0 until c.indexOf("GET /api/sync/words"), "calls: $c")
+        val sent = imports().single()
+        assertEquals("id", sent["locale"]!!.jsonPrimitive.content)
+        assertEquals("swiftkey", sent["source"]!!.jsonPrimitive.content)
+        assertEquals(setOf("zorbel", "plimko", "vandrel"), importedWords(sent))
+        // safely on the server and in the mirror: the file is gone and nothing is queued
+        assertTrue(legacyFiles.isEmpty(), "the SwiftKey file is deleted")
+        assertTrue(store.pendingImport.isEmpty())
+        assertEquals(mapOf("id" to setOf("zorbel", "plimko")), store.imported)
+        assertEquals(setOf("zorbel", "plimko"), rebuiltWords.last().imported["id"])
+        assertTrue("id" in rebuilt.last().first)
+
+        // next sync: nothing to import any more
+        requests.clear()
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+        assertTrue(imports().isEmpty())
+    }
+
+    @Test fun swiftKeyDictionary_staysWhenTheImportFails() = runBlocking<Unit> {
+        legacyFiles["id"] = setOf("zorbel", "plimko")
+        importStatus = 503
+
+        assertEquals(KudSyncOutcome.Retry, sync.sync())
+
+        assertEquals(setOf("zorbel", "plimko"), legacyFiles["id"], "never deleted before its words are safe")
+        assertEquals(setOf("zorbel", "plimko"), store.pendingImport["id"])
+        assertTrue(calls().none { it.startsWith("GET /api/sync/words") }, "no pull after a failed import")
+        // meanwhile the words are in the synced dictionary
+        assertEquals(setOf("zorbel", "plimko"), rebuiltWords.last().forLang("id").keys)
+
+        importStatus = 200
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+        assertTrue(legacyFiles.isEmpty())
+        assertTrue(store.pendingImport.isEmpty())
+    }
+
+    @Test fun swiftKeyDictionary_signedOut_isKeptLocallyThenDeleted() = runBlocking<Unit> {
+        voice.markSignedOut()
+        legacyFiles["id"] = setOf("zorbel", "plimko")
+
+        sync.maintain()
+
+        assertTrue(legacyFiles.isEmpty(), "deleted once its words are queued on disk")
+        assertEquals(setOf("zorbel", "plimko"), store.pendingImport["id"])
+        assertEquals(setOf("zorbel", "plimko"), rebuiltWords.last().forLang("id").keys, "and in the synced dictionary")
+        assertTrue(calls().isEmpty(), "nothing sent while signed out")
+
+        // signed in later: the queue goes up
+        voice.signedIn("sess.SECRET-TOKEN", "Test", "test@example.com")
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+        assertEquals(setOf("zorbel", "plimko"), importedWords(imports().single()))
+        assertTrue(store.pendingImport.isEmpty())
+    }
+
+    @Test fun swiftKeyDictionary_neverRevivesARemovedWord() = runBlocking<Unit> {
+        store.removed = mapOf("id" to mapOf("zorbel" to now - 1000))
+        store.addTombstones(listOf(KudTombstone("plimko", "id", now - 500)))
+        legacyFiles["id"] = setOf("zorbel", "plimko", "vandrel")
+
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+
+        assertEquals(setOf("vandrel"), importedWords(imports().single()))
+        assertTrue(legacyFiles.isEmpty())
+    }
+
+    @Test fun swiftKeyDictionary_wordsTheAccountHasAreNotSentAgain() = runBlocking<Unit> {
+        serverWords = """{"words":[{"word":"zorbel","locale":"id","count":2,"source":"swiftkey","deleted":false,"updatedAt":"x"}],"now":"2026-10-31T00:00:00.000Z"}"""
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+        requests.clear()
+        legacyFiles["id"] = setOf("zorbel")
+
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+
+        assertTrue(imports().isEmpty())
+        assertTrue(legacyFiles.isEmpty(), "everything in it is in the account already")
+    }
+
+    @Test fun anInstallFromBeforeSourcesPullsEverythingOnce() = runBlocking<Unit> {
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+        store.update { it.copy(sourcesKnown = false) } // as an older version left it
+        store.mirror = mapOf("id" to mapOf("zorbel" to 2))
+        serverWords = """{"words":[{"word":"zorbel","locale":"id","count":2,"source":"swiftkey","deleted":false,"updatedAt":"x"}],"now":"2026-10-31T02:00:00.000Z"}"""
+        requests.clear()
+
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+
+        assertTrue("GET /api/sync/words" in calls(), "a full pull, not one since the last: ${calls()}")
+        assertEquals(mapOf("id" to setOf("zorbel")), store.imported)
+        assertTrue("id" in rebuilt.last().first, "rebuilt with the sources")
+        assertTrue(store.state.sourcesKnown)
+        requests.clear()
+        assertEquals(KudSyncOutcome.Done, sync.sync())
+        assertTrue(calls().any { it.startsWith("GET /api/sync/words?since=") })
+    }
+
+    @Test fun maintain_rebuildsStaleDictionariesOnce() = runBlocking<Unit> {
+        store.mirror = mapOf("en" to mapOf("zorbel" to 1))
+        var stale = setOf("en")
+        val rebuilds = mutableListOf<Set<String>>()
+        val probe = KudSync(
+            ctx, voice, SyncClient({ voice.apiBase }), store, learned = KudLearnedWords { emptyMap() },
+            dicts = object : KudSyncedDicts {
+                override fun rebuild(langs: Set<String>, words: KudSyncedWords) { rebuilds += langs; stale = emptySet() }
+                override fun stale(words: KudSyncedWords) = stale
+            },
+            legacyImport = KudLegacyImport.None, prefs = prefs, clock = { now }, onSignedOut = {},
+        )
+        probe.maintain()
+        probe.maintain()
+        assertEquals(listOf(setOf("en")), rebuilds)
+    }
+
     /** L1: the bookkeeping is written off the main thread even when a screen starts the sync on it. */
     @Test fun sync_runsItsFileWorkOffTheMainThread() {
         var thread: Thread? = null
         val probe = KudSync(
             ctx, voice, SyncClient({ voice.apiBase }), store,
             learned = KudLearnedWords { thread = Thread.currentThread(); emptyMap() },
-            dicts = KudSyncedDicts { _, _ -> }, prefs = prefs, clock = { now }, onSignedOut = {},
+            dicts = KudSyncedDicts { _, _ -> }, legacyImport = KudLegacyImport.None, prefs = prefs, clock = { now }, onSignedOut = {},
         )
         val main = Thread.currentThread() // Robolectric's main looper thread
         assertEquals(KudSyncOutcome.Done, runBlocking { probe.sync() })

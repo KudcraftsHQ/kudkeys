@@ -8,6 +8,7 @@ import { UsagePage } from '@/pages/Usage'
 import { Devices } from '@/pages/Devices'
 import { WordsPage } from '@/pages/Words'
 import { BackupsPage } from '@/pages/Backups'
+import { useMountEffect } from '@/hooks/useMountEffect'
 
 export function App() {
   const { data, isPending } = useSession()
@@ -22,6 +23,7 @@ export function App() {
   }
 
   if (!data?.user) {
+    if (__DEV_AUTO_SIGNIN__) return <DevAutoSignIn />
     return (
       <BrowserRouter key="public">
         <Routes>
@@ -46,4 +48,13 @@ export function App() {
       </Routes>
     </BrowserRouter>
   )
+}
+
+/** Dev worktrees only: hand the browser to the server's auto sign-in (server/dev-auto-sign-in.ts). */
+function DevAutoSignIn() {
+  useMountEffect(() => {
+    const next = window.location.pathname + window.location.search
+    window.location.replace(`/api/auth/dev/auto-sign-in?next=${encodeURIComponent(next)}`)
+  })
+  return <div className="mx-auto max-w-2xl px-5 py-16 text-sm">Signing in…</div>
 }

@@ -71,7 +71,10 @@ public final class SuggestionResults extends TreeSet<SuggestedWordInfo> {
             if (o1.mScore < o2.mScore) return 1;
             if (o1.mCodePointCount < o2.mCodePointCount) return -1;
             if (o1.mCodePointCount > o2.mCodePointCount) return 1;
-            return o1.mWord.compareTo(o2.mWord);
+            // Kud Keys: ignoring case first, so on a tie "aku" comes before "Aku" (plain compareTo puts capitals first)
+            final int ignoringCase = o1.mWord.compareToIgnoreCase(o2.mWord);
+            if (ignoringCase != 0) return ignoringCase;
+            return o2.mWord.compareTo(o1.mWord);
         }
     }
 

@@ -84,7 +84,7 @@ class KudV04ScreenshotTest {
 
     private fun sync() = KudSync(
         latinIME, settings, SyncClient({ settings.apiBase }), store,
-        learned = KudLearnedWords { emptyMap() }, dicts = KudSyncedDicts { _, _ -> }, onSignedOut = {},
+        learned = KudLearnedWords { emptyMap() }, dicts = KudSyncedDicts { _, _ -> }, legacyImport = helium314.keyboard.kudkeys.sync.KudLegacyImport.None, onSignedOut = {},
     )
 
     private fun iso(msAgo: Long) = java.time.Instant.ofEpochMilli(now - msAgo).toString()

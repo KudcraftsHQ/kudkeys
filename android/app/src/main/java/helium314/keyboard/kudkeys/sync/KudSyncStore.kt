@@ -29,6 +29,11 @@ data class KudSyncState(
     val initialDone: Boolean = false,
     /** The account (email) this bookkeeping belongs to; "" before the first sign-in. */
     val account: String = "",
+    /**
+     * The mirror knows each word's source ([KudSyncStore.imported]). Installs from before it pull every word once
+     * more to learn them.
+     */
+    val sourcesKnown: Boolean = false,
 )
 
 /** A suggestion removed from the strip, waiting to go to the server as a tombstone. */
@@ -80,6 +85,27 @@ class KudSyncStore(private val dir: File) {
         get() = synchronized(lock) { read("mirror.json") { json.decodeFromString<Map<String, Map<String, Int>>>(it) } ?: emptyMap() }
         set(value) = synchronized(lock) { write("mirror.json", json.encodeToString(value)) }
 
+    /** The mirror's words that came from the SwiftKey import (source `swiftkey`), by lang. */
+    var imported: Map<String, Set<String>>
+        get() = synchronized(lock) { read("imported.json") { json.decodeFromString<Map<String, Set<String>>>(it) } ?: emptyMap() }
+        set(value) = synchronized(lock) { write("imported.json", json.encodeToString(value)) }
+
+    /**
+     * Imported words (the old `swiftkey_user.dict`) waiting to go to the server's import, by lang. They are in the
+     * synced dictionary meanwhile. Device words, not the account's: kept across sign-out and account changes.
+     */
+    var pendingImport: Map<String, Set<String>>
+        get() = synchronized(lock) { read("pending_import.json") { json.decodeFromString<Map<String, Set<String>>>(it) } ?: emptyMap() }
+        set(value) = synchronized(lock) { write("pending_import.json", json.encodeToString(value.filterValues { it.isNotEmpty() })) }
+
+    /**
+     * By locale tag: how each synced dictionary was last built (filter version and main dictionary file). A
+     * different value now means it needs a rebuild.
+     */
+    var dictStamps: Map<String, String>
+        get() = synchronized(lock) { read("dict_stamps.json") { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap() }
+        set(value) = synchronized(lock) { write("dict_stamps.json", json.encodeToString(value)) }
+
     var tombstones: List<KudTombstone>
         get() = synchronized(lock) { read("tombstones.json") { json.decodeFromString<List<KudTombstone>>(it) } ?: emptyList() }
         set(value) = synchronized(lock) { write("tombstones.json", json.encodeToString(value)) }
@@ -107,7 +133,7 @@ class KudSyncStore(private val dir: File) {
             resetForSignOut()
             return@synchronized
         }
-        listOf("pushed.json", "mirror.json", "tombstones.json", "removed.json", "settings.json").forEach { File(dir, it).delete() }
+        listOf("pushed.json", "mirror.json", "imported.json", "tombstones.json", "removed.json", "settings.json").forEach { File(dir, it).delete() }
         state = KudSyncState(deviceId = s.deviceId, autoBackup = s.autoBackup, account = account)
     }
 
@@ -118,6 +144,11 @@ class KudSyncStore(private val dir: File) {
     }
 
     private fun write(name: String, text: String) {
+        writeOk(name, text)
+    }
+
+    /** Whether the write went through (the store otherwise swallows failures). */
+    private fun writeOk(name: String, text: String): Boolean =
         runCatching {
             dir.mkdirs()
             val af = AtomicFile(File(dir, name))
@@ -129,6 +160,5 @@ class KudSyncStore(private val dir: File) {
                 af.failWrite(out)
                 throw t
             }
-        }
-    }
+        }.isSuccess
 }

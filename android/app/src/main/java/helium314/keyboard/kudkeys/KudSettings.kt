@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package helium314.keyboard.kudkeys
 
+import helium314.keyboard.latin.Suggest
 import helium314.keyboard.latin.SuggestedWords
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
 
@@ -15,6 +16,10 @@ object KudSettings {
     /** Typing → Quick prediction insert: space inserts the middle prediction before the next word is started. */
     const val PREF_QUICK_PREDICTION_INSERT = "kudkeys_quick_prediction_insert"
     const val DEFAULT_QUICK_PREDICTION_INSERT = false
+
+    /** Typing → Fix apostrophes: "dont" → "don't", "im" → "I'm" on space, also with Autocorrect off (KudApostrophes). */
+    const val PREF_FIX_APOSTROPHES = "kudkeys_fix_apostrophes"
+    const val DEFAULT_FIX_APOSTROPHES = true
 
     /** Emoji → Emoji access on enter key: long-press enter opens emoji, only while the emoji key is hidden. */
     const val PREF_EMOJI_ON_ENTER = "kudkeys_emoji_on_enter"
@@ -54,7 +59,8 @@ object KudSettings {
         if (!suggestedWords.isPrediction || suggestedWords.isEmpty) return null
         // predictions have no typed word, so the best one (index 0) is the one in the middle of the strip
         val best = suggestedWords.getInfo(0)
-        return best.takeIf { it.mWord.isNotBlank() && !it.isEmoji() }
+        // a filler (history top word, starter word) is not a prediction for this context, so space stays a space
+        return best.takeIf { it.mWord.isNotBlank() && !it.isEmoji() && it.mSourceDict !== Suggest.DICTIONARY_FALLBACK }
     }
 
     /** Whether the enter key keeps its long-press emoji. */
