@@ -690,8 +690,20 @@ class Pages:
         os.makedirs(os.path.join(self.d, "lp"), exist_ok=True)
         self.pages = {}
 
+    def dump_keys(self, path=None):
+        """Dump + key nodes; Kud Keys' virtual key nodes can be missing from the first dump: tap the field, retry."""
+        for attempt in range(4):
+            xml = dump(path)
+            keys = ime_keys(xml, self.pkg)
+            if keys:
+                return xml, keys
+            if attempt == 1:
+                tap(screen_size()[0] // 2, 300)
+            time.sleep(1.0)
+        return xml, keys
+
     def keys_now(self, path=None):
-        return ime_keys(dump(path), self.pkg)
+        return self.dump_keys(path)[1]
 
     def goto(self, field, taps):
         open_typed(field)
@@ -710,8 +722,7 @@ class Pages:
         keys = self.goto(field, taps)
         time.sleep(0.5)
         png = screencap(os.path.join(self.d, f"{name}.png"))
-        xml = dump(os.path.join(self.d, f"{name}.xml"))
-        keys = ime_keys(xml, self.pkg)
+        xml, keys = self.dump_keys(os.path.join(self.d, f"{name}.xml"))
         frame, touch = ime_frame()
         same = next((n for n, p in self.pages.items() if p["sig"] == sig(keys)), None)
         self.pages[name] = {"field": field, "taps": taps, "keys": keys, "sig": sig(keys), "png": png,
