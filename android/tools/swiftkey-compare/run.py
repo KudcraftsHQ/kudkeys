@@ -614,6 +614,219 @@ def kud_addon_pass(pos, km):
     return {"cases": run_cases("kudkeys_addon", pos, km, KUD_PKG, only=ADDON_CASES)}
 
 
+# ---------- layouts mode: every page + long-press popups, both keyboards ----------
+FIELD_TYPES = ["number", "number_signed", "number_decimal", "number_password", "phone", "datetime", "date", "time"]
+NOLP = re.compile(r"^(delete|backspace|enter|return|go|done|next|search|send|space|shift|caps.*|double tap.*|emoji.*|"
+                  r"symbols?( and numbers)?|letters|alphabet|abc|switch.*|.*keyboard.*|numpad|number pad)$", re.I)
+
+
+def open_typed(t):
+    sh(f"am start -S -n {TT_PKG}/.MainActivity --es type {t}")
+    time.sleep(3)
+
+
+def _rect(n):
+    m = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", n.get("bounds", ""))
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def ime_keys(xml, ime_pkg):
+    """Key nodes (leaf android.view.View with a label) in absolute screen pixels.
+    Kud Keys reports its virtual key nodes relative to the keyboard view: those are shifted by the parent origin."""
+    try:
+        root = ET.fromstring(xml)
+    except Exception:
+        return []
+    keys, nav = [], []
+
+    def walk(n, P):
+        r = _rect(n) if n.tag == "node" else None
+        if r and P and not (r[1] >= P[1] - 2 and r[3] <= P[3] + 2 and r[0] >= P[0] - 2 and r[2] <= P[2] + 2):
+            r = (r[0] + P[0], r[1] + P[1], r[2] + P[0], r[3] + P[1])
+        if n.tag == "node" and n.get("package") == ime_pkg and r:
+            label = n.get("content-desc") or n.get("text") or ""
+            if label in ("Back", "Switch input method", "Home", "Hide keyboard"):
+                nav.append(r)
+            elif label and len(n) == 0 and n.get("class") == "android.view.View":
+                keys.append({"label": label, "b": list(r)})
+        for c in n:
+            walk(c, r if r else P)
+
+    walk(root, None)
+    if nav:
+        top = min(r[1] for r in nav)
+        keys = [k for k in keys if k["b"][1] < top - 4]
+    keys.sort(key=lambda k: (k["b"][1], k["b"][0]))
+    return keys
+
+
+def rows_of(keys):
+    rows = []
+    for k in keys:
+        if rows and abs(rows[-1][0]["b"][1] - k["b"][1]) <= 12:
+            rows[-1].append(k)
+        else:
+            rows.append([k])
+    for r in rows:
+        r.sort(key=lambda k: k["b"][0])
+    return rows
+
+
+def sig(keys):
+    return tuple(k["label"] for k in keys)
+
+
+def center(k):
+    b = k["b"]
+    return (b[0] + b[2]) // 2, (b[1] + b[3]) // 2
+
+
+class Pages:
+    """Captures pages of one keyboard; `path` = field type + labels/indices of keys to tap from a fresh field."""
+
+    def __init__(self, kb, ime_pkg):
+        self.kb, self.pkg = kb, ime_pkg
+        self.d = os.path.join(OUT, "layouts", kb)
+        os.makedirs(os.path.join(self.d, "lp"), exist_ok=True)
+        self.pages = {}
+
+    def keys_now(self, path=None):
+        return ime_keys(dump(path), self.pkg)
+
+    def goto(self, field, taps):
+        open_typed(field)
+        keys = self.keys_now()
+        for want in taps:
+            k = next((k for k in keys if k["label"] == want[0] and abs(center(k)[1] - want[1]) < 40), None)
+            if not k:
+                log(self.kb, "goto: no key", want, "in", sig(keys))
+                return keys
+            tap(*center(k))
+            time.sleep(1.2)
+            keys = self.keys_now()
+        return keys
+
+    def capture(self, name, field, taps):
+        keys = self.goto(field, taps)
+        time.sleep(0.5)
+        png = screencap(os.path.join(self.d, f"{name}.png"))
+        xml = dump(os.path.join(self.d, f"{name}.xml"))
+        keys = ime_keys(xml, self.pkg)
+        frame, touch = ime_frame()
+        same = next((n for n, p in self.pages.items() if p["sig"] == sig(keys)), None)
+        self.pages[name] = {"field": field, "taps": taps, "keys": keys, "sig": sig(keys), "png": png,
+                            "touch": touch, "same_as": same}
+        json.dump(keys, open(os.path.join(self.d, f"{name}.keys.json"), "w"), indent=0, ensure_ascii=False)
+        log(self.kb, "page", name, "same_as", same, "|", " ".join(k["label"] for k in keys)[:500])
+        return keys
+
+    def longpress_all(self, name, skip=()):
+        p = self.pages[name]
+        res = []
+        cur = None
+        base = Image.open(p["png"]).convert("RGB")
+        for i, k in enumerate(p["keys"]):
+            if NOLP.match(k["label"]) or k["label"] in skip:
+                continue
+            if cur != p["sig"]:
+                cur = sig(self.goto(p["field"], p["taps"]))
+                if cur != p["sig"]:
+                    log(self.kb, name, "could not return to page; stop long-press")
+                    break
+            run("adb logcat -c")
+            x, y = center(k)
+            sh(f"input motionevent DOWN {x} {y}")
+            time.sleep(1.0)
+            f = os.path.join(self.d, "lp", f"{name}_{i:02d}.png")
+            screencap(f)
+            held = dump(os.path.join(self.d, "lp", f"{name}_{i:02d}.xml"))
+            sh(f"input motionevent UP {x} {y}")
+            time.sleep(0.6)
+            typed = field_text()
+            popup = [n for n in ime_keys(held, self.pkg) if [n["label"], n["b"]] not in [[q["label"], q["b"]] for q in p["keys"]]]
+            bbox = None
+            try:
+                from PIL import ImageChops
+                diff = ImageChops.difference(base, Image.open(f).convert("RGB")).convert("L").point(lambda v: 255 if v > 40 else 0)
+                bbox = diff.getbbox()
+            except Exception as e:  # noqa
+                log("diff failed", e)
+            big = bool(bbox) and ((bbox[2] - bbox[0]) > (k["b"][2] - k["b"][0]) * 1.3 or bbox[1] < k["b"][1] - 20)
+            res.append({"i": i, "label": k["label"], "b": k["b"], "png": f, "typed": typed, "popup_nodes": popup,
+                        "diff_bbox": bbox, "popup": big})
+            log(self.kb, "lp", name, repr(k["label"]), "popup" if big else "-", [n["label"] for n in popup], "typed", repr(typed))
+            cur = sig(self.keys_now())
+        p["longpress"] = res
+        return res
+
+
+def layouts_for(kb, ime, pkg):
+    select_ime(ime)
+    P = Pages(kb, pkg)
+    letters = P.capture("letters", "text", [])
+    rows = rows_of(letters)
+    if not rows:
+        log(kb, "no keys on letters page")
+        return P
+    bottom = rows[-1]
+    sym = next((k for k in bottom if re.search(r"symbol|123|number", k["label"], re.I)), bottom[0])
+    t1 = [(sym["label"], center(sym)[1])]
+    s1 = P.capture("symbols1", "text", t1)
+    r1 = rows_of(s1)
+    if len(r1) >= 2:
+        tog = r1[-2][0]
+        t2 = t1 + [(tog["label"], center(tog)[1])]
+        s2 = P.capture("symbols2", "text", t2)
+        if sig(s2) == sig(s1):
+            log(kb, "page-2 toggle did nothing:", tog["label"])
+        else:
+            r2 = rows_of(s2)
+            if len(r2) >= 2 and r2[-2][0]["label"] != tog["label"]:
+                log(kb, "page-2 toggle label differs:", r2[-2][0]["label"])
+        # any extra page keys on the symbols bottom row (Kud Keys' numpad key, SwiftKey's ...)
+        for k in r1[-1]:
+            if re.search(r"numpad|number pad|numbers", k["label"], re.I):
+                P.capture("symbols_numpad", "text", t1 + [(k["label"], center(k)[1])])
+        P.longpress_all("symbols1", skip=(tog["label"], sym["label"]))
+        if sig(s2) != sig(s1):
+            P.longpress_all("symbols2", skip=(tog["label"], sym["label"]))
+    for t in FIELD_TYPES:
+        keys = P.capture(t, t, [])
+        rr = rows_of(keys)
+        if not rr or P.pages[t]["same_as"] not in (None,):
+            continue
+        # page switches on numeric pads: bottom-left key and anything labelled symbols / * #
+        cands = [rr[-1][0]] + [k for k in keys if re.search(r"symbol|\*.*#|more|abc|letters", k["label"], re.I)]
+        seen = set()
+        for c in cands:
+            if c["label"] in seen:
+                continue
+            seen.add(c["label"])
+            k2 = P.capture(f"{t}__{len(seen)}", t, [(c["label"], center(c)[1])])
+            if sig(k2) == sig(keys):
+                log(kb, t, "key", c["label"], "does not switch page")
+        P.longpress_all(t)
+    json.dump({n: {kk: v for kk, v in p.items()} for n, p in P.pages.items()},
+              open(os.path.join(P.d, "pages.json"), "w"), indent=1, ensure_ascii=False)
+    return P
+
+
+def layouts_main(kbs):
+    for kb, ime, pkg in kbs:
+        try:
+            layouts_for(kb, ime, pkg)
+        except Exception:
+            import traceback
+            log(kb, "layouts FAILED", traceback.format_exc())
+    try:
+        import sbs
+        sbs.main(os.path.join(OUT, "layouts"))
+    except Exception:
+        import traceback
+        log("sbs FAILED", traceback.format_exc())
+    log("done")
+
+
 def main():
     phase = sys.argv[1] if len(sys.argv) > 1 else "all"
     overrides = {}
@@ -647,12 +860,14 @@ def main():
         log("swiftkey ime", sk_ime, "| ime list:", sh("ime list -a -s"))
         sk_ime = sk_ime or SK_PKG + "/com.touchtype.KeyboardService"
     kbs = []
-    if sk_ime:
+    if sk_ime and os.environ.get("SKIP_SWIFTKEY") != "1":
         setup_swiftkey(sk_ime)
         kbs.append(("swiftkey", sk_ime, SK_PKG))
     else:
         log("SwiftKey not installed; Kud Keys only")
     kbs.insert(0, ("kudkeys", KUD_IME, KUD_PKG))
+    if phase == "layouts":
+        return layouts_main(kbs)
     for kb, ime, pkg in kbs:
         try:
             select_ime(ime)

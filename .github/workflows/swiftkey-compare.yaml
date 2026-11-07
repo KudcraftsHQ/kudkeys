@@ -10,6 +10,11 @@ concurrency:
   group: swiftkey-compare
   cancel-in-progress: true
 
+env:
+  MODE: layouts                 # run.py mode: all | cases | layouts
+  KUD_REF: feat/swiftkey-symbols-numpad   # empty = build Kud Keys from this branch
+  SKIP_SWIFTKEY: '0'            # 1 = Kud Keys only (SwiftKey ground truth from an earlier run)
+
 jobs:
   compare:
     runs-on: ubuntu-latest
@@ -30,6 +35,13 @@ jobs:
           NDK=$(sed -n 's/.*ndkVersion = "\(.*\)".*/\1/p' app/build.gradle.kts)
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK" > /dev/null
 
+      - name: Kud Keys sources from another branch (layouts work)
+        if: env.KUD_REF != ''
+        run: |
+          git fetch --no-tags origin "$KUD_REF"
+          git checkout FETCH_HEAD -- android/app/src/main
+          git log -1 --format='Kud Keys app/src/main from %H %s' FETCH_HEAD
+
       - name: Build Kud Keys debug + TypeTest
         working-directory: android
         run: |
@@ -39,6 +51,7 @@ jobs:
           cp tools/typetest/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/apks/typetest.apk"
 
       - name: Synthetic SwiftKey-style add-on dictionary (common words only)
+        if: env.MODE != 'layouts'
         working-directory: android
         env:
           SYNTH_DICT_OUT: ${{ github.workspace }}/apks/synthetic/swiftkey_user.dict
@@ -67,7 +80,7 @@ jobs:
 
       - name: Python deps
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr ffmpeg > /dev/null
+          if [ "$MODE" != layouts ]; then sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr ffmpeg > /dev/null; fi
           pip install -q pillow uiautomator2
 
       - name: Enable KVM
@@ -90,7 +103,7 @@ jobs:
           disk-size: 8000M
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 android/tools/swiftkey-compare/run.py all
+          script: python3 android/tools/swiftkey-compare/run.py $MODE
 
       - uses: actions/upload-artifact@v4
         if: always()
