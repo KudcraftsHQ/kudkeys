@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "scripts": {
     "e2e": "e2e run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc-ts --noEmit"
   },
   "dependencies": {
     "@e2e-dev/decision": "0.3.2",
@@ -17,6 +17,7 @@
     "@openrouter/ai-sdk-provider": "3.1.0",
     "ai": "7.0.162",
     "@types/bun": "latest",
+    "tsc-ts": "0.1.4",
     "typescript": "~6.0.2"
   }
 }
