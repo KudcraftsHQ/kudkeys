@@ -2,18 +2,18 @@
 <!-- Kud Keys: the account (sign-in, profile). English only, like the other Kud Keys strings. -->
 <resources>
     <string name="kud_account_sign_in" translatable="false">Sign in</string>
-    <string name="kud_account_sign_in_summary" translatable="false">Voice typing works with your Kud Keys account, and spells your keywords right</string>
+    <string name="kud_account_sign_in_summary" translatable="false">Voice typing works with your Kudkeys account, and spells your keywords right</string>
     <string name="kud_account_signed_out" translatable="false">Signed out — sign in again</string>
     <string name="kud_account_title" translatable="false">Account</string>
-    <string name="kud_account_sign_in_intro" translatable="false">Sign in with your Kud Keys account. Voice typing uses it, with the keywords and languages on your profile.</string>
+    <string name="kud_account_sign_in_intro" translatable="false">Sign in with your Kudkeys account. Voice typing uses it, with the keywords and languages on your profile.</string>
     <string name="kud_account_email" translatable="false">Email</string>
     <string name="kud_account_password" translatable="false">Password</string>
     <string name="kud_account_signing_in" translatable="false">Signing in…</string>
-    <string name="kud_account_no_account" translatable="false">No account? Kud Keys is invite-only. Create one at keys.kudcrafts.com</string>
+    <string name="kud_account_no_account" translatable="false">No account? Kudkeys is invite-only. Create one at keys.kudcrafts.com</string>
     <string name="kud_account_err_password" translatable="false">Wrong email or password.</string>
     <string name="kud_account_err_offline" translatable="false">No internet connection. Check Wi-Fi or mobile data and try again.</string>
     <string name="kud_account_err_unreachable" translatable="false">Can\'t reach %s. Try again in a moment.</string>
-    <string name="kud_account_err_not_allowed" translatable="false">This email isn\'t allowed to use Kud Keys.</string>
+    <string name="kud_account_err_not_allowed" translatable="false">This email isn\'t allowed to use Kudkeys.</string>
     <string name="kud_account_name" translatable="false">Name</string>
     <string name="kud_account_keywords" translatable="false">Voice keywords</string>
     <string name="kud_account_keywords_summary" translatable="false">Names and brands voice typing should spell right. Sent with every voice note.</string>
