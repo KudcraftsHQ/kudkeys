@@ -29,15 +29,12 @@
             android:layoutDirection="ltr"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
-        <!-- kudkeys: inflated the first time emoji are shown (KeyboardSwitcher.getEmojiPalettesView), not with every
-             keyboard view: its ViewPager2 made the first keyboard open slower -->
-        <ViewStub
-            android:id="@+id/emoji_palettes_stub"
-            android:inflatedId="@+id/emoji_palettes_view"
-            android:layout="@layout/emoji_palettes_view"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom" />
+        <!-- kudkeys: inflated with the keyboard view again, not lazily from a ViewStub: building it in the middle of
+             the emoji key's touch threw the keyboard back to letters. KudWarmup prebuilds the input view while idle,
+             so this costs the first open little. -->
+        <include
+            android:id="@+id/emoji_palettes_view"
+            layout="@layout/emoji_palettes_view" />
 
         <ImageButton
             android:id="@+id/btn_stop_one_handed_mode"

@@ -73,7 +73,7 @@ public final class KeyboardSwitcher {
     private KeyboardWrapperView mKeyboardViewWrapper;
     private View mMainKeyboardFrame;
     private MainKeyboardView mKeyboardView;
-    private EmojiPalettesView mEmojiPalettesView; // kudkeys: null until emoji are first shown, see getEmojiPalettesView
+    private EmojiPalettesView mEmojiPalettesView; // kudkeys: inflated with the input view (a stub would be inflated in getEmojiPalettesView)
     private ViewStub mEmojiPalettesStub;
     private View mEmojiTabStripView;
     private SuggestionStripView mSuggestionStripView;
@@ -538,7 +538,7 @@ public final class KeyboardSwitcher {
         mCurrentViewKey = key;
         mCurrentViewGeneration = mViewGeneration;
         mMainKeyboardFrame = mCurrentInputView.findViewById(R.id.main_keyboard_frame);
-        mEmojiPalettesView = mCurrentInputView.findViewById(R.id.emoji_palettes_view); // null until first inflated
+        mEmojiPalettesView = mCurrentInputView.findViewById(R.id.emoji_palettes_view);
         mEmojiPalettesStub = mCurrentInputView.findViewById(R.id.emoji_palettes_stub);
         if (mEmojiPalettesView != null) setUpEmojiPalettesView(isHardwareAcceleratedDrawingEnabled);
         mFakeToastView = mCurrentInputView.findViewById(R.id.fakeToast);
