@@ -20,7 +20,6 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewStub;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodSubtype;
@@ -73,8 +72,7 @@ public final class KeyboardSwitcher {
     private KeyboardWrapperView mKeyboardViewWrapper;
     private View mMainKeyboardFrame;
     private MainKeyboardView mKeyboardView;
-    private EmojiPalettesView mEmojiPalettesView; // kudkeys: inflated with the input view (a stub would be inflated in getEmojiPalettesView)
-    private ViewStub mEmojiPalettesStub;
+    private EmojiPalettesView mEmojiPalettesView; // kudkeys: inflated with the input view 
     private View mEmojiTabStripView;
     private SuggestionStripView mSuggestionStripView;
     private FrameLayout mStripContainer;
@@ -539,7 +537,6 @@ public final class KeyboardSwitcher {
         mCurrentViewGeneration = mViewGeneration;
         mMainKeyboardFrame = mCurrentInputView.findViewById(R.id.main_keyboard_frame);
         mEmojiPalettesView = mCurrentInputView.findViewById(R.id.emoji_palettes_view);
-        mEmojiPalettesStub = mCurrentInputView.findViewById(R.id.emoji_palettes_stub);
         if (mEmojiPalettesView != null) setUpEmojiPalettesView(isHardwareAcceleratedDrawingEnabled);
         mFakeToastView = mCurrentInputView.findViewById(R.id.fakeToast);
 
@@ -657,13 +654,8 @@ public final class KeyboardSwitcher {
         }
     }
 
-    /** kudkeys: the emoji palette, inflated from its stub the first time it is needed. */
-    @Nullable private EmojiPalettesView getEmojiPalettesView() {
-        if (mEmojiPalettesView == null && mEmojiPalettesStub != null) {
-            mEmojiPalettesView = (EmojiPalettesView) mEmojiPalettesStub.inflate();
-            mEmojiPalettesStub = null;
-            setUpEmojiPalettesView(mIsHardwareAcceleratedDrawingEnabled);
-        }
+    /** kudkeys: the emoji palette, inflated with the input view. */
+    private EmojiPalettesView getEmojiPalettesView() {
         return mEmojiPalettesView;
     }
 

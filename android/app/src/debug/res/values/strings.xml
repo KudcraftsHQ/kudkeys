@@ -4,7 +4,7 @@
 -->
 <resources>
     <string name="english_ime_name" translatable="false">Kudkeys AI Keyboard debug</string>
-    <string name="spell_checker_service_name" translatable="false">Kud Keys debug Spell Checker</string>
-    <string name="ime_settings" translatable="false">Kud Keys debug Settings</string>
+    <string name="spell_checker_service_name" translatable="false">Kudkeys AI Keyboard debug Spell Checker</string>
+    <string name="ime_settings" translatable="false">Kudkeys AI Keyboard debug Settings</string>
 
 </resources>

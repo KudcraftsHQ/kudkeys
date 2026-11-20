@@ -50,8 +50,8 @@
     <string name="kud_physical_keyboard" translatable="false">Physical keyboard</string>
     <string name="kud_physical_keyboard_summary" translatable="false">Adjust the settings for your physical keyboard. These settings do not affect your on-screen keyboard.</string>
     <string name="kud_clear_typing_data" translatable="false">Clear typing data</string>
-    <string name="kud_clear_typing_data_summary" translatable="false">Forget the words and phrases Kud Keys learned from your typing</string>
-    <string name="kud_clear_typing_data_confirm" translatable="false">Clear typing data? The words, phrases and next-word predictions Kud Keys learned from your typing will be deleted. This cannot be undone. Your Android personal dictionary (Settings → Personal dictionary) is not touched.</string>
+    <string name="kud_clear_typing_data_summary" translatable="false">Forget the words and phrases Kudkeys learned from your typing</string>
+    <string name="kud_clear_typing_data_confirm" translatable="false">Clear typing data? The words, phrases and next-word predictions Kudkeys learned from your typing will be deleted. This cannot be undone. Your Android personal dictionary (Settings → Personal dictionary) is not touched.</string>
     <string name="kud_clear_typing_data_button" translatable="false">Clear</string>
     <string name="kud_clear_typing_data_done" translatable="false">Typing data cleared</string>
 
