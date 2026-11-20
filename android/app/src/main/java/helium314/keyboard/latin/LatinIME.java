@@ -1025,7 +1025,10 @@ public class LatinIME extends InputMethodService implements
         } else if (restarting) {
             // TODO: Come up with a more comprehensive way to reset the keyboard layout when
             // a keyboard layout set doesn't get reloaded in this method.
-            switcher.resetKeyboardStateToAlphabet();
+            // kudkeys: the same field restarting (apps do this when the keyboard's height changes, e.g. as the emoji
+            // palette opens) must not throw the emoji palette back to letters
+            if (!switcher.isShowingEmojiPalettes())
+                switcher.resetKeyboardStateToAlphabet();
             // In apps like Talk, we come here when the text is sent and the field gets emptied and
             // we need to re-evaluate the shift state, but not the whole layout which would be
             // disruptive.
